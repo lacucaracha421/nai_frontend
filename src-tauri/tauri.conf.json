@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "NAI Frontend",
-  "version": "0.2.0",
-  "identifier": "local.nai.frontend",
+  "productName": "NAI V5 Studio",
+  "version": "0.4.8",
+  "identifier": "local.nai.v5studio",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,20 +12,31 @@
   "app": {
     "windows": [
       {
-        "title": "NAI Frontend",
-        "width": 1440,
-        "height": 900,
-        "minWidth": 980,
+        "label": "main",
+        "title": "NAI V5 Studio",
+        "width": 820,
+        "height": 1180,
+        "minWidth": 420,
         "minHeight": 680,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPCACHE/nai-v5-images/**/*"
+        ]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "resources": [
+      "resources/danbooru.sqlite.gz",
+      "resources/danbooru.version"
+    ]
   }
 }

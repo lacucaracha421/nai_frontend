@@ -1,130 +1,220 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { buildNovelAiRequest } from "../adapters/novelai/buildRequest";
-import { generateNovelAiImage } from "../adapters/novelai/client";
-import type { CharacterPrompt, GenerationImage, GenerationSettings, GenerationStatus } from "../types/generation";
+import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/buildRequest";
+import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
+import type {
+  CharacterPrompt,
+  GenerationImage,
+  GenerationSettings,
+  GenerationStatus,
+  PromptSectionKey,
+} from "../types/generation";
 
-const createCharacter = (index: number): CharacterPrompt => ({
+const DEFAULT_SETTINGS: GenerationSettings = {
+  model: "nai-diffusion-5-full",
+  width: 832,
+  height: 1216,
+  steps: 28,
+  guidance: 5,
+  guidanceRescale: 0.15,
+  sampler: "k_euler_ancestral",
+  noiseSchedule: "karras",
+  seed: null,
+};
+
+const newCharacter = (index: number): CharacterPrompt => ({
   id: crypto.randomUUID(),
-  prompt: index === 0 ? "1girl, long hair, blue eyes" : "",
+  name: "",
+  prompt: "",
   negative: "",
-  enabled: index === 0,
-  position: { x: 0.5, y: 0.5 },
-  positionLabel: index === 0 ? "C3" : "B3",
+  enabled: true,
+  position: {
+    x: Math.min(0.85, 0.3 + (index % 3) * 0.2),
+    y: Math.min(0.85, 0.35 + Math.floor(index / 3) * 0.18),
+  },
 });
 
-type GenerationState = {
-  beginningPrompt: string;
-  endingPrompt: string;
+const isBusy = (status: GenerationStatus) => status === "generating" || status === "upscaling";
+
+type State = {
+  artistPrompt: string;
+  otherPrompt: string;
+  qualityPrompt: string;
   negativePrompt: string;
   characters: CharacterPrompt[];
-  aiPosition: boolean;
+  useCharacterCoords: boolean;
   settings: GenerationSettings;
   status: GenerationStatus;
   images: GenerationImage[];
   activeImage: number;
   errorMessage: string | null;
-  lastGeneratedAt: number | null;
-  setBeginningPrompt: (value: string) => void;
-  setEndingPrompt: (value: string) => void;
-  setNegativePrompt: (value: string) => void;
-  setAiPosition: (value: boolean) => void;
+  setPrompt: (key: PromptSectionKey, value: string) => void;
+  appendPrompt: (key: PromptSectionKey, value: string) => void;
   setSetting: <K extends keyof GenerationSettings>(key: K, value: GenerationSettings[K]) => void;
   addCharacter: () => void;
   removeCharacter: (id: string) => void;
   updateCharacter: (id: string, patch: Partial<CharacterPrompt>) => void;
-  insertPromptText: (value: string) => void;
+  setUseCharacterCoords: (value: boolean) => void;
   setActiveImage: (index: number) => void;
+  clearSessionImages: () => void;
   clearError: () => void;
+  useSeed: (seed: number | null) => void;
+  positivePrompt: () => string;
   generate: () => Promise<void>;
+  upscaleActive: () => Promise<void>;
 };
 
-export const useGenerationStore = create<GenerationState>()(
+const append = (base: string, value: string) => {
+  const clean = value.replace(/_/g, " ").trim();
+  if (!clean) return base;
+  return base.trim() ? `${base.trim().replace(/,\s*$/, "")}, ${clean}` : clean;
+};
+
+function migratePersistedState(value: unknown) {
+  if (!value || typeof value !== "object") return value;
+  const persisted = value as Partial<State>;
+  const characters = Array.isArray(persisted.characters)
+    ? persisted.characters.map((character, index) => ({
+        ...newCharacter(index),
+        ...character,
+        name: /^Character \d+$/.test(character?.name ?? "") ? "" : (character?.name ?? ""),
+        position: { ...newCharacter(index).position, ...(character?.position ?? {}) },
+      }))
+    : [newCharacter(0)];
+  return {
+    ...persisted,
+    characters,
+    settings: { ...DEFAULT_SETTINGS, ...(persisted.settings ?? {}) },
+  };
+}
+
+export const useGenerationStore = create<State>()(
   persist(
     (set, get) => ({
-      beginningPrompt: "1girl,",
-      endingPrompt: ", meta:golden era,",
-      negativePrompt: "anime screenshot, anime coloring, censored, bar censor",
-      characters: [createCharacter(0), createCharacter(1)],
-      aiPosition: false,
-      settings: {
-        model: "nai-diffusion-4-5-full",
-        preset: "Normal Portrait",
-        width: 832,
-        height: 1216,
-        steps: 28,
-        guidance: 5.5,
-        guidanceRescale: 0.15,
-        varietyPlus: false,
-        sampler: "k_euler_ancestral",
-        noiseSchedule: "karras",
-        seed: null,
-        count: 1,
-      },
+      artistPrompt: "",
+      otherPrompt: "",
+      qualityPrompt: "high complexity",
+      negativePrompt: "",
+      characters: [newCharacter(0)],
+      useCharacterCoords: false,
+      settings: { ...DEFAULT_SETTINGS },
       status: "idle",
       images: [],
       activeImage: 0,
       errorMessage: null,
-      lastGeneratedAt: null,
-      setBeginningPrompt: (beginningPrompt) => set({ beginningPrompt }),
-      setEndingPrompt: (endingPrompt) => set({ endingPrompt }),
-      setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
-      setAiPosition: (aiPosition) => set({ aiPosition }),
+
+      setPrompt: (key, value) => set({ [`${key}Prompt`]: value } as Partial<State>),
+      appendPrompt: (key, value) =>
+        set((state) => ({
+          [`${key}Prompt`]: append((state as unknown as Record<string, string>)[`${key}Prompt`], value),
+        } as Partial<State>)),
       setSetting: (key, value) => set((state) => ({ settings: { ...state.settings, [key]: value } })),
-      addCharacter: () => set((state) => ({ characters: [...state.characters, createCharacter(state.characters.length)] })),
-      removeCharacter: (id) => set((state) => ({ characters: state.characters.filter((item) => item.id !== id) })),
-      updateCharacter: (id, patch) => set((state) => ({
-        characters: state.characters.map((item) => item.id === id ? { ...item, ...patch } : item),
-      })),
-      insertPromptText: (value) => set((state) => ({
-        beginningPrompt: state.beginningPrompt.trim()
-          ? `${state.beginningPrompt.replace(/\s+$/, "")}${state.beginningPrompt.trim().endsWith(",") ? " " : ", "}${value}`
-          : value,
-      })),
+      addCharacter: () => set((state) => ({ characters: [...state.characters, newCharacter(state.characters.length)] })),
+      removeCharacter: (id) => set((state) => ({ characters: state.characters.filter((character) => character.id !== id) })),
+      updateCharacter: (id, patch) =>
+        set((state) => ({ characters: state.characters.map((character) => character.id === id ? { ...character, ...patch } : character) })),
+      setUseCharacterCoords: (useCharacterCoords) => set({ useCharacterCoords }),
       setActiveImage: (activeImage) => set({ activeImage }),
+      clearSessionImages: () => set({ images: [], activeImage: 0 }),
       clearError: () => set({ errorMessage: null, status: "idle" }),
+      useSeed: (seed) => set((state) => ({ settings: { ...state.settings, seed } })),
+      positivePrompt: () => joinPositivePrompt(get()),
+
       generate: async () => {
-        const state = get();
+        const snapshot = get();
+        if (isBusy(snapshot.status)) return;
         set({ status: "generating", errorMessage: null });
         try {
-          const request = buildNovelAiRequest({
-            beginningPrompt: state.beginningPrompt,
-            endingPrompt: state.endingPrompt,
-            negativePrompt: state.negativePrompt,
-            characters: state.characters,
-            aiPosition: state.aiPosition,
-            settings: state.settings,
-          });
+          const request = buildNovelAiRequest(snapshot);
           const result = await generateNovelAiImage(request);
-          const images = result.map((item) => ({
-            dataUrl: item.image.startsWith("data:") ? item.image : `data:image/png;base64,${item.image}`,
-            index: item.index,
-            seed: item.seed,
+          const positivePrompt = joinPositivePrompt(snapshot);
+          const createdAt = Date.now();
+          const incoming = result.map((image) => ({
+            src: cachedImageSrc(image.path),
+            filePath: image.path,
+            index: image.index,
+            seed: image.seed,
+            width: image.width,
+            height: image.height,
+            positivePrompt,
+            kind: "generation" as const,
+            createdAt,
           }));
-          if (!images.length) throw new Error("NovelAI 응답에 이미지가 없답니다.");
-          set({
+          if (!incoming.length) throw new Error("NovelAI 응답에 이미지가 없사와요.");
+          set((state) => ({
             status: "success",
-            images,
-            activeImage: 0,
+            images: [...state.images, ...incoming],
+            activeImage: state.images.length,
             errorMessage: null,
-            lastGeneratedAt: Date.now(),
-          });
+          }));
         } catch (error) {
+          set({ status: "error", errorMessage: error instanceof Error ? error.message : String(error) });
+        }
+      },
+
+      upscaleActive: async () => {
+        const snapshot = get();
+        if (isBusy(snapshot.status)) return;
+        const image = snapshot.images[snapshot.activeImage];
+        if (!image) return;
+        if (image.width * image.height > 1024 * 1024) {
           set({
             status: "error",
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage: "전용 Upscale은 1024×1024 픽셀 면적 이하 원본에서 사용하도록 공식 문서에 안내되어 있사와요.",
           });
+          return;
+        }
+        set({ status: "upscaling", errorMessage: null });
+        try {
+          const result = await upscaleNovelAiImage(image.filePath);
+          const createdAt = Date.now();
+          const incoming = result.map((upscaled) => ({
+            src: cachedImageSrc(upscaled.path),
+            filePath: upscaled.path,
+            index: upscaled.index,
+            seed: image.seed,
+            width: upscaled.width,
+            height: upscaled.height,
+            positivePrompt: image.positivePrompt,
+            kind: "upscale" as const,
+            createdAt,
+          }));
+          if (!incoming.length) throw new Error("Upscale 응답에 이미지가 없사와요.");
+          set((state) => ({
+            status: "success",
+            images: [...state.images, ...incoming],
+            activeImage: state.images.length,
+            errorMessage: null,
+          }));
+        } catch (error) {
+          set({ status: "error", errorMessage: error instanceof Error ? error.message : String(error) });
         }
       },
     }),
     {
-      name: "nai-frontend-generation-v0.2",
+      name: "nai-v5-s11-generation-v0.3",
+      version: 1,
+      migrate: (persisted) => migratePersistedState(persisted) as State,
+      merge: (persisted, current) => {
+        const migrated = migratePersistedState(persisted) as Partial<State>;
+        return {
+          ...current,
+          ...migrated,
+          settings: { ...DEFAULT_SETTINGS, ...(migrated.settings ?? {}) },
+          // Session output is deliberately never restored across app launches.
+          images: [],
+          activeImage: 0,
+          status: "idle",
+          errorMessage: null,
+        };
+      },
       partialize: (state) => ({
-        beginningPrompt: state.beginningPrompt,
-        endingPrompt: state.endingPrompt,
+        artistPrompt: state.artistPrompt,
+        otherPrompt: state.otherPrompt,
+        qualityPrompt: state.qualityPrompt,
         negativePrompt: state.negativePrompt,
         characters: state.characters,
-        aiPosition: state.aiPosition,
+        useCharacterCoords: state.useCharacterCoords,
         settings: state.settings,
       }),
     },

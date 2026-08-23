@@ -1,10 +1,29 @@
-node_modules/
+﻿node_modules/
 dist/
-.vite/
+.cache/
+
+# Rust build output
 src-tauri/target/
-.DS_Store
-Thumbs.db
-*.log
-.env
-.env.*
-!.env.example
+
+# TypeScript / Python caches
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+
+# Android generated build/cache only
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/local.properties
+
+# Raw Danbooru JSON shards - runtime uses compressed SQLite instead
+public/data/danbooru/
+
+# Uncompressed working DB only
+src-tauri/resources/danbooru.sqlite
+
+# Old patch-delivery leftovers
+PATCH_NOTES*.txt
+APPLY_README.txt
+README_ANDROID_*.txt
+Install_v0.4.4_ALL.cmd

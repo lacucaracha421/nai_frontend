@@ -1,0 +1,42 @@
+[
+  {
+    "name": "kanzarin",
+    "category": 1,
+    "post_count": 10000,
+    "aliases": []
+  },
+  {
+    "name": "toma_(toma50)",
+    "category": 1,
+    "post_count": 8000,
+    "aliases": [
+      "toma50"
+    ]
+  },
+  {
+    "name": "kaine_(nier)",
+    "category": 4,
+    "post_count": 5000,
+    "aliases": [
+      "カイネ",
+      "카이네"
+    ]
+  },
+  {
+    "name": "ryuuge_kisaki_(blue_archive)",
+    "category": 4,
+    "post_count": 9000,
+    "aliases": [
+      "キサキ",
+      "키사키"
+    ]
+  },
+  {
+    "name": "from_below",
+    "category": 0,
+    "post_count": 100000,
+    "aliases": [
+      "로우 앵글"
+    ]
+  }
+]

@@ -1,20 +1,3 @@
-import { create } from "zustand";
-import type { SidebarTab, WorkspaceTab } from "../types/generation";
-
-type UiState = {
-  sidebarTab: SidebarTab;
-  workspaceTab: WorkspaceTab;
-  libraryOpen: boolean;
-  setSidebarTab: (tab: SidebarTab) => void;
-  setWorkspaceTab: (tab: WorkspaceTab) => void;
-  setLibraryOpen: (open: boolean) => void;
-};
-
-export const useUiStore = create<UiState>((set) => ({
-  sidebarTab: "prompt",
-  workspaceTab: "generate",
-  libraryOpen: false,
-  setSidebarTab: (sidebarTab) => set({ sidebarTab }),
-  setWorkspaceTab: (workspaceTab) => set({ workspaceTab }),
-  setLibraryOpen: (libraryOpen) => set({ libraryOpen }),
-}));
+import { create } from "zustand"; import { persist } from "zustand/middleware";
+type State={showFixedPrompts:boolean;setShowFixedPrompts:(v:boolean)=>void};
+export const useUiStore=create<State>()(persist(set=>({showFixedPrompts:false,setShowFixedPrompts:(showFixedPrompts)=>set({showFixedPrompts})}),{name:"nai-v5-s11-ui"}));

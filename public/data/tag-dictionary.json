@@ -1,0 +1,1127 @@
+[
+  {
+    "title": "더치 앵글",
+    "category": "시점",
+    "prompt": "dutch angle",
+    "description": "화면의 수평선을 기울여 긴장감과 역동성을 만드는 시점.",
+    "aliases": "더치앵글, 기울어진 화면, 사선 구도, 틸트",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "위에서",
+    "category": "시점",
+    "prompt": "from above",
+    "description": "피사체를 위쪽에서 내려다보는 시점.",
+    "aliases": "위에서, 내려다봄, 하이앵글, 하이 앵글",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "뒤에서",
+    "category": "시점",
+    "prompt": "from behind",
+    "description": "피사체의 뒤쪽을 바라보는 시점.",
+    "aliases": "뒤에서, 후면, 뒷모습, 백뷰",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "아래에서",
+    "category": "시점",
+    "prompt": "from below",
+    "description": "피사체를 아래쪽에서 올려다보는 시점.",
+    "aliases": "아래에서, 올려다봄, 로우앵글, 로우 앵글",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "옆에서",
+    "category": "시점",
+    "prompt": "from side",
+    "description": "피사체를 옆면에서 바라보는 시점.",
+    "aliases": "옆에서, 측면, 사이드뷰, 사이드 뷰",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "높은 곳에서",
+    "category": "시점",
+    "prompt": "high up",
+    "description": "아주 높은 위치에서 아래의 장면을 바라보는 시점.",
+    "aliases": "높은 곳, 고공, 멀리 위에서, 높은 시점",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "다중 시점",
+    "category": "시점",
+    "prompt": "multiple views",
+    "description": "한 이미지 안에 같은 대상을 여러 방향이나 시점으로 함께 보여줌.",
+    "aliases": "다중시점, 여러 시점, 여러 각도, 멀티뷰",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "옆으로 누운 화면",
+    "category": "시점",
+    "prompt": "sideways",
+    "description": "이미지나 피사체가 옆으로 돌아간 듯한 방향감.",
+    "aliases": "옆으로, 90도, 가로로 누움, sideways",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "정면",
+    "category": "시점",
+    "prompt": "straight-on",
+    "description": "카메라가 피사체 정면을 곧게 바라보는 시점.",
+    "aliases": "정면, 정면샷, 프론트뷰, 직선 시점",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "3/4 뷰",
+    "category": "시점",
+    "prompt": "three quarter view",
+    "description": "정면과 측면의 중간 정도에서 바라보는 3/4 시점.",
+    "aliases": "삼사분면, 3/4, 사선 정면, 쓰리쿼터",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "거꾸로",
+    "category": "시점",
+    "prompt": "upside-down",
+    "description": "장면이나 피사체를 상하가 뒤집힌 방향으로 보여줌.",
+    "aliases": "거꾸로, 상하반전, 뒤집힘",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "웜즈 아이 뷰",
+    "category": "시점",
+    "prompt": "worm's eye view",
+    "description": "지면 가까운 극단적으로 낮은 위치에서 위를 올려다보는 시점.",
+    "aliases": "웜즈아이, 벌레 시점, 극단 로우앵글, 바닥 시점",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "대기 원근법",
+    "category": "렌즈·원근",
+    "prompt": "atmospheric perspective",
+    "description": "멀어질수록 흐리고 옅어지는 공기감으로 깊이를 표현함.",
+    "aliases": "대기원근, 공기원근, 거리감, 안개 원근",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "어안",
+    "category": "렌즈·원근",
+    "prompt": "fisheye",
+    "description": "초광각 렌즈처럼 화면 가장자리와 원근이 크게 휘어지는 표현.",
+    "aliases": "어안, 피쉬아이, 초광각, 왜곡 렌즈",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "파노라마",
+    "category": "렌즈·원근",
+    "prompt": "panorama",
+    "description": "한눈에 보기 어려울 만큼 넓은 범위를 길게 펼쳐 보여주는 시야.",
+    "aliases": "파노라마, 초광폭, 넓은 풍경, 광각 풍경",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "360 파노라마",
+    "category": "렌즈·원근",
+    "prompt": "360 panorama",
+    "description": "장면 주위를 360도로 이어지는 파노라마처럼 표현함.",
+    "aliases": "360도, 360 파노라마, 전방위",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "원근 강조",
+    "category": "렌즈·원근",
+    "prompt": "perspective",
+    "description": "가까운 것과 먼 것의 크기 차이를 이용해 공간 깊이를 강조함.",
+    "aliases": "원근, 퍼스, 원근감, 깊이",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "소실점",
+    "category": "렌즈·원근",
+    "prompt": "vanishing point",
+    "description": "선들이 한 지점으로 모이는 소실점을 강하게 드러내는 구도.",
+    "aliases": "소실점, 원근선, 퍼스포인트",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "단축법",
+    "category": "렌즈·원근",
+    "prompt": "foreshortening",
+    "description": "카메라 쪽으로 뻗은 신체나 물체를 원근 때문에 짧고 크게 보이게 표현함.",
+    "aliases": "단축법, 포쇼트닝, 전경 확대, 손발 크게",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "심도",
+    "category": "렌즈·원근",
+    "prompt": "depth of field",
+    "description": "초점이 맞은 영역과 흐린 영역을 나눠 렌즈의 심도를 표현함.",
+    "aliases": "심도, 피사계심도, 초점거리, dof",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "전경 흐림",
+    "category": "렌즈·원근",
+    "prompt": "blurry foreground",
+    "description": "카메라 가까운 전경을 흐리게 하여 피사체와의 깊이를 강조함.",
+    "aliases": "전경흐림, 앞쪽 흐림, 앞 보케",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "배경 흐림",
+    "category": "렌즈·원근",
+    "prompt": "blurry background",
+    "description": "피사체 뒤의 배경을 흐리게 하여 주제를 강조함.",
+    "aliases": "배경흐림, 아웃포커싱, 뒤 보케",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "강제 원근",
+    "category": "렌즈·원근",
+    "prompt": "forced perspective",
+    "description": "크기와 거리 착시를 이용해 실제보다 과장된 원근 관계를 만듦.",
+    "aliases": "강제원근, 원근착시, 크기 착시",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "아이소메트릭",
+    "category": "렌즈·원근",
+    "prompt": "isometric",
+    "description": "축이 일정한 각도로 보이는 등각 투영풍 공간 표현.",
+    "aliases": "아이소메트릭, 등각투영, 등각 시점",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "포트레이트",
+    "category": "프레이밍",
+    "prompt": "portrait",
+    "description": "얼굴부터 어깨 부근까지 중심으로 잡는 프레이밍.",
+    "aliases": "얼굴샷, 어깨까지, 초상, 포트레이트",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "상반신",
+    "category": "프레이밍",
+    "prompt": "upper body",
+    "description": "얼굴부터 몸통 정도까지 화면에 담는 프레이밍.",
+    "aliases": "상반신, 허리 위, 바스트샷",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "하반신",
+    "category": "프레이밍",
+    "prompt": "lower body",
+    "description": "몸통 아래부터 다리 쪽을 중심으로 잡는 프레이밍.",
+    "aliases": "하반신, 허리 아래, 다리 중심",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "카우보이 샷",
+    "category": "프레이밍",
+    "prompt": "cowboy shot",
+    "description": "얼굴부터 허벅지 정도까지 담는 대표적인 중간 거리 프레이밍.",
+    "aliases": "카우보이샷, 허벅지까지, 니샷, 미디엄풀",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "발이 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "feet out of frame",
+    "description": "머리부터 무릎 아래까지 보이지만 발은 화면 밖으로 나간 프레이밍.",
+    "aliases": "발 잘림, 발 프레임밖, 무릎 아래까지",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "전신",
+    "category": "프레이밍",
+    "prompt": "full body",
+    "description": "머리부터 발끝까지 전신이 화면 안에 들어오는 프레이밍.",
+    "aliases": "전신, 풀바디, 전신샷",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "와이드 샷",
+    "category": "프레이밍",
+    "prompt": "wide shot",
+    "description": "전신과 주변 환경이 함께 보이도록 멀리서 잡는 프레이밍.",
+    "aliases": "와이드샷, 롱샷, 멀리서 전신",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "매우 먼 와이드 샷",
+    "category": "프레이밍",
+    "prompt": "very wide shot",
+    "description": "피사체가 작게 보일 정도로 아주 멀리서 장면 전체를 잡음.",
+    "aliases": "익스트림 와이드, 초원경, 아주 멀리",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "머리가 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "head out of frame",
+    "description": "목 아래는 보이지만 머리가 화면 밖으로 잘린 프레이밍.",
+    "aliases": "머리 잘림, 머리 프레임밖, 얼굴 없음",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "눈이 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "eyes out of frame",
+    "description": "코 아래쪽은 보이지만 눈 위쪽이 화면 밖으로 잘린 프레이밍.",
+    "aliases": "눈 잘림, 눈 프레임밖, 얼굴 일부",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "팔이 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "arm out of frame",
+    "description": "팔의 일부가 이미지 경계를 넘어 화면 밖으로 이어지는 프레이밍.",
+    "aliases": "팔 잘림, 팔 프레임밖",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "한쪽 발이 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "foot out of frame",
+    "description": "한쪽 발 또는 발 일부가 이미지 경계 밖으로 나간 프레이밍.",
+    "aliases": "한쪽 발 잘림, 발 하나 프레임밖",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "무릎이 프레임 밖",
+    "category": "프레이밍",
+    "prompt": "knees out of frame",
+    "description": "무릎 부근부터 아래가 화면 밖으로 나가는 프레이밍.",
+    "aliases": "무릎 잘림, 무릎 프레임밖",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "클로즈업",
+    "category": "프레이밍",
+    "prompt": "close-up",
+    "description": "얼굴이나 특정 부위를 화면 가득 크게 잡는 근접 프레이밍.",
+    "aliases": "클로즈업, 근접, 확대샷",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "크롭",
+    "category": "프레이밍",
+    "prompt": "cropped",
+    "description": "피사체 일부가 의도적으로 잘려 화면 안에 모두 보이지 않는 상태.",
+    "aliases": "크롭, 잘림, 일부만",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "다리 크롭",
+    "category": "프레이밍",
+    "prompt": "cropped legs",
+    "description": "다리를 화면 경계로 자른 것이 아니라 그림 자체에서 일부만 그린 형태.",
+    "aliases": "다리크롭, 다리 잘림, 다리 일부",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "몸통 크롭",
+    "category": "프레이밍",
+    "prompt": "cropped torso",
+    "description": "몸통 일부가 그림 자체에서 잘려 그려진 형태.",
+    "aliases": "몸통크롭, 토르소 잘림",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "팔 크롭",
+    "category": "프레이밍",
+    "prompt": "cropped arms",
+    "description": "팔 일부가 그림 자체에서 잘려 그려진 형태.",
+    "aliases": "팔크롭, 팔 일부",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "어깨 크롭",
+    "category": "프레이밍",
+    "prompt": "cropped shoulders",
+    "description": "어깨 부위가 그림 자체에서 일부 잘려 그려진 형태.",
+    "aliases": "어깨크롭, 어깨 잘림",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "머리 크롭",
+    "category": "프레이밍",
+    "prompt": "cropped head",
+    "description": "머리 일부가 그림 자체에서 잘려 그려진 형태.",
+    "aliases": "머리크롭, 머리 일부",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "컷인",
+    "category": "프레이밍",
+    "prompt": "cut-in",
+    "description": "주 화면 위에 특정 부위나 장면을 작은 별도 컷으로 끼워 넣음.",
+    "aliases": "컷인, 삽입컷, 부분 확대",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "프로필",
+    "category": "프레이밍",
+    "prompt": "profile",
+    "description": "얼굴이나 몸을 뚜렷한 옆모습으로 보여주는 프레이밍.",
+    "aliases": "프로필, 옆얼굴, 측면 얼굴",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "그룹 프로필",
+    "category": "프레이밍",
+    "prompt": "group profile",
+    "description": "여러 인물을 나란히 옆모습으로 보여주는 프레이밍.",
+    "aliases": "그룹프로필, 여러명 옆모습",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "분할 크롭",
+    "category": "프레이밍",
+    "prompt": "split crop",
+    "description": "피사체나 화면을 나누어 서로 다른 부분을 잘라 보여주는 구성.",
+    "aliases": "분할크롭, 스플릿크롭, 잘린 분할",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "테두리",
+    "category": "구도",
+    "prompt": "border",
+    "description": "이미지 가장자리에 명확한 테두리를 두는 구성.",
+    "aliases": "테두리, 프레임, 보더",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "안쪽 테두리",
+    "category": "구도",
+    "prompt": "inset border",
+    "description": "이미지 바깥이 아니라 안쪽에 여백을 두고 테두리를 배치함.",
+    "aliases": "안쪽테두리, 인셋보더",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "바깥 테두리",
+    "category": "구도",
+    "prompt": "outside border",
+    "description": "피사체 일부가 테두리 바깥으로 튀어나오거나 외부에 놓이는 구성.",
+    "aliases": "바깥테두리, 프레임밖, 보더 밖",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "뷰파인더",
+    "category": "구도",
+    "prompt": "viewfinder",
+    "description": "카메라나 촬영 화면을 보는 듯한 뷰파인더 UI를 겹친 구성.",
+    "aliases": "뷰파인더, 카메라화면, 촬영화면",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "콜라주",
+    "category": "구도",
+    "prompt": "collage",
+    "description": "여러 이미지나 장면을 한 화면에 조합한 구성.",
+    "aliases": "콜라주, 여러 사진, 모음",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "세로 줄 배치",
+    "category": "구도",
+    "prompt": "column lineup",
+    "description": "여러 인물을 열이나 세로 방향으로 정렬해 배치한 구성.",
+    "aliases": "세로배치, 줄세움, 컬럼 라인업",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "프레임 밖 연출",
+    "category": "구도",
+    "prompt": "out of frame",
+    "description": "피사체 일부가 이미지 테두리 바깥으로 이어지는 효과를 적극적으로 사용함.",
+    "aliases": "프레임밖, 화면밖, 튀어나옴",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "바깥에서 바라봄",
+    "category": "구도",
+    "prompt": "from outside",
+    "description": "창문이나 문 등 장면 바깥쪽에서 안을 바라보는 듯한 구성.",
+    "aliases": "밖에서, 외부시점, 창밖에서",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "레터박스",
+    "category": "구도",
+    "prompt": "letterboxed",
+    "description": "화면 위아래에 검은 띠나 여백을 둔 영화 화면 같은 구성.",
+    "aliases": "레터박스, 위아래 검은띠, 시네마틱",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "필러박스",
+    "category": "구도",
+    "prompt": "pillarboxed",
+    "description": "화면 좌우에 띠나 여백을 두는 구성.",
+    "aliases": "필러박스, 좌우 검은띠",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "라인업",
+    "category": "구도",
+    "prompt": "lineup",
+    "description": "여러 인물이나 대상을 한 줄로 정렬해 보여주는 구성.",
+    "aliases": "라인업, 줄세움, 일렬배치",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "네거티브 스페이스",
+    "category": "구도",
+    "prompt": "negative space",
+    "description": "피사체 주변의 넓은 빈 공간을 구도 요소로 적극 활용함.",
+    "aliases": "네거티브스페이스, 여백, 빈공간, 공간감",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "부분 수중 샷",
+    "category": "구도",
+    "prompt": "partially underwater shot",
+    "description": "수면을 기준으로 화면 일부는 물속, 일부는 물 밖으로 나누는 구성.",
+    "aliases": "반수중, 수면분할, 물속 물밖",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "POV",
+    "category": "구도",
+    "prompt": "pov",
+    "description": "관찰자나 상대방의 눈으로 직접 보는 듯한 1인칭 시점 구성.",
+    "aliases": "pov, 1인칭, 시점샷, 관찰자 시점",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "소셜 미디어 구성",
+    "category": "구도",
+    "prompt": "social media composition",
+    "description": "SNS 게시물이나 피드 화면처럼 인터페이스를 포함해 구성함.",
+    "aliases": "SNS, 소셜미디어, 게시물 화면, 피드",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "대칭",
+    "category": "구도",
+    "prompt": "symmetry",
+    "description": "좌우 또는 상하가 균형 있게 대응하도록 배치한 구도.",
+    "aliases": "대칭, 좌우대칭, 균형",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "극단적 대비 배치",
+    "category": "구도",
+    "prompt": "polar opposites",
+    "description": "서로 반대되는 두 대상이나 요소를 대칭적으로 대비시키는 구성.",
+    "aliases": "양극, 정반대, 대비구도, 반대 배치",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "회전 대칭",
+    "category": "구도",
+    "prompt": "rotational symmetry",
+    "description": "중심을 기준으로 회전했을 때 반복되는 대칭 구도.",
+    "aliases": "회전대칭, 방사대칭, 중심대칭",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "줌 레이어",
+    "category": "구도",
+    "prompt": "zoom layer",
+    "description": "원본 장면 위에 특정 부분을 확대해 별도 레이어처럼 보여줌.",
+    "aliases": "줌레이어, 확대창, 부분확대",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "투영 인셋",
+    "category": "구도",
+    "prompt": "projected inset",
+    "description": "장면 일부를 별도의 삽입 화면이나 투영된 컷처럼 겹쳐 보여줌.",
+    "aliases": "인셋, 삽입화면, 투영컷",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "셀피",
+    "category": "구도",
+    "prompt": "selfie",
+    "description": "캐릭터가 직접 카메라를 들고 자신을 촬영하는 듯한 구도.",
+    "aliases": "셀피, 셀카, 자촬",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "거울 셀피",
+    "category": "구도",
+    "prompt": "mirror selfie",
+    "description": "거울에 비친 모습을 카메라로 촬영하는 셀피 구도.",
+    "aliases": "거울셀피, 거울셀카, 미러셀피",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "시청자를 봄",
+    "category": "구도",
+    "prompt": "looking at viewer",
+    "description": "캐릭터의 시선이 화면을 보는 관찰자에게 향함.",
+    "aliases": "정면응시, 카메라봄, 시청자봄, 눈맞춤",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "시선을 피함",
+    "category": "구도",
+    "prompt": "looking away",
+    "description": "캐릭터가 카메라나 중심 대상에서 시선을 돌림.",
+    "aliases": "시선피함, 딴곳봄, 외면",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "뒤돌아봄",
+    "category": "구도",
+    "prompt": "looking back",
+    "description": "몸은 다른 방향을 향하면서 고개나 시선만 뒤쪽으로 돌림.",
+    "aliases": "뒤돌아봄, 뒤보기, 돌아봄",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "옆을 봄",
+    "category": "구도",
+    "prompt": "looking to the side",
+    "description": "캐릭터의 시선이 좌우 측면으로 향함.",
+    "aliases": "옆을봄, 측면응시, 사이드 시선",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "위를 봄",
+    "category": "구도",
+    "prompt": "looking up",
+    "description": "캐릭터가 위쪽을 바라봄.",
+    "aliases": "위를봄, 위를바라봄, 상향시선",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "아래를 봄",
+    "category": "구도",
+    "prompt": "looking down",
+    "description": "캐릭터가 아래쪽을 바라봄.",
+    "aliases": "아래를봄, 내려다봄, 하향시선",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "다른 인물을 봄",
+    "category": "구도",
+    "prompt": "looking at another",
+    "description": "한 캐릭터가 화면 안의 다른 캐릭터를 바라봄.",
+    "aliases": "서로봄, 상대방봄, 다른인물 응시",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "서로 머리를 맞댐",
+    "category": "구도",
+    "prompt": "heads together",
+    "description": "여러 인물이 머리나 얼굴을 가까이 맞대어 응집된 구도를 만듦.",
+    "aliases": "머리맞댐, 얼굴가까이, 단체 밀착",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "둘러싸임",
+    "category": "구도",
+    "prompt": "surrounded",
+    "description": "중심 피사체를 여러 인물이나 물체가 사방에서 둘러싸는 구성.",
+    "aliases": "둘러싸임, 포위, 중앙 인물",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "정면을 향함",
+    "category": "구도",
+    "prompt": "facing viewer",
+    "description": "몸의 방향 자체가 카메라나 관찰자 쪽을 향함.",
+    "aliases": "정면향함, 몸 정면, 카메라 향함",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "등을 돌림",
+    "category": "구도",
+    "prompt": "facing away",
+    "description": "몸의 방향이 카메라 반대쪽을 향해 등을 보이는 구성.",
+    "aliases": "등돌림, 뒤돌아섬, 반대방향",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "그룹 사진",
+    "category": "구도",
+    "prompt": "group picture",
+    "description": "여러 인물이 단체 사진처럼 한 장면에 모여 포즈를 취하는 구성.",
+    "aliases": "단체사진, 그룹샷, 단체샷",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "동물 초점",
+    "category": "초점",
+    "prompt": "animal focus",
+    "description": "사람보다 동물이나 생물을 화면의 주된 초점으로 둠.",
+    "aliases": "동물중심, 동물초점, 애니멀포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "겨드랑이 초점",
+    "category": "초점",
+    "prompt": "armpit focus",
+    "description": "겨드랑이 부위를 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "겨드랑이, 겨드랑이강조, 암핏",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "엉덩이 초점",
+    "category": "초점",
+    "prompt": "ass focus",
+    "description": "엉덩이 부위를 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "엉덩이, 힙 강조, 둔부",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "등 초점",
+    "category": "초점",
+    "prompt": "back focus",
+    "description": "등과 뒷면을 화면의 주된 초점으로 둠.",
+    "aliases": "등, 뒷모습강조, 등강조",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "책 초점",
+    "category": "초점",
+    "prompt": "book focus",
+    "description": "책이나 펼쳐진 페이지를 화면의 주된 초점으로 둠.",
+    "aliases": "책, 책강조, 페이지",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "가슴 초점",
+    "category": "초점",
+    "prompt": "breast focus",
+    "description": "가슴 부위를 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "가슴, 흉부강조, 바스트포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "구름 초점",
+    "category": "초점",
+    "prompt": "cloud focus",
+    "description": "구름이나 하늘의 구름층을 화면의 중심 요소로 둠.",
+    "aliases": "구름, 하늘강조, 구름중심",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "눈 초점",
+    "category": "초점",
+    "prompt": "eye focus",
+    "description": "눈이나 홍채를 화면의 주된 시선 지점으로 강조함.",
+    "aliases": "눈, 눈강조, 아이포커스, 홍채",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "음식 초점",
+    "category": "초점",
+    "prompt": "food focus",
+    "description": "음식이나 요리를 화면의 주된 초점으로 둠.",
+    "aliases": "음식, 요리, 음식강조",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "발 초점",
+    "category": "초점",
+    "prompt": "foot focus",
+    "description": "발이나 발끝을 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "발, 발강조, 풋포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "손 초점",
+    "category": "초점",
+    "prompt": "hand focus",
+    "description": "손과 손가락을 화면의 주된 초점으로 강조함.",
+    "aliases": "손, 손강조, 핸드포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "골반 초점",
+    "category": "초점",
+    "prompt": "hip focus",
+    "description": "골반이나 허리 주변을 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "골반, 허리강조, 힙포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "남성 초점",
+    "category": "초점",
+    "prompt": "male focus",
+    "description": "남성 캐릭터를 화면의 주된 초점으로 둠.",
+    "aliases": "남캐중심, 남성중심, male focus",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "괴물 초점",
+    "category": "초점",
+    "prompt": "monster focus",
+    "description": "괴물이나 비인간형 존재를 화면의 주된 초점으로 둠.",
+    "aliases": "괴물, 몬스터중심, 크리처",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "배꼽 초점",
+    "category": "초점",
+    "prompt": "navel focus",
+    "description": "배꼽과 복부 중앙을 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "배꼽, 복부강조, 네이블",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "사물 초점",
+    "category": "초점",
+    "prompt": "object focus",
+    "description": "특정 사물이나 소품을 인물보다 강하게 강조함.",
+    "aliases": "사물, 소품중심, 오브젝트",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "식물 초점",
+    "category": "초점",
+    "prompt": "plant focus",
+    "description": "식물이나 꽃, 나무 등을 화면의 주된 초점으로 둠.",
+    "aliases": "식물, 꽃중심, 나무중심",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "가슴근육 초점",
+    "category": "초점",
+    "prompt": "pectoral focus",
+    "description": "가슴근육이나 흉근을 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "흉근, 가슴근육, 펙토럴",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "성기 초점",
+    "category": "초점",
+    "prompt": "penis focus",
+    "description": "남성 성기를 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "성기, 남성성기, 페니스포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "단독 인물 초점",
+    "category": "초점",
+    "prompt": "solo focus",
+    "description": "여러 요소 중 한 인물을 명확한 주인공으로 강조함.",
+    "aliases": "단독초점, 한명중심, 솔로포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "텍스트 초점",
+    "category": "초점",
+    "prompt": "text focus",
+    "description": "문자나 문구를 이미지의 주된 시선 지점으로 강조함.",
+    "aliases": "텍스트, 글자중심, 문구강조",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "허벅지 초점",
+    "category": "초점",
+    "prompt": "thigh focus",
+    "description": "허벅지를 구도의 주된 시선 지점으로 강조함.",
+    "aliases": "허벅지, 허벅지강조, thigh",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "무기 초점",
+    "category": "초점",
+    "prompt": "weapon focus",
+    "description": "무기를 인물만큼 또는 그보다 강하게 화면 중심으로 강조함.",
+    "aliases": "무기, 무기강조, 웨폰포커스",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "탈것 초점",
+    "category": "초점",
+    "prompt": "vehicle focus",
+    "description": "자동차나 오토바이 등 탈것을 화면의 주된 초점으로 둠.",
+    "aliases": "탈것, 자동차중심, 차량강조",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "글리치",
+    "category": "화면 효과",
+    "prompt": "glitch",
+    "description": "디지털 오류나 화면 깨짐처럼 보이는 시각 효과.",
+    "aliases": "글리치, 오류화면, 디지털깨짐",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "모션 블러",
+    "category": "화면 효과",
+    "prompt": "motion blur",
+    "description": "빠른 움직임 때문에 피사체나 배경이 방향성 있게 흐려지는 효과.",
+    "aliases": "모션블러, 움직임흐림, 속도감",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "색수차",
+    "category": "화면 효과",
+    "prompt": "chromatic aberration",
+    "description": "윤곽 가장자리의 RGB 색이 어긋난 렌즈 색수차 효과.",
+    "aliases": "색수차, rgb 어긋남, chromatic",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "필름 그레인",
+    "category": "화면 효과",
+    "prompt": "film grain",
+    "description": "필름 사진처럼 미세한 입자 노이즈를 더하는 효과.",
+    "aliases": "필름그레인, 입자, 필름노이즈",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "비네트",
+    "category": "화면 효과",
+    "prompt": "vignette",
+    "description": "화면 가장자리를 어둡게 하거나 중심으로 시선을 모으는 효과.",
+    "aliases": "비네트, 가장자리어둡게, 주변부감광",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "렌즈 플레어",
+    "category": "화면 효과",
+    "prompt": "lens flare",
+    "description": "강한 광원이 렌즈 안에서 번지거나 반사되는 빛 효과.",
+    "aliases": "렌즈플레어, 빛번짐, 광원반사",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "스캔라인",
+    "category": "화면 효과",
+    "prompt": "scanlines",
+    "description": "CRT나 오래된 모니터처럼 가는 수평선을 반복해 넣는 효과.",
+    "aliases": "스캔라인, crt, 모니터줄",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "VHS 아티팩트",
+    "category": "화면 효과",
+    "prompt": "vhs artifacts",
+    "description": "비디오테이프 재생처럼 노이즈와 왜곡이 생기는 효과.",
+    "aliases": "vhs, 비디오노이즈, 테이프효과",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "JPEG 아티팩트",
+    "category": "화면 효과",
+    "prompt": "jpeg artifacts",
+    "description": "강한 JPEG 압축에서 생기는 블록과 번짐 같은 흔적.",
+    "aliases": "jpeg, 압축노이즈, 블록노이즈",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "앨리어싱",
+    "category": "화면 효과",
+    "prompt": "aliasing",
+    "description": "윤곽이나 선이 계단처럼 깨져 보이는 픽셀화 효과.",
+    "aliases": "앨리어싱, 계단현상, 픽셀계단",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "모아레",
+    "category": "화면 효과",
+    "prompt": "moire",
+    "description": "촘촘한 패턴이 겹치며 물결무늬 간섭이 생기는 효과.",
+    "aliases": "모아레, 간섭무늬, 물결패턴",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "젖은 렌즈",
+    "category": "화면 효과",
+    "prompt": "wet lens",
+    "description": "카메라 렌즈에 물방울이 묻은 것처럼 전경에 물방울을 겹치는 효과.",
+    "aliases": "젖은렌즈, 물방울렌즈, 렌즈 물방울",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "깊이감",
+    "category": "V5",
+    "prompt": "depthness",
+    "description": "V5에서 음영과 공간의 깊이감을 강화하는 전용 태그.",
+    "aliases": "깊이, 깊이감, depthness",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "높은 복잡도",
+    "category": "V5",
+    "prompt": "high complexity",
+    "description": "V5에서 일반적인 고품질 디테일을 유도하기 좋은 복잡도 태그.",
+    "aliases": "고복잡도, 디테일, high complexity",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "초고 복잡도",
+    "category": "V5",
+    "prompt": "ultra complexity",
+    "description": "더 강한 복잡성과 스타일화를 유도하는 V5 태그.",
+    "aliases": "초고복잡도, 울트라, ultra complexity",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "투명 배경",
+    "category": "V5",
+    "prompt": "transparent background",
+    "description": "V5의 네이티브 알파 투명 배경을 요청함.",
+    "aliases": "투명배경, 알파, transparent",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "알파 사용",
+    "category": "V5",
+    "prompt": "has alpha",
+    "description": "V5가 이미지의 알파 채널을 활용하도록 힌트를 줌.",
+    "aliases": "알파, 투명, has alpha",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "알파 투명도",
+    "category": "V5",
+    "prompt": "alpha transparency",
+    "description": "반투명 효과나 투명 요소를 생성하도록 요청함.",
+    "aliases": "반투명, 알파투명, alpha transparency",
+    "note": "",
+    "pinned": false
+  },
+  {
+    "title": "비주얼 노벨 CG",
+    "category": "V5",
+    "prompt": "visual novel cg",
+    "description": "비주얼 노벨 CG풍 화면을 유도하는 V5 태그.",
+    "aliases": "비주얼노벨, vn cg, cg",
+    "note": "",
+    "pinned": false
+  }
+]

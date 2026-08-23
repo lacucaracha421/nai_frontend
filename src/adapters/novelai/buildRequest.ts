@@ -1,28 +1,44 @@
 import type { GenerationDraft, NovelAiImageRequest } from "./types";
 
-function joinPrompt(...parts: string[]) {
-  return parts
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" ")
+function cleanPart(value: string) {
+  return value
+    .trim()
+    .replace(/_+/g, " ")
     .replace(/\s+,/g, ",")
-    .trim();
+    .replace(/,\s*,+/g, ",");
+}
+
+export function joinPositivePrompt(
+  draft: Pick<GenerationDraft, "artistPrompt" | "otherPrompt" | "qualityPrompt">,
+) {
+  return [draft.artistPrompt, draft.otherPrompt, draft.qualityPrompt]
+    .map(cleanPart)
+    .filter(Boolean)
+    .join(", ")
+    .replace(/,\s*,+/g, ", ");
 }
 
 export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest {
-  const prompt = joinPrompt(draft.beginningPrompt, draft.endingPrompt);
-  const enabledCharacters = draft.characters.filter((item) => item.enabled && item.prompt.trim());
-  const charCaptions = enabledCharacters.map((item) => ({
-    char_caption: item.prompt.trim(),
-    centers: [{ x: item.position.x, y: item.position.y }],
-  }));
-  const negativeCharCaptions = enabledCharacters.map((item) => ({
-    char_caption: item.negative.trim(),
-    centers: [{ x: item.position.x, y: item.position.y }],
+  const prompt = joinPositivePrompt(draft);
+  const enabled = draft.characters.filter((c) => c.enabled && c.prompt.trim());
+
+  // NovelAI V4/V5 structured character captions expect a center entry even when
+  // AI's Choice is active. `use_coords: false` tells the model to ignore those
+  // centers and choose placement itself. Omitting centers can produce a server 500.
+  const chars = enabled.map((c) => ({
+    char_caption: cleanPart(c.prompt),
+    centers: [{ x: c.position.x, y: c.position.y }],
   }));
 
-  const parameters: Record<string, unknown> = {
-    params_version: 3,
+  // Keep the negative caption array index-aligned with the positive characters.
+  // Empty per-character UC is valid, but the center still needs to be present.
+  const negs = enabled.map((c) => ({
+    char_caption: cleanPart(c.negative),
+    centers: [{ x: c.position.x, y: c.position.y }],
+  }));
+
+  const parameters: NovelAiImageRequest["parameters"] = {
+    params_version: 4,
     width: draft.settings.width,
     height: draft.settings.height,
     steps: draft.settings.steps,
@@ -30,44 +46,47 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
     cfg_rescale: draft.settings.guidanceRescale,
     sampler: draft.settings.sampler,
     noise_schedule: draft.settings.noiseSchedule,
-    negative_prompt: draft.negativePrompt,
-    n_samples: draft.settings.count,
-    qualityToggle: true,
+    n_samples: 1,
+    negative_prompt: cleanPart(draft.negativePrompt),
+    qualityToggle: false,
     ucPreset: 0,
     dynamic_thresholding: false,
     legacy: false,
-    add_original_image: false,
+    legacy_v3_extend: false,
+    add_original_image: true,
     v4_prompt: {
       caption: {
         base_caption: prompt,
-        char_captions: charCaptions,
+        char_captions: chars,
       },
-      use_coords: !draft.aiPosition,
+      use_coords: draft.useCharacterCoords,
       use_order: true,
+      legacy_uc: false,
     },
     v4_negative_prompt: {
       caption: {
-        base_caption: draft.negativePrompt,
-        char_captions: negativeCharCaptions,
+        base_caption: cleanPart(draft.negativePrompt),
+        char_captions: negs,
       },
-      use_coords: !draft.aiPosition,
-      use_order: true,
+      // Current NovelAI clients keep negative character coordinates disabled;
+      // centers remain index-aligned with the positive captions.
+      use_coords: false,
+      use_order: false,
+      legacy_uc: false,
     },
+    tag_hint_transparent_background: /(transparent background|has alpha|alpha transparency)/i.test(
+      prompt,
+    ),
   };
 
   if (draft.settings.seed !== null) {
     parameters.seed = draft.settings.seed;
+    parameters.extra_noise_seed = draft.settings.seed;
   }
 
   if (draft.settings.sampler === "k_euler_ancestral") {
     parameters.deliberate_euler_ancestral_bug = false;
     parameters.prefer_brownian = true;
-  }
-
-  // V4.5's Variety+ value is known. V5 may use a different threshold, so do not
-  // force the V4.5 value onto an unknown/new model.
-  if (draft.settings.varietyPlus && draft.settings.model.includes("4-5")) {
-    parameters.skip_cfg_above_sigma = 59.04722600415217;
   }
 
   return {

@@ -1,0 +1,3 @@
+import { create } from "zustand"; import { persist } from "zustand/middleware";
+type State={favorites:string[];toggleFavorite:(tag:string)=>void;isFavorite:(tag:string)=>boolean};
+export const useTagStore=create<State>()(persist((set,get)=>({favorites:[],toggleFavorite:(tag)=>set(s=>({favorites:s.favorites.includes(tag)?s.favorites.filter(x=>x!==tag):[tag,...s.favorites]})),isFavorite:(tag)=>get().favorites.includes(tag)}),{name:"nai-v5-local-tag-favorites"}));

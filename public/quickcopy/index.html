@@ -1,0 +1,2143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Artist / Tag Quick Copy v7</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg:#0f1115;
+  --panel:#171a20;
+  --panel-2:#1d2128;
+  --panel-3:#222730;
+  --line:#2a3039;
+  --line-soft:#232932;
+  --text:#f3f5f7;
+  --muted:#969eaa;
+  --muted-2:#68717d;
+  --danger:#ff7777;
+  --shadow:0 18px 60px rgba(0,0,0,.36);
+}
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,Pretendard,"Noto Sans KR",system-ui,-apple-system,sans-serif;
+}
+button,input,textarea { font:inherit; }
+button { color:inherit; }
+.app {
+  width:min(1180px,calc(100% - 32px));
+  margin:34px auto 80px;
+}
+.topbar {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:16px;
+}
+.title-wrap h1 {
+  margin:0 0 5px;
+  font-size:22px;
+  letter-spacing:-.025em;
+}
+.subtitle {
+  color:var(--muted);
+  font-size:13px;
+}
+.toolbar {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.btn {
+  appearance:none;
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  color:var(--text);
+  border-radius:10px;
+  padding:9px 13px;
+  font-size:13px;
+  cursor:pointer;
+}
+.btn:hover { background:#252b34; }
+.btn.primary {
+  background:#f3f4f6;
+  color:#111318;
+  border-color:#f3f4f6;
+  font-weight:750;
+}
+.btn.primary:hover { background:#fff; }
+
+.tabs {
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+.tab {
+  appearance:none;
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--muted);
+  border-radius:10px;
+  padding:9px 14px;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+}
+.tab.active {
+  color:var(--text);
+  background:var(--panel-2);
+  border-color:#3a424e;
+}
+
+.controls {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom:12px;
+}
+.search {
+  flex:1;
+  min-width:0;
+  border:1px solid var(--line);
+  background:#13161b;
+  color:var(--text);
+  border-radius:10px;
+  padding:10px 12px;
+  outline:none;
+}
+.search:focus { border-color:#586271; }
+.search::placeholder { color:#626b77; }
+
+.category-strip {
+  display:none;
+  gap:7px;
+  overflow:auto;
+  scrollbar-width:thin;
+  padding-bottom:2px;
+}
+.category-strip.show { display:flex; }
+.cat-btn {
+  flex:0 0 auto;
+  appearance:none;
+  border:1px solid var(--line);
+  background:#15181d;
+  color:var(--muted);
+  border-radius:999px;
+  padding:7px 11px;
+  font-size:12px;
+  cursor:pointer;
+}
+.cat-btn.active {
+  color:#111318;
+  background:#f3f4f6;
+  border-color:#f3f4f6;
+  font-weight:750;
+}
+
+.section-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:15px 2px 8px;
+}
+.section-title {
+  font-size:12px;
+  color:var(--muted);
+  font-weight:750;
+  letter-spacing:.02em;
+}
+.section-count {
+  color:var(--muted-2);
+  font-size:11px;
+}
+
+.sheet {
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:14px;
+  overflow:hidden;
+}
+.artist-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.artist-row {
+  min-height:62px;
+  display:grid;
+  grid-template-columns:38px minmax(145px,1fr) minmax(120px,.82fr);
+  align-items:stretch;
+  border-bottom:1px solid var(--line);
+}
+.artist-row:nth-child(odd) { border-right:1px solid var(--line); }
+.artist-row.pinned { background:rgba(255,255,255,.018); }
+.idx {
+  display:flex;
+  align-items:center;
+  padding-left:15px;
+  color:#768092;
+  font-size:11px;
+  user-select:none;
+  font-variant-numeric:tabular-nums;
+}
+.artist-name-cell {
+  min-width:0;
+  display:flex;
+  align-items:center;
+  padding:0 12px 0 4px;
+  cursor:pointer;
+  user-select:none;
+}
+.artist-name-cell:hover { background:var(--panel-2); }
+.artist-name {
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:14px;
+  font-weight:700;
+}
+.pin {
+  flex:0 0 auto;
+  margin-left:7px;
+  color:#b7bfcc;
+  font-size:10px;
+  letter-spacing:.04em;
+}
+.note-wrap {
+  min-width:0;
+  display:flex;
+  align-items:center;
+  padding:8px 9px;
+  border-left:1px solid var(--line-soft);
+  background:rgba(255,255,255,.01);
+}
+.inline-note {
+  width:100%;
+  min-width:0;
+  border:1px solid transparent;
+  background:transparent;
+  color:#c9ced5;
+  border-radius:8px;
+  padding:8px 9px;
+  outline:none;
+  font-size:12px;
+}
+.inline-note::placeholder { color:#59616c; }
+.inline-note:hover {
+  background:#14171c;
+  border-color:#252b33;
+}
+.inline-note:focus {
+  background:#111318;
+  border-color:#56606e;
+  color:var(--text);
+}
+
+.action-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.action-card {
+  min-width:0;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:13px;
+  padding:13px 14px 12px;
+  cursor:pointer;
+  user-select:none;
+  transition:background .12s ease,border-color .12s ease,transform .12s ease;
+}
+.action-card:hover {
+  background:var(--panel-2);
+  border-color:#3a424e;
+}
+.action-card:active { transform:translateY(1px); }
+.action-card.pinned { border-color:#444d5b; }
+.action-top {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:8px;
+}
+.action-title-wrap {
+  min-width:0;
+  display:flex;
+  align-items:center;
+}
+.action-title {
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:14px;
+  font-weight:780;
+}
+.badge {
+  flex:0 0 auto;
+  max-width:130px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  border:1px solid #343b46;
+  background:#15191f;
+  color:#aeb6c2;
+  border-radius:999px;
+  padding:4px 8px;
+  font-size:10px;
+}
+.prompt-preview {
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  min-height:36px;
+  color:#d8dce2;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:12px;
+  line-height:1.5;
+  word-break:break-word;
+}
+.action-note {
+  margin-top:9px;
+  color:#808a97;
+  font-size:11px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.action-note:empty { display:none; }
+
+.empty {
+  padding:42px 18px;
+  text-align:center;
+  color:var(--muted);
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:14px;
+}
+.hint {
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+  text-align:right;
+}
+
+.menu {
+  position:fixed;
+  z-index:40;
+  min-width:158px;
+  padding:6px;
+  border:1px solid var(--line);
+  background:#20242b;
+  border-radius:10px;
+  box-shadow:var(--shadow);
+  display:none;
+}
+.menu.show { display:block; }
+.menu button {
+  width:100%;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  text-align:left;
+  padding:9px 10px;
+  border-radius:7px;
+  font-size:13px;
+  cursor:pointer;
+}
+.menu button:hover { background:#2a3039; }
+.menu button.danger { color:var(--danger); }
+
+.toast {
+  position:fixed;
+  left:50%;
+  bottom:26px;
+  z-index:60;
+  transform:translate(-50%,12px);
+  opacity:0;
+  pointer-events:none;
+  background:#f3f4f6;
+  color:#111318;
+  border-radius:10px;
+  padding:9px 13px;
+  font-size:13px;
+  font-weight:750;
+  box-shadow:0 12px 36px rgba(0,0,0,.35);
+  transition:.18s ease;
+}
+.toast.show {
+  opacity:1;
+  transform:translate(-50%,0);
+}
+
+dialog {
+  width:min(540px,calc(100% - 28px));
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#191d23;
+  color:var(--text);
+  padding:0;
+  box-shadow:0 30px 100px rgba(0,0,0,.58);
+}
+dialog::backdrop { background:rgba(0,0,0,.62); }
+.dialog-body { padding:20px; }
+.dialog-title {
+  font-size:17px;
+  font-weight:780;
+  margin-bottom:15px;
+}
+.field + .field { margin-top:12px; }
+.label {
+  display:block;
+  margin:0 0 6px 2px;
+  color:var(--muted);
+  font-size:11px;
+}
+.dialog-input,
+.dialog-textarea {
+  width:100%;
+  border:1px solid var(--line);
+  background:#111419;
+  color:var(--text);
+  border-radius:9px;
+  padding:11px 12px;
+  outline:none;
+}
+.dialog-input:focus,
+.dialog-textarea:focus { border-color:#606b7a; }
+.dialog-textarea {
+  min-height:150px;
+  resize:vertical;
+  line-height:1.45;
+}
+.dialog-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:16px;
+}
+
+@keyframes flash {
+  0% { background:#3b424e; }
+  100% { background:transparent; }
+}
+.flash { animation:flash .38s ease; }
+
+
+.choice-list {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.choice-row {
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:10px 11px;
+  border:1px solid var(--line);
+  background:#12161b;
+  border-radius:9px;
+  cursor:pointer;
+}
+.choice-row:hover { background:#171b21; }
+.choice-row input {
+  margin-top:3px;
+  accent-color:#f3f4f6;
+}
+.choice-row span {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.choice-row strong {
+  font-size:13px;
+  font-weight:750;
+}
+.choice-row small {
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.4;
+}
+.import-summary {
+  margin-bottom:14px;
+  padding:10px 11px;
+  border:1px solid var(--line);
+  background:#12161b;
+  border-radius:9px;
+  color:#cbd1d9;
+  font-size:12px;
+  line-height:1.55;
+}
+select.dialog-input {
+  appearance:auto;
+}
+
+
+
+/* Tag dictionary */
+.combo-toggle {
+  display:none;
+  flex:0 0 auto;
+  min-height:42px;
+}
+.combo-toggle.show { display:inline-flex; align-items:center; justify-content:center; }
+.combo-toggle.active {
+  background:#f3f4f6;
+  color:#111318;
+  border-color:#f3f4f6;
+  font-weight:750;
+}
+.tag-card {
+  min-width:0;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:13px;
+  padding:13px 14px 12px;
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+  touch-action:manipulation;
+  transition:background .12s ease,border-color .12s ease,transform .12s ease;
+}
+.tag-card:hover { background:var(--panel-2); border-color:#3a424e; }
+.tag-card:active { transform:translateY(1px); }
+.tag-card.pinned { border-color:#444d5b; }
+.tag-card.selected {
+  border-color:#dfe4ea;
+  box-shadow:inset 0 0 0 1px #dfe4ea;
+  background:#20252c;
+}
+.tag-main {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+}
+.tag-prompt-wrap { min-width:0; }
+.tag-prompt {
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:14px;
+  font-weight:780;
+  color:#f3f5f7;
+}
+.tag-title {
+  margin-top:4px;
+  color:#aeb6c2;
+  font-size:11px;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.tag-description {
+  color:#cbd1d9;
+  font-size:12px;
+  line-height:1.48;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  min-height:36px;
+}
+.tag-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+.combo-bar {
+  position:fixed;
+  left:50%;
+  bottom:calc(14px + env(safe-area-inset-bottom));
+  z-index:50;
+  width:min(1120px,calc(100% - 28px));
+  transform:translateY(24px) translateX(-50%);
+  opacity:0;
+  pointer-events:none;
+  border:1px solid #3b434e;
+  background:rgba(24,28,34,.96);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-radius:14px;
+  box-shadow:0 18px 60px rgba(0,0,0,.46);
+  padding:10px;
+  transition:opacity .14s ease,transform .14s ease;
+}
+.combo-bar.show {
+  opacity:1;
+  transform:translateY(0) translateX(-50%);
+  pointer-events:auto;
+}
+.combo-bar-inner {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.combo-chips {
+  flex:1;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  overflow-x:auto;
+  scrollbar-width:thin;
+  padding:2px 1px;
+}
+.combo-empty {
+  color:var(--muted);
+  font-size:12px;
+  white-space:nowrap;
+  padding:0 5px;
+}
+.combo-chip {
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:34px;
+  border:1px solid #3b434e;
+  background:#111419;
+  border-radius:999px;
+  padding:5px 7px 5px 10px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px;
+  color:#e5e8ec;
+}
+.combo-chip button {
+  width:24px;
+  height:24px;
+  display:grid;
+  place-items:center;
+  border:0;
+  border-radius:50%;
+  background:#272d35;
+  color:#d7dce2;
+  cursor:pointer;
+  padding:0;
+}
+.combo-actions {
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.combo-count {
+  color:var(--muted);
+  font-size:11px;
+  min-width:34px;
+  text-align:right;
+}
+.combo-actions .btn { min-height:38px; padding:8px 10px; }
+.combo-actions .btn:disabled { opacity:.42; cursor:default; }
+body.combo-active .app { padding-bottom:104px; }
+body.combo-active .toast { bottom:124px; }
+.artist-name-cell,
+.action-card {
+  -webkit-touch-callout:none;
+  touch-action:manipulation;
+}
+
+@media (max-width:860px) {
+  .tag-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .tabs {
+    overflow-x:auto;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:2px;
+  }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { flex:0 0 auto; min-height:42px; }
+  .cat-btn { min-height:40px; padding:8px 12px; }
+}
+
+@media (max-width:600px) {
+  .tag-grid { grid-template-columns:1fr; }
+  dialog {
+    width:calc(100% - 16px);
+    max-height:calc(100dvh - 20px);
+    overflow:auto;
+    border-radius:14px;
+  }
+  .dialog-body { padding:16px; }
+  .dialog-input,
+  .dialog-textarea,
+  .search { font-size:16px; }
+  .dialog-textarea { min-height:112px; }
+  .dialog-actions {
+    position:sticky;
+    bottom:0;
+    background:#191d23;
+    padding-top:10px;
+  }
+  .menu button { min-height:44px; font-size:14px; }
+  .combo-bar {
+    width:calc(100% - 16px);
+    bottom:calc(8px + env(safe-area-inset-bottom));
+    padding:8px;
+  }
+  .combo-bar-inner { flex-direction:column; align-items:stretch; gap:8px; }
+  .combo-chips { width:100%; min-height:36px; }
+  .combo-actions { width:100%; }
+  .combo-count { text-align:left; margin-right:auto; }
+  .combo-actions .btn { min-height:42px; }
+  body.combo-active .app { padding-bottom:154px; }
+  body.combo-active .toast { bottom:174px; }
+  .tag-card { padding:13px; min-height:104px; }
+}
+
+@media (max-width:860px) {
+  .app {
+    width:min(100% - 20px,1180px);
+    margin-top:20px;
+  }
+  .topbar {
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .toolbar { width:100%; }
+  .toolbar .btn { flex:1; }
+  .artist-grid,
+  .action-grid { grid-template-columns:1fr; }
+  .artist-row:nth-child(odd) { border-right:0; }
+}
+@media (max-width:520px) {
+  .artist-row {
+    grid-template-columns:34px minmax(105px,1fr) minmax(94px,.85fr);
+  }
+  .idx { padding-left:10px; }
+  .artist-name-cell { padding-right:7px; }
+  .note-wrap { padding:7px 6px; }
+  .controls { flex-direction:column; align-items:stretch; }
+}
+
+
+/* Galaxy Tab S11 portrait-first touch layout.
+   1600x2560 physical pixels commonly maps close to an 800px CSS viewport at DPR 2. */
+@media (min-width:601px) and (max-width:900px) and (orientation:portrait) {
+  .app {
+    width:min(100% - 28px,900px);
+    margin-top:22px;
+  }
+  .title-wrap h1 { font-size:23px; }
+  .subtitle { font-size:13px; }
+  .toolbar { width:100%; gap:8px; }
+  .toolbar .btn { min-height:44px; }
+  .tabs { gap:8px; margin-bottom:14px; }
+  .tab { min-height:46px; padding:10px 15px; font-size:14px; }
+  .controls { gap:10px; margin-bottom:14px; }
+  .search { min-height:48px; padding:11px 14px; font-size:15px; }
+  .combo-toggle { min-height:48px; padding-inline:16px; }
+  .category-strip { gap:8px; padding-bottom:4px; }
+  .cat-btn { min-height:44px; padding:9px 14px; font-size:13px; }
+  .tag-grid,
+  .action-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+  }
+  .tag-card { min-height:118px; padding:15px 16px 14px; border-radius:14px; }
+  .tag-prompt { font-size:15px; }
+  .tag-title { margin-top:5px; font-size:12px; }
+  .tag-description { font-size:13px; line-height:1.5; min-height:39px; }
+  .action-card { min-height:112px; padding:15px 16px 14px; }
+  .combo-bar {
+    width:calc(100% - 28px);
+    bottom:calc(12px + env(safe-area-inset-bottom));
+    padding:11px;
+  }
+  .combo-bar-inner { gap:11px; }
+  .combo-chips { min-height:42px; gap:7px; }
+  .combo-chip { min-height:40px; padding:4px 6px 4px 11px; font-size:12px; }
+  .combo-chip button { width:34px; height:34px; font-size:16px; }
+  .combo-actions { gap:8px; }
+  .combo-actions .btn { min-height:44px; padding:9px 12px; }
+  body.combo-active .app { padding-bottom:116px; }
+  body.combo-active .toast { bottom:136px; }
+  dialog { width:min(620px,calc(100% - 32px)); max-height:calc(100dvh - 36px); }
+  .dialog-input, .dialog-textarea { font-size:16px; }
+  .menu button { min-height:46px; font-size:14px; }
+}
+
+
+/* NAI V5 embedded mode */
+body.nai-embedded { padding-top: 0; }
+body.nai-embedded .app {
+  width: min(1180px, calc(100% - 24px));
+  margin: 18px auto 72px;
+}
+@media (max-width: 700px) {
+  body.nai-embedded .app { width: calc(100% - 18px); margin-top: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="title-wrap">
+      <h1>Artist / Tag Quick Copy</h1>
+      <div class="subtitle" id="subtitle"></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="backupBtn">백업</button>
+      <button class="btn" id="importBtn">불러오기</button>
+      <button class="btn" id="resetBtn">초기화</button>
+      <button class="btn primary" id="addBtn">+ 작가 추가</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="artists">작가 <span id="artistCountTab"></span></button>
+    <button class="tab" data-tab="actions">행동·행위 <span id="actionCountTab"></span></button>
+    <button class="tab" data-tab="tags">태그사전 <span id="tagCountTab"></span></button>
+  </div>
+
+  <div class="controls">
+    <input class="search" id="searchInput" placeholder="작가명 또는 메모 검색..." autocomplete="off" />
+    <button class="btn combo-toggle" id="comboModeBtn" type="button">조합 모드</button>
+  </div>
+
+  <div class="category-strip" id="categoryStrip"></div>
+
+  <div id="content"></div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<div class="combo-bar" id="comboBar" aria-live="polite">
+  <div class="combo-bar-inner">
+    <div class="combo-chips" id="comboChips"></div>
+    <div class="combo-actions">
+      <span class="combo-count" id="comboCount">0개</span>
+      <button class="btn primary" id="comboCopyBtn" type="button" disabled>전체 복사</button>
+      <button class="btn" id="comboClearBtn" type="button">비우기</button>
+      <button class="btn" id="comboExitBtn" type="button">종료</button>
+    </div>
+  </div>
+</div>
+
+<div class="menu" id="menu">
+  <button id="pinBtn">상단에 고정</button>
+  <button id="duplicateBtn">복제</button>
+  <button id="editBtn">수정</button>
+  <button class="danger" id="deleteBtn">삭제</button>
+</div>
+
+<div class="toast" id="toast"></div>
+<input id="importFileInput" type="file" accept=".json,application/json" hidden />
+
+<dialog id="artistDialog">
+  <div class="dialog-body">
+    <div class="dialog-title" id="artistDialogTitle">작가 추가</div>
+    <form method="dialog" id="artistForm">
+      <div class="field">
+        <label class="label" for="artistNameInput">작가명</label>
+        <input class="dialog-input" id="artistNameInput" autocomplete="off" placeholder="예: toridamono" />
+      </div>
+      <div class="field">
+        <label class="label" for="artistNoteInput">메모 · 선택</label>
+        <input class="dialog-input" id="artistNoteInput" autocomplete="off" placeholder="예: 체형, 선화, 채색 취향" />
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">취소</button>
+        <button class="btn primary" value="default">저장</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="actionDialog">
+  <div class="dialog-body">
+    <div class="dialog-title" id="actionDialogTitle">행동·행위 추가</div>
+    <form method="dialog" id="actionForm">
+      <div class="field">
+        <label class="label" for="actionTitleInput">표시 이름</label>
+        <input class="dialog-input" id="actionTitleInput" autocomplete="off" placeholder="예: 뒤돌아보며 허리 숙이기" />
+      </div>
+
+      <div class="field">
+        <label class="label" for="actionCategoryInput">분류</label>
+        <input class="dialog-input" id="actionCategoryInput" list="categorySuggestions" autocomplete="off" placeholder="예: 포즈" />
+        <datalist id="categorySuggestions">
+          <option value="포즈"></option>
+          <option value="손·팔"></option>
+          <option value="시선·표정"></option>
+          <option value="이동·동작"></option>
+          <option value="상호작용"></option>
+          <option value="구도 연계"></option>
+          <option value="기타"></option>
+        </datalist>
+      </div>
+
+      <div class="field">
+        <label class="label" for="actionPromptInput">프롬프트</label>
+        <textarea class="dialog-textarea" id="actionPromptInput" spellcheck="false" placeholder="looking_back, bent_over, hand_on_thigh, looking_at_viewer, ..."></textarea>
+      </div>
+
+      <div class="field">
+        <label class="label" for="actionNoteInput">메모 · 선택</label>
+        <input class="dialog-input" id="actionNoteInput" autocomplete="off" placeholder="예: 전신에서 잘 먹힘" />
+      </div>
+
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">취소</button>
+        <button class="btn primary" value="default">저장</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="tagDialog">
+  <div class="dialog-body">
+    <div class="dialog-title" id="tagDialogTitle">태그 추가</div>
+    <form method="dialog" id="tagForm">
+      <div class="field">
+        <label class="label" for="tagTitleInput">표시 이름</label>
+        <input class="dialog-input" id="tagTitleInput" autocomplete="off" placeholder="예: 로우 앵글" />
+      </div>
+      <div class="field">
+        <label class="label" for="tagPromptInput">복사 태그</label>
+        <input class="dialog-input" id="tagPromptInput" autocomplete="off" spellcheck="false" placeholder="예: from below" />
+      </div>
+      <div class="field">
+        <label class="label" for="tagCategoryInput">분류</label>
+        <input class="dialog-input" id="tagCategoryInput" list="tagCategorySuggestions" autocomplete="off" placeholder="예: 시점" />
+        <datalist id="tagCategorySuggestions">
+          <option value="시점"></option>
+          <option value="렌즈·원근"></option>
+          <option value="프레이밍"></option>
+          <option value="구도"></option>
+          <option value="초점"></option>
+          <option value="화면 효과"></option>
+        </datalist>
+      </div>
+      <div class="field">
+        <label class="label" for="tagDescriptionInput">짧은 설명</label>
+        <textarea class="dialog-textarea" id="tagDescriptionInput" spellcheck="false" placeholder="이 태그가 어떤 구도인지 짧게 설명"></textarea>
+      </div>
+      <div class="field">
+        <label class="label" for="tagAliasesInput">검색 별칭 · 쉼표로 구분</label>
+        <input class="dialog-input" id="tagAliasesInput" autocomplete="off" placeholder="예: 아래에서, 로우앵글, 올려다봄" />
+      </div>
+      <div class="field">
+        <label class="label" for="tagNoteInput">개인 메모 · 선택</label>
+        <input class="dialog-input" id="tagNoteInput" autocomplete="off" placeholder="카드에는 표시되지 않으며 검색에는 포함됨" />
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">취소</button>
+        <button class="btn primary" value="default">저장</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="importDialog">
+  <div class="dialog-body">
+    <div class="dialog-title">백업 불러오기</div>
+
+    <div class="import-summary" id="importSummary"></div>
+
+    <div class="field">
+      <label class="label">불러오기 방식</label>
+      <div class="choice-list">
+        <label class="choice-row">
+          <input type="radio" name="importMode" value="replace" checked />
+          <span>
+            <strong>현재 데이터 교체</strong>
+            <small>현재 목록을 지우고 백업 내용으로 바꿉니다.</small>
+          </span>
+        </label>
+        <label class="choice-row">
+          <input type="radio" name="importMode" value="merge" />
+          <span>
+            <strong>현재 데이터와 병합</strong>
+            <small>현재 목록을 유지하면서 백업 항목을 추가합니다.</small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field" id="duplicatePolicyField">
+      <label class="label">병합 중 중복이 발견되면</label>
+      <select class="dialog-input" id="duplicatePolicy">
+        <option value="keep">현재 항목 유지</option>
+        <option value="overwrite">백업 항목으로 덮어쓰기</option>
+      </select>
+    </div>
+
+    <div class="dialog-actions">
+      <button class="btn" id="cancelImportBtn" type="button">취소</button>
+      <button class="btn primary" id="confirmImportBtn" type="button">불러오기</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const DEFAULT_ARTISTS = [{"name": "kanzarin", "note": "", "pinned": false}, {"name": "ing (ing205509)", "note": "", "pinned": false}, {"name": "kim 8thhh", "note": "", "pinned": false}, {"name": "konoshige (ryuun)", "note": "", "pinned": false}, {"name": "toma (toma50)", "note": "", "pinned": false}, {"name": "turisasu", "note": "", "pinned": false}, {"name": "sanatsuki (user cgxu2455)", "note": "", "pinned": false}, {"name": "velzhe", "note": "", "pinned": false}, {"name": "laliberte", "note": "", "pinned": false}, {"name": "kuromoto-kun (rina masimaro)", "note": "", "pinned": false}, {"name": "ushio kiyoshi", "note": "", "pinned": false}, {"name": "seoyong", "note": "", "pinned": false}, {"name": "santa (sunflower)", "note": "", "pinned": false}, {"name": "luxsumildo", "note": "", "pinned": false}, {"name": "kubo tite", "note": "", "pinned": false}, {"name": "mori kaoru", "note": "", "pinned": false}, {"name": "obata takeshi", "note": "", "pinned": false}, {"name": "hiramoto akira", "note": "", "pinned": false}, {"name": "gurihiru", "note": "", "pinned": false}, {"name": "yabuki kentarou", "note": "", "pinned": false}, {"name": "katsura masakazu", "note": "", "pinned": false}, {"name": "oogure ito", "note": "", "pinned": false}, {"name": "eguchi hisashi", "note": "", "pinned": false}, {"name": "fujimoto tatsuki", "note": "", "pinned": false}, {"name": "rurudo", "note": "", "pinned": false}, {"name": "saitou masatsugu", "note": "", "pinned": false}, {"name": "mignon", "note": "", "pinned": false}, {"name": "mugi (twinbox)", "note": "", "pinned": false}];
+const DEFAULT_TAGS = [{"title":"더치 앵글","category":"시점","prompt":"dutch angle","description":"화면의 수평선을 기울여 긴장감과 역동성을 만드는 시점.","aliases":"더치앵글, 기울어진 화면, 사선 구도, 틸트","note":"","pinned":false},{"title":"위에서","category":"시점","prompt":"from above","description":"피사체를 위쪽에서 내려다보는 시점.","aliases":"위에서, 내려다봄, 하이앵글, 하이 앵글","note":"","pinned":false},{"title":"뒤에서","category":"시점","prompt":"from behind","description":"피사체의 뒤쪽을 바라보는 시점.","aliases":"뒤에서, 후면, 뒷모습, 백뷰","note":"","pinned":false},{"title":"아래에서","category":"시점","prompt":"from below","description":"피사체를 아래쪽에서 올려다보는 시점.","aliases":"아래에서, 올려다봄, 로우앵글, 로우 앵글","note":"","pinned":false},{"title":"옆에서","category":"시점","prompt":"from side","description":"피사체를 옆면에서 바라보는 시점.","aliases":"옆에서, 측면, 사이드뷰, 사이드 뷰","note":"","pinned":false},{"title":"높은 곳에서","category":"시점","prompt":"high up","description":"아주 높은 위치에서 아래의 장면을 바라보는 시점.","aliases":"높은 곳, 고공, 멀리 위에서, 높은 시점","note":"","pinned":false},{"title":"다중 시점","category":"시점","prompt":"multiple views","description":"한 이미지 안에 같은 대상을 여러 방향이나 시점으로 함께 보여줌.","aliases":"다중시점, 여러 시점, 여러 각도, 멀티뷰","note":"","pinned":false},{"title":"옆으로 누운 화면","category":"시점","prompt":"sideways","description":"이미지나 피사체가 옆으로 돌아간 듯한 방향감.","aliases":"옆으로, 90도, 가로로 누움, sideways","note":"","pinned":false},{"title":"정면","category":"시점","prompt":"straight-on","description":"카메라가 피사체 정면을 곧게 바라보는 시점.","aliases":"정면, 정면샷, 프론트뷰, 직선 시점","note":"","pinned":false},{"title":"3/4 뷰","category":"시점","prompt":"three quarter view","description":"정면과 측면의 중간 정도에서 바라보는 3/4 시점.","aliases":"삼사분면, 3/4, 사선 정면, 쓰리쿼터","note":"","pinned":false},{"title":"거꾸로","category":"시점","prompt":"upside-down","description":"장면이나 피사체를 상하가 뒤집힌 방향으로 보여줌.","aliases":"거꾸로, 상하반전, 뒤집힘","note":"","pinned":false},{"title":"웜즈 아이 뷰","category":"시점","prompt":"worm's eye view","description":"지면 가까운 극단적으로 낮은 위치에서 위를 올려다보는 시점.","aliases":"웜즈아이, 벌레 시점, 극단 로우앵글, 바닥 시점","note":"","pinned":false},{"title":"대기 원근법","category":"렌즈·원근","prompt":"atmospheric perspective","description":"멀어질수록 흐리고 옅어지는 공기감으로 깊이를 표현함.","aliases":"대기원근, 공기원근, 거리감, 안개 원근","note":"","pinned":false},{"title":"어안","category":"렌즈·원근","prompt":"fisheye","description":"초광각 렌즈처럼 화면 가장자리와 원근이 크게 휘어지는 표현.","aliases":"어안, 피쉬아이, 초광각, 왜곡 렌즈","note":"","pinned":false},{"title":"파노라마","category":"렌즈·원근","prompt":"panorama","description":"한눈에 보기 어려울 만큼 넓은 범위를 길게 펼쳐 보여주는 시야.","aliases":"파노라마, 초광폭, 넓은 풍경, 광각 풍경","note":"","pinned":false},{"title":"360 파노라마","category":"렌즈·원근","prompt":"360 panorama","description":"장면 주위를 360도로 이어지는 파노라마처럼 표현함.","aliases":"360도, 360 파노라마, 전방위","note":"","pinned":false},{"title":"원근 강조","category":"렌즈·원근","prompt":"perspective","description":"가까운 것과 먼 것의 크기 차이를 이용해 공간 깊이를 강조함.","aliases":"원근, 퍼스, 원근감, 깊이","note":"","pinned":false},{"title":"소실점","category":"렌즈·원근","prompt":"vanishing point","description":"선들이 한 지점으로 모이는 소실점을 강하게 드러내는 구도.","aliases":"소실점, 원근선, 퍼스포인트","note":"","pinned":false},{"title":"단축법","category":"렌즈·원근","prompt":"foreshortening","description":"카메라 쪽으로 뻗은 신체나 물체를 원근 때문에 짧고 크게 보이게 표현함.","aliases":"단축법, 포쇼트닝, 전경 확대, 손발 크게","note":"","pinned":false},{"title":"심도","category":"렌즈·원근","prompt":"depth of field","description":"초점이 맞은 영역과 흐린 영역을 나눠 렌즈의 심도를 표현함.","aliases":"심도, 피사계심도, 초점거리, dof","note":"","pinned":false},{"title":"전경 흐림","category":"렌즈·원근","prompt":"blurry foreground","description":"카메라 가까운 전경을 흐리게 하여 피사체와의 깊이를 강조함.","aliases":"전경흐림, 앞쪽 흐림, 앞 보케","note":"","pinned":false},{"title":"배경 흐림","category":"렌즈·원근","prompt":"blurry background","description":"피사체 뒤의 배경을 흐리게 하여 주제를 강조함.","aliases":"배경흐림, 아웃포커싱, 뒤 보케","note":"","pinned":false},{"title":"강제 원근","category":"렌즈·원근","prompt":"forced perspective","description":"크기와 거리 착시를 이용해 실제보다 과장된 원근 관계를 만듦.","aliases":"강제원근, 원근착시, 크기 착시","note":"","pinned":false},{"title":"아이소메트릭","category":"렌즈·원근","prompt":"isometric","description":"축이 일정한 각도로 보이는 등각 투영풍 공간 표현.","aliases":"아이소메트릭, 등각투영, 등각 시점","note":"","pinned":false},{"title":"포트레이트","category":"프레이밍","prompt":"portrait","description":"얼굴부터 어깨 부근까지 중심으로 잡는 프레이밍.","aliases":"얼굴샷, 어깨까지, 초상, 포트레이트","note":"","pinned":false},{"title":"상반신","category":"프레이밍","prompt":"upper body","description":"얼굴부터 몸통 정도까지 화면에 담는 프레이밍.","aliases":"상반신, 허리 위, 바스트샷","note":"","pinned":false},{"title":"하반신","category":"프레이밍","prompt":"lower body","description":"몸통 아래부터 다리 쪽을 중심으로 잡는 프레이밍.","aliases":"하반신, 허리 아래, 다리 중심","note":"","pinned":false},{"title":"카우보이 샷","category":"프레이밍","prompt":"cowboy shot","description":"얼굴부터 허벅지 정도까지 담는 대표적인 중간 거리 프레이밍.","aliases":"카우보이샷, 허벅지까지, 니샷, 미디엄풀","note":"","pinned":false},{"title":"발이 프레임 밖","category":"프레이밍","prompt":"feet out of frame","description":"머리부터 무릎 아래까지 보이지만 발은 화면 밖으로 나간 프레이밍.","aliases":"발 잘림, 발 프레임밖, 무릎 아래까지","note":"","pinned":false},{"title":"전신","category":"프레이밍","prompt":"full body","description":"머리부터 발끝까지 전신이 화면 안에 들어오는 프레이밍.","aliases":"전신, 풀바디, 전신샷","note":"","pinned":false},{"title":"와이드 샷","category":"프레이밍","prompt":"wide shot","description":"전신과 주변 환경이 함께 보이도록 멀리서 잡는 프레이밍.","aliases":"와이드샷, 롱샷, 멀리서 전신","note":"","pinned":false},{"title":"매우 먼 와이드 샷","category":"프레이밍","prompt":"very wide shot","description":"피사체가 작게 보일 정도로 아주 멀리서 장면 전체를 잡음.","aliases":"익스트림 와이드, 초원경, 아주 멀리","note":"","pinned":false},{"title":"머리가 프레임 밖","category":"프레이밍","prompt":"head out of frame","description":"목 아래는 보이지만 머리가 화면 밖으로 잘린 프레이밍.","aliases":"머리 잘림, 머리 프레임밖, 얼굴 없음","note":"","pinned":false},{"title":"눈이 프레임 밖","category":"프레이밍","prompt":"eyes out of frame","description":"코 아래쪽은 보이지만 눈 위쪽이 화면 밖으로 잘린 프레이밍.","aliases":"눈 잘림, 눈 프레임밖, 얼굴 일부","note":"","pinned":false},{"title":"팔이 프레임 밖","category":"프레이밍","prompt":"arm out of frame","description":"팔의 일부가 이미지 경계를 넘어 화면 밖으로 이어지는 프레이밍.","aliases":"팔 잘림, 팔 프레임밖","note":"","pinned":false},{"title":"한쪽 발이 프레임 밖","category":"프레이밍","prompt":"foot out of frame","description":"한쪽 발 또는 발 일부가 이미지 경계 밖으로 나간 프레이밍.","aliases":"한쪽 발 잘림, 발 하나 프레임밖","note":"","pinned":false},{"title":"무릎이 프레임 밖","category":"프레이밍","prompt":"knees out of frame","description":"무릎 부근부터 아래가 화면 밖으로 나가는 프레이밍.","aliases":"무릎 잘림, 무릎 프레임밖","note":"","pinned":false},{"title":"클로즈업","category":"프레이밍","prompt":"close-up","description":"얼굴이나 특정 부위를 화면 가득 크게 잡는 근접 프레이밍.","aliases":"클로즈업, 근접, 확대샷","note":"","pinned":false},{"title":"크롭","category":"프레이밍","prompt":"cropped","description":"피사체 일부가 의도적으로 잘려 화면 안에 모두 보이지 않는 상태.","aliases":"크롭, 잘림, 일부만","note":"","pinned":false},{"title":"다리 크롭","category":"프레이밍","prompt":"cropped legs","description":"다리를 화면 경계로 자른 것이 아니라 그림 자체에서 일부만 그린 형태.","aliases":"다리크롭, 다리 잘림, 다리 일부","note":"","pinned":false},{"title":"몸통 크롭","category":"프레이밍","prompt":"cropped torso","description":"몸통 일부가 그림 자체에서 잘려 그려진 형태.","aliases":"몸통크롭, 토르소 잘림","note":"","pinned":false},{"title":"팔 크롭","category":"프레이밍","prompt":"cropped arms","description":"팔 일부가 그림 자체에서 잘려 그려진 형태.","aliases":"팔크롭, 팔 일부","note":"","pinned":false},{"title":"어깨 크롭","category":"프레이밍","prompt":"cropped shoulders","description":"어깨 부위가 그림 자체에서 일부 잘려 그려진 형태.","aliases":"어깨크롭, 어깨 잘림","note":"","pinned":false},{"title":"머리 크롭","category":"프레이밍","prompt":"cropped head","description":"머리 일부가 그림 자체에서 잘려 그려진 형태.","aliases":"머리크롭, 머리 일부","note":"","pinned":false},{"title":"컷인","category":"프레이밍","prompt":"cut-in","description":"주 화면 위에 특정 부위나 장면을 작은 별도 컷으로 끼워 넣음.","aliases":"컷인, 삽입컷, 부분 확대","note":"","pinned":false},{"title":"프로필","category":"프레이밍","prompt":"profile","description":"얼굴이나 몸을 뚜렷한 옆모습으로 보여주는 프레이밍.","aliases":"프로필, 옆얼굴, 측면 얼굴","note":"","pinned":false},{"title":"그룹 프로필","category":"프레이밍","prompt":"group profile","description":"여러 인물을 나란히 옆모습으로 보여주는 프레이밍.","aliases":"그룹프로필, 여러명 옆모습","note":"","pinned":false},{"title":"분할 크롭","category":"프레이밍","prompt":"split crop","description":"피사체나 화면을 나누어 서로 다른 부분을 잘라 보여주는 구성.","aliases":"분할크롭, 스플릿크롭, 잘린 분할","note":"","pinned":false},{"title":"테두리","category":"구도","prompt":"border","description":"이미지 가장자리에 명확한 테두리를 두는 구성.","aliases":"테두리, 프레임, 보더","note":"","pinned":false},{"title":"안쪽 테두리","category":"구도","prompt":"inset border","description":"이미지 바깥이 아니라 안쪽에 여백을 두고 테두리를 배치함.","aliases":"안쪽테두리, 인셋보더","note":"","pinned":false},{"title":"바깥 테두리","category":"구도","prompt":"outside border","description":"피사체 일부가 테두리 바깥으로 튀어나오거나 외부에 놓이는 구성.","aliases":"바깥테두리, 프레임밖, 보더 밖","note":"","pinned":false},{"title":"뷰파인더","category":"구도","prompt":"viewfinder","description":"카메라나 촬영 화면을 보는 듯한 뷰파인더 UI를 겹친 구성.","aliases":"뷰파인더, 카메라화면, 촬영화면","note":"","pinned":false},{"title":"콜라주","category":"구도","prompt":"collage","description":"여러 이미지나 장면을 한 화면에 조합한 구성.","aliases":"콜라주, 여러 사진, 모음","note":"","pinned":false},{"title":"세로 줄 배치","category":"구도","prompt":"column lineup","description":"여러 인물을 열이나 세로 방향으로 정렬해 배치한 구성.","aliases":"세로배치, 줄세움, 컬럼 라인업","note":"","pinned":false},{"title":"프레임 밖 연출","category":"구도","prompt":"out of frame","description":"피사체 일부가 이미지 테두리 바깥으로 이어지는 효과를 적극적으로 사용함.","aliases":"프레임밖, 화면밖, 튀어나옴","note":"","pinned":false},{"title":"바깥에서 바라봄","category":"구도","prompt":"from outside","description":"창문이나 문 등 장면 바깥쪽에서 안을 바라보는 듯한 구성.","aliases":"밖에서, 외부시점, 창밖에서","note":"","pinned":false},{"title":"레터박스","category":"구도","prompt":"letterboxed","description":"화면 위아래에 검은 띠나 여백을 둔 영화 화면 같은 구성.","aliases":"레터박스, 위아래 검은띠, 시네마틱","note":"","pinned":false},{"title":"필러박스","category":"구도","prompt":"pillarboxed","description":"화면 좌우에 띠나 여백을 두는 구성.","aliases":"필러박스, 좌우 검은띠","note":"","pinned":false},{"title":"라인업","category":"구도","prompt":"lineup","description":"여러 인물이나 대상을 한 줄로 정렬해 보여주는 구성.","aliases":"라인업, 줄세움, 일렬배치","note":"","pinned":false},{"title":"네거티브 스페이스","category":"구도","prompt":"negative space","description":"피사체 주변의 넓은 빈 공간을 구도 요소로 적극 활용함.","aliases":"네거티브스페이스, 여백, 빈공간, 공간감","note":"","pinned":false},{"title":"부분 수중 샷","category":"구도","prompt":"partially underwater shot","description":"수면을 기준으로 화면 일부는 물속, 일부는 물 밖으로 나누는 구성.","aliases":"반수중, 수면분할, 물속 물밖","note":"","pinned":false},{"title":"POV","category":"구도","prompt":"pov","description":"관찰자나 상대방의 눈으로 직접 보는 듯한 1인칭 시점 구성.","aliases":"pov, 1인칭, 시점샷, 관찰자 시점","note":"","pinned":false},{"title":"소셜 미디어 구성","category":"구도","prompt":"social media composition","description":"SNS 게시물이나 피드 화면처럼 인터페이스를 포함해 구성함.","aliases":"SNS, 소셜미디어, 게시물 화면, 피드","note":"","pinned":false},{"title":"대칭","category":"구도","prompt":"symmetry","description":"좌우 또는 상하가 균형 있게 대응하도록 배치한 구도.","aliases":"대칭, 좌우대칭, 균형","note":"","pinned":false},{"title":"극단적 대비 배치","category":"구도","prompt":"polar opposites","description":"서로 반대되는 두 대상이나 요소를 대칭적으로 대비시키는 구성.","aliases":"양극, 정반대, 대비구도, 반대 배치","note":"","pinned":false},{"title":"회전 대칭","category":"구도","prompt":"rotational symmetry","description":"중심을 기준으로 회전했을 때 반복되는 대칭 구도.","aliases":"회전대칭, 방사대칭, 중심대칭","note":"","pinned":false},{"title":"줌 레이어","category":"구도","prompt":"zoom layer","description":"원본 장면 위에 특정 부분을 확대해 별도 레이어처럼 보여줌.","aliases":"줌레이어, 확대창, 부분확대","note":"","pinned":false},{"title":"투영 인셋","category":"구도","prompt":"projected inset","description":"장면 일부를 별도의 삽입 화면이나 투영된 컷처럼 겹쳐 보여줌.","aliases":"인셋, 삽입화면, 투영컷","note":"","pinned":false},{"title":"셀피","category":"구도","prompt":"selfie","description":"캐릭터가 직접 카메라를 들고 자신을 촬영하는 듯한 구도.","aliases":"셀피, 셀카, 자촬","note":"","pinned":false},{"title":"거울 셀피","category":"구도","prompt":"mirror selfie","description":"거울에 비친 모습을 카메라로 촬영하는 셀피 구도.","aliases":"거울셀피, 거울셀카, 미러셀피","note":"","pinned":false},{"title":"시청자를 봄","category":"구도","prompt":"looking at viewer","description":"캐릭터의 시선이 화면을 보는 관찰자에게 향함.","aliases":"정면응시, 카메라봄, 시청자봄, 눈맞춤","note":"","pinned":false},{"title":"시선을 피함","category":"구도","prompt":"looking away","description":"캐릭터가 카메라나 중심 대상에서 시선을 돌림.","aliases":"시선피함, 딴곳봄, 외면","note":"","pinned":false},{"title":"뒤돌아봄","category":"구도","prompt":"looking back","description":"몸은 다른 방향을 향하면서 고개나 시선만 뒤쪽으로 돌림.","aliases":"뒤돌아봄, 뒤보기, 돌아봄","note":"","pinned":false},{"title":"옆을 봄","category":"구도","prompt":"looking to the side","description":"캐릭터의 시선이 좌우 측면으로 향함.","aliases":"옆을봄, 측면응시, 사이드 시선","note":"","pinned":false},{"title":"위를 봄","category":"구도","prompt":"looking up","description":"캐릭터가 위쪽을 바라봄.","aliases":"위를봄, 위를바라봄, 상향시선","note":"","pinned":false},{"title":"아래를 봄","category":"구도","prompt":"looking down","description":"캐릭터가 아래쪽을 바라봄.","aliases":"아래를봄, 내려다봄, 하향시선","note":"","pinned":false},{"title":"다른 인물을 봄","category":"구도","prompt":"looking at another","description":"한 캐릭터가 화면 안의 다른 캐릭터를 바라봄.","aliases":"서로봄, 상대방봄, 다른인물 응시","note":"","pinned":false},{"title":"서로 머리를 맞댐","category":"구도","prompt":"heads together","description":"여러 인물이 머리나 얼굴을 가까이 맞대어 응집된 구도를 만듦.","aliases":"머리맞댐, 얼굴가까이, 단체 밀착","note":"","pinned":false},{"title":"둘러싸임","category":"구도","prompt":"surrounded","description":"중심 피사체를 여러 인물이나 물체가 사방에서 둘러싸는 구성.","aliases":"둘러싸임, 포위, 중앙 인물","note":"","pinned":false},{"title":"정면을 향함","category":"구도","prompt":"facing viewer","description":"몸의 방향 자체가 카메라나 관찰자 쪽을 향함.","aliases":"정면향함, 몸 정면, 카메라 향함","note":"","pinned":false},{"title":"등을 돌림","category":"구도","prompt":"facing away","description":"몸의 방향이 카메라 반대쪽을 향해 등을 보이는 구성.","aliases":"등돌림, 뒤돌아섬, 반대방향","note":"","pinned":false},{"title":"그룹 사진","category":"구도","prompt":"group picture","description":"여러 인물이 단체 사진처럼 한 장면에 모여 포즈를 취하는 구성.","aliases":"단체사진, 그룹샷, 단체샷","note":"","pinned":false},{"title":"동물 초점","category":"초점","prompt":"animal focus","description":"사람보다 동물이나 생물을 화면의 주된 초점으로 둠.","aliases":"동물중심, 동물초점, 애니멀포커스","note":"","pinned":false},{"title":"겨드랑이 초점","category":"초점","prompt":"armpit focus","description":"겨드랑이 부위를 구도의 주된 시선 지점으로 강조함.","aliases":"겨드랑이, 겨드랑이강조, 암핏","note":"","pinned":false},{"title":"엉덩이 초점","category":"초점","prompt":"ass focus","description":"엉덩이 부위를 구도의 주된 시선 지점으로 강조함.","aliases":"엉덩이, 힙 강조, 둔부","note":"","pinned":false},{"title":"등 초점","category":"초점","prompt":"back focus","description":"등과 뒷면을 화면의 주된 초점으로 둠.","aliases":"등, 뒷모습강조, 등강조","note":"","pinned":false},{"title":"책 초점","category":"초점","prompt":"book focus","description":"책이나 펼쳐진 페이지를 화면의 주된 초점으로 둠.","aliases":"책, 책강조, 페이지","note":"","pinned":false},{"title":"가슴 초점","category":"초점","prompt":"breast focus","description":"가슴 부위를 구도의 주된 시선 지점으로 강조함.","aliases":"가슴, 흉부강조, 바스트포커스","note":"","pinned":false},{"title":"구름 초점","category":"초점","prompt":"cloud focus","description":"구름이나 하늘의 구름층을 화면의 중심 요소로 둠.","aliases":"구름, 하늘강조, 구름중심","note":"","pinned":false},{"title":"눈 초점","category":"초점","prompt":"eye focus","description":"눈이나 홍채를 화면의 주된 시선 지점으로 강조함.","aliases":"눈, 눈강조, 아이포커스, 홍채","note":"","pinned":false},{"title":"음식 초점","category":"초점","prompt":"food focus","description":"음식이나 요리를 화면의 주된 초점으로 둠.","aliases":"음식, 요리, 음식강조","note":"","pinned":false},{"title":"발 초점","category":"초점","prompt":"foot focus","description":"발이나 발끝을 구도의 주된 시선 지점으로 강조함.","aliases":"발, 발강조, 풋포커스","note":"","pinned":false},{"title":"손 초점","category":"초점","prompt":"hand focus","description":"손과 손가락을 화면의 주된 초점으로 강조함.","aliases":"손, 손강조, 핸드포커스","note":"","pinned":false},{"title":"골반 초점","category":"초점","prompt":"hip focus","description":"골반이나 허리 주변을 구도의 주된 시선 지점으로 강조함.","aliases":"골반, 허리강조, 힙포커스","note":"","pinned":false},{"title":"남성 초점","category":"초점","prompt":"male focus","description":"남성 캐릭터를 화면의 주된 초점으로 둠.","aliases":"남캐중심, 남성중심, male focus","note":"","pinned":false},{"title":"괴물 초점","category":"초점","prompt":"monster focus","description":"괴물이나 비인간형 존재를 화면의 주된 초점으로 둠.","aliases":"괴물, 몬스터중심, 크리처","note":"","pinned":false},{"title":"배꼽 초점","category":"초점","prompt":"navel focus","description":"배꼽과 복부 중앙을 구도의 주된 시선 지점으로 강조함.","aliases":"배꼽, 복부강조, 네이블","note":"","pinned":false},{"title":"사물 초점","category":"초점","prompt":"object focus","description":"특정 사물이나 소품을 인물보다 강하게 강조함.","aliases":"사물, 소품중심, 오브젝트","note":"","pinned":false},{"title":"식물 초점","category":"초점","prompt":"plant focus","description":"식물이나 꽃, 나무 등을 화면의 주된 초점으로 둠.","aliases":"식물, 꽃중심, 나무중심","note":"","pinned":false},{"title":"가슴근육 초점","category":"초점","prompt":"pectoral focus","description":"가슴근육이나 흉근을 구도의 주된 시선 지점으로 강조함.","aliases":"흉근, 가슴근육, 펙토럴","note":"","pinned":false},{"title":"성기 초점","category":"초점","prompt":"penis focus","description":"남성 성기를 구도의 주된 시선 지점으로 강조함.","aliases":"성기, 남성성기, 페니스포커스","note":"","pinned":false},{"title":"단독 인물 초점","category":"초점","prompt":"solo focus","description":"여러 요소 중 한 인물을 명확한 주인공으로 강조함.","aliases":"단독초점, 한명중심, 솔로포커스","note":"","pinned":false},{"title":"텍스트 초점","category":"초점","prompt":"text focus","description":"문자나 문구를 이미지의 주된 시선 지점으로 강조함.","aliases":"텍스트, 글자중심, 문구강조","note":"","pinned":false},{"title":"허벅지 초점","category":"초점","prompt":"thigh focus","description":"허벅지를 구도의 주된 시선 지점으로 강조함.","aliases":"허벅지, 허벅지강조, thigh","note":"","pinned":false},{"title":"무기 초점","category":"초점","prompt":"weapon focus","description":"무기를 인물만큼 또는 그보다 강하게 화면 중심으로 강조함.","aliases":"무기, 무기강조, 웨폰포커스","note":"","pinned":false},{"title":"탈것 초점","category":"초점","prompt":"vehicle focus","description":"자동차나 오토바이 등 탈것을 화면의 주된 초점으로 둠.","aliases":"탈것, 자동차중심, 차량강조","note":"","pinned":false},{"title":"글리치","category":"화면 효과","prompt":"glitch","description":"디지털 오류나 화면 깨짐처럼 보이는 시각 효과.","aliases":"글리치, 오류화면, 디지털깨짐","note":"","pinned":false},{"title":"모션 블러","category":"화면 효과","prompt":"motion blur","description":"빠른 움직임 때문에 피사체나 배경이 방향성 있게 흐려지는 효과.","aliases":"모션블러, 움직임흐림, 속도감","note":"","pinned":false},{"title":"색수차","category":"화면 효과","prompt":"chromatic aberration","description":"윤곽 가장자리의 RGB 색이 어긋난 렌즈 색수차 효과.","aliases":"색수차, rgb 어긋남, chromatic","note":"","pinned":false},{"title":"필름 그레인","category":"화면 효과","prompt":"film grain","description":"필름 사진처럼 미세한 입자 노이즈를 더하는 효과.","aliases":"필름그레인, 입자, 필름노이즈","note":"","pinned":false},{"title":"비네트","category":"화면 효과","prompt":"vignette","description":"화면 가장자리를 어둡게 하거나 중심으로 시선을 모으는 효과.","aliases":"비네트, 가장자리어둡게, 주변부감광","note":"","pinned":false},{"title":"렌즈 플레어","category":"화면 효과","prompt":"lens flare","description":"강한 광원이 렌즈 안에서 번지거나 반사되는 빛 효과.","aliases":"렌즈플레어, 빛번짐, 광원반사","note":"","pinned":false},{"title":"스캔라인","category":"화면 효과","prompt":"scanlines","description":"CRT나 오래된 모니터처럼 가는 수평선을 반복해 넣는 효과.","aliases":"스캔라인, crt, 모니터줄","note":"","pinned":false},{"title":"VHS 아티팩트","category":"화면 효과","prompt":"vhs artifacts","description":"비디오테이프 재생처럼 노이즈와 왜곡이 생기는 효과.","aliases":"vhs, 비디오노이즈, 테이프효과","note":"","pinned":false},{"title":"JPEG 아티팩트","category":"화면 효과","prompt":"jpeg artifacts","description":"강한 JPEG 압축에서 생기는 블록과 번짐 같은 흔적.","aliases":"jpeg, 압축노이즈, 블록노이즈","note":"","pinned":false},{"title":"앨리어싱","category":"화면 효과","prompt":"aliasing","description":"윤곽이나 선이 계단처럼 깨져 보이는 픽셀화 효과.","aliases":"앨리어싱, 계단현상, 픽셀계단","note":"","pinned":false},{"title":"모아레","category":"화면 효과","prompt":"moire","description":"촘촘한 패턴이 겹치며 물결무늬 간섭이 생기는 효과.","aliases":"모아레, 간섭무늬, 물결패턴","note":"","pinned":false},{"title":"젖은 렌즈","category":"화면 효과","prompt":"wet lens","description":"카메라 렌즈에 물방울이 묻은 것처럼 전경에 물방울을 겹치는 효과.","aliases":"젖은렌즈, 물방울렌즈, 렌즈 물방울","note":"","pinned":false}];
+const STORAGE_KEY = "artist-tag-quick-copy.v4";
+const NAI_EMBEDDED = window.self !== window.top;
+const NAI_BRIDGE_SOURCE = "artist-tag-quick-copy-v7";
+if (NAI_EMBEDDED) document.body.classList.add("nai-embedded");
+const LEGACY_KEY = "artist-quick-copy.v1";
+const TAG_CATEGORIES = ["시점","렌즈·원근","프레이밍","구도","초점","화면 효과"];
+
+const DEFAULT_DATA = {
+  artists: DEFAULT_ARTISTS,
+  actions: [],
+  tags: DEFAULT_TAGS
+};
+
+let data = loadData();
+let activeTab = "artists";
+let searchText = "";
+let activeCategory = "전체";
+
+let targetType = null;
+let targetIndex = -1;
+let artistEditIndex = -1;
+let actionEditIndex = -1;
+let tagEditIndex = -1;
+let comboMode = false;
+let comboSelection = new Set();
+
+const content = document.getElementById("content");
+const subtitle = document.getElementById("subtitle");
+const searchInput = document.getElementById("searchInput");
+const categoryStrip = document.getElementById("categoryStrip");
+const hint = document.getElementById("hint");
+const menu = document.getElementById("menu");
+const toast = document.getElementById("toast");
+const comboModeBtn = document.getElementById("comboModeBtn");
+const comboBar = document.getElementById("comboBar");
+const comboChips = document.getElementById("comboChips");
+const comboCount = document.getElementById("comboCount");
+const comboCopyBtn = document.getElementById("comboCopyBtn");
+
+function normalizeArtist(item) {
+  if (typeof item === "string") {
+    return { name:item.trim(), note:"", pinned:false };
+  }
+  if (item && typeof item === "object") {
+    return {
+      name:String(item.name ?? "").trim(),
+      note:String(item.note ?? ""),
+      pinned:Boolean(item.pinned)
+    };
+  }
+  return null;
+}
+
+function normalizeAction(item) {
+  if (!item || typeof item !== "object") return null;
+  return {
+    title:String(item.title ?? "").trim(),
+    category:String(item.category ?? "기타").trim() || "기타",
+    prompt:String(item.prompt ?? "").trim(),
+    note:String(item.note ?? ""),
+    pinned:Boolean(item.pinned)
+  };
+}
+
+function normalizeTag(item) {
+  if (!item || typeof item !== "object") return null;
+  return {
+    title:String(item.title ?? "").trim(),
+    category:String(item.category ?? "구도").trim() || "구도",
+    prompt:String(item.prompt ?? "").trim(),
+    description:String(item.description ?? "").trim(),
+    aliases:String(item.aliases ?? "").trim(),
+    note:String(item.note ?? ""),
+    pinned:Boolean(item.pinned)
+  };
+}
+
+function cloneDefaultData() {
+  return {
+    artists: DEFAULT_DATA.artists.map(x => ({...x})),
+    actions: DEFAULT_DATA.actions.map(x => ({...x})),
+    tags: DEFAULT_DATA.tags.map(x => ({...x}))
+  };
+}
+
+function loadData() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved && typeof saved === "object") {
+      return {
+        artists:Array.isArray(saved.artists) ? saved.artists.map(normalizeArtist).filter(x => x && x.name) : [],
+        actions:Array.isArray(saved.actions) ? saved.actions.map(normalizeAction).filter(x => x && x.title && x.prompt) : [],
+        tags:Array.isArray(saved.tags)
+          ? saved.tags.map(normalizeTag).filter(x => x && x.title && x.prompt)
+          : DEFAULT_TAGS.map(x => ({...x}))
+      };
+    }
+  } catch {}
+
+  // v1~v3 migration: old versions stored only the artist array.
+  try {
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY));
+    if (Array.isArray(legacy)) {
+      const migrated = {
+        artists:legacy.map(normalizeArtist).filter(x => x && x.name),
+        actions:[],
+        tags:DEFAULT_TAGS.map(x => ({...x}))
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+  } catch {}
+
+  return cloneDefaultData();
+}
+
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function orderedEntries(items) {
+  return items
+    .map((item,index) => ({item,index}))
+    .sort((a,b) => Number(b.item.pinned) - Number(a.item.pinned));
+}
+
+function includesText(...values) {
+  const q = searchText.trim().toLowerCase();
+  if (!q) return true;
+  return values.some(v => String(v ?? "").toLowerCase().includes(q));
+}
+
+function render() {
+  document.getElementById("artistCountTab").textContent = `(${data.artists.length})`;
+  document.getElementById("actionCountTab").textContent = `(${data.actions.length})`;
+  document.getElementById("tagCountTab").textContent = `(${data.tags.length})`;
+
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === activeTab);
+  });
+
+  comboModeBtn.classList.toggle("show", activeTab === "tags");
+  comboModeBtn.classList.toggle("active", activeTab === "tags" && comboMode);
+  comboModeBtn.textContent = comboMode ? "조합 모드 켜짐" : "조합 모드";
+
+  if (activeTab === "artists") {
+    renderArtists();
+  } else if (activeTab === "actions") {
+    renderActions();
+  } else {
+    renderTags();
+  }
+
+  renderComboBar();
+}
+
+function renderArtists() {
+  categoryStrip.classList.remove("show");
+  categoryStrip.innerHTML = "";
+  searchInput.placeholder = "작가명 또는 메모 검색...";
+  document.getElementById("addBtn").textContent = "+ 작가 추가";
+  subtitle.textContent = `${data.artists.length}명 · 작가명을 클릭하면 artist:이름 ${NAI_EMBEDDED ? "삽입" : "복사"}`;
+  hint.textContent = "작가명 클릭: 복사 · 우클릭: 상단 고정 / 수정 / 삭제 · 메모: 입력 즉시 자동 저장";
+
+  const filtered = orderedEntries(data.artists).filter(({item}) =>
+    includesText(item.name,item.note)
+  );
+
+  if (!filtered.length) {
+    content.innerHTML = `<div class="empty">${searchText ? "검색 결과가 없답니다." : "등록된 작가가 없답니다."}</div>`;
+    return;
+  }
+
+  const pinned = filtered.filter(x => x.item.pinned);
+  const regular = filtered.filter(x => !x.item.pinned);
+
+  let html = "";
+  if (pinned.length) {
+    html += artistSectionHtml("고정", pinned);
+  }
+  if (regular.length) {
+    html += artistSectionHtml(pinned.length ? "전체" : "작가", regular);
+  }
+  content.innerHTML = html;
+
+  content.querySelectorAll(".artist-row").forEach(row => {
+    const i = Number(row.dataset.index);
+    const nameCell = row.querySelector(".artist-name-cell");
+    const noteInput = row.querySelector(".inline-note");
+
+    bindPressable(nameCell,"artist",i,() => copyArtist(i,row));
+
+    noteInput.addEventListener("input", () => {
+      data.artists[i].note = noteInput.value;
+      persist();
+    });
+    noteInput.addEventListener("click", e => e.stopPropagation());
+    noteInput.addEventListener("contextmenu", e => e.stopPropagation());
+  });
+}
+
+function artistSectionHtml(label, entries) {
+  const rows = entries.map(({item,index},displayIndex) => `
+    <div class="artist-row ${item.pinned ? "pinned" : ""}" data-index="${index}">
+      <div class="idx">${String(displayIndex + 1).padStart(2,"0")}</div>
+      <div class="artist-name-cell" title="클릭해서 artist: 태그 복사">
+        <span class="artist-name">${escapeHtml(item.name)}</span>
+        ${item.pinned ? '<span class="pin">PIN</span>' : ""}
+      </div>
+      <div class="note-wrap">
+        <input class="inline-note" value="${escapeAttr(item.note)}" placeholder="메모" autocomplete="off" />
+      </div>
+    </div>
+  `).join("");
+
+  return `
+    <div class="section-head">
+      <div class="section-title">${label}</div>
+      <div class="section-count">${entries.length}</div>
+    </div>
+    <section class="sheet">
+      <div class="artist-grid">${rows}</div>
+    </section>
+  `;
+}
+
+function renderActions() {
+  searchInput.placeholder = "행동 이름, 프롬프트, 분류, 메모 검색...";
+  document.getElementById("addBtn").textContent = "+ 행동 추가";
+  subtitle.textContent = `${data.actions.length}개 · 카드를 클릭하면 프롬프트 전체 ${NAI_EMBEDDED ? "삽입" : "복사"}`;
+  hint.textContent = "카드 클릭: 프롬프트 전체 복사 · 우클릭: 상단 고정 / 수정 / 삭제";
+
+  renderCategoryStrip();
+
+  const filtered = orderedEntries(data.actions).filter(({item}) => {
+    const categoryOk = activeCategory === "전체" || item.category === activeCategory;
+    const searchOk = includesText(item.title,item.category,item.prompt,item.note);
+    return categoryOk && searchOk;
+  });
+
+  if (!filtered.length) {
+    content.innerHTML = `<div class="empty">${(searchText || activeCategory !== "전체") ? "조건에 맞는 행동 프롬프트가 없답니다." : "아직 행동 프롬프트가 없답니다. + 행동 추가로 첫 항목을 넣어보시와요."}</div>`;
+    return;
+  }
+
+  const pinned = filtered.filter(x => x.item.pinned);
+  const regular = filtered.filter(x => !x.item.pinned);
+
+  let html = "";
+  if (pinned.length) html += actionSectionHtml("고정",pinned);
+  if (regular.length) html += actionSectionHtml(pinned.length ? "전체" : "행동·행위",regular);
+  content.innerHTML = html;
+
+  content.querySelectorAll(".action-card").forEach(card => {
+    const i = Number(card.dataset.index);
+    bindPressable(card,"action",i,() => copyAction(i,card));
+  });
+}
+
+function renderCategoryStrip() {
+  const categories = Array.from(new Set(
+    data.actions.map(x => x.category || "기타")
+  )).sort((a,b) => a.localeCompare(b,"ko"));
+
+  const all = ["전체",...categories];
+  if (!all.includes(activeCategory)) activeCategory = "전체";
+
+  categoryStrip.innerHTML = all.map(cat => `
+    <button class="cat-btn ${cat === activeCategory ? "active" : ""}" data-category="${escapeAttr(cat)}">${escapeHtml(cat)}</button>
+  `).join("");
+  categoryStrip.classList.add("show");
+
+  categoryStrip.querySelectorAll(".cat-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeCategory = btn.dataset.category;
+      renderActions();
+    });
+  });
+}
+
+function actionSectionHtml(label, entries) {
+  const cards = entries.map(({item,index}) => `
+    <article class="action-card ${item.pinned ? "pinned" : ""}" data-index="${index}" title="클릭해서 프롬프트 전체 복사">
+      <div class="action-top">
+        <div class="action-title-wrap">
+          <div class="action-title">${escapeHtml(item.title)}</div>
+          ${item.pinned ? '<span class="pin">PIN</span>' : ""}
+        </div>
+        <div class="badge">${escapeHtml(item.category || "기타")}</div>
+      </div>
+      <div class="prompt-preview">${escapeHtml(item.prompt)}</div>
+      <div class="action-note">${escapeHtml(item.note)}</div>
+    </article>
+  `).join("");
+
+  return `
+    <div class="section-head">
+      <div class="section-title">${label}</div>
+      <div class="section-count">${entries.length}</div>
+    </div>
+    <div class="action-grid">${cards}</div>
+  `;
+}
+
+
+function renderTags() {
+  searchInput.placeholder = "태그, 한국어 이름, 설명, 검색 별칭 검색...";
+  document.getElementById("addBtn").textContent = "+ 태그 추가";
+  subtitle.textContent = `${data.tags.length}개 · ${comboMode ? "카드를 눌러 조합 바구니에 추가" : `카드를 클릭하면 태그 ${NAI_EMBEDDED ? "삽입" : "복사"}`}`;
+  hint.textContent = comboMode
+    ? "조합 모드: 카드 클릭으로 선택/해제 · 하단 고정 바에서 한 번에 복사 · 길게 누르기: 수정 메뉴"
+    : "카드 클릭: 태그 복사 · 우클릭/길게 누르기: 상단 고정 / 복제 / 수정 / 삭제";
+
+  renderTagCategoryStrip();
+
+  const filtered = orderedEntries(data.tags).filter(({item}) => {
+    const categoryOk = activeCategory === "전체" || item.category === activeCategory;
+    const searchOk = includesText(item.title,item.category,item.prompt,item.description,item.aliases,item.note);
+    return categoryOk && searchOk;
+  });
+
+  if (!filtered.length) {
+    content.innerHTML = `<div class="empty">${(searchText || activeCategory !== "전체") ? "조건에 맞는 태그가 없답니다." : "등록된 태그가 없답니다."}</div>`;
+    return;
+  }
+
+  const pinned = filtered.filter(x => x.item.pinned);
+  const regular = filtered.filter(x => !x.item.pinned);
+  let html = "";
+  if (pinned.length) html += tagSectionHtml("고정",pinned);
+  if (regular.length) html += tagSectionHtml(pinned.length ? "전체" : "태그사전",regular);
+  content.innerHTML = html;
+
+  content.querySelectorAll(".tag-card").forEach(card => {
+    const i = Number(card.dataset.index);
+    bindPressable(card,"tag",i,() => {
+      if (comboMode) toggleComboSelection(i);
+      else copyTag(i,card);
+    });
+  });
+}
+
+function renderTagCategoryStrip() {
+  const all = ["전체",...TAG_CATEGORIES];
+  if (!all.includes(activeCategory)) activeCategory = "전체";
+  categoryStrip.innerHTML = all.map(cat => `
+    <button class="cat-btn ${cat === activeCategory ? "active" : ""}" data-category="${escapeAttr(cat)}">${escapeHtml(cat)}</button>
+  `).join("");
+  categoryStrip.classList.add("show");
+  categoryStrip.querySelectorAll(".cat-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeCategory = btn.dataset.category;
+      renderTags();
+      renderComboBar();
+    });
+  });
+}
+
+function tagSectionHtml(label, entries) {
+  const cards = entries.map(({item,index}) => `
+    <article class="tag-card ${item.pinned ? "pinned" : ""} ${comboSelection.has(index) ? "selected" : ""}" data-index="${index}" title="${comboMode ? "클릭해서 조합에 추가/제거" : "클릭해서 태그 복사"}">
+      <div class="tag-main">
+        <div class="tag-prompt-wrap">
+          <div class="tag-prompt">${escapeHtml(item.prompt)}</div>
+          <div class="tag-title">${escapeHtml(item.title)}</div>
+        </div>
+        <div class="badge">${escapeHtml(item.category || "구도")}</div>
+      </div>
+      <div class="tag-description">${escapeHtml(item.description)}</div>
+    </article>
+  `).join("");
+  return `
+    <div class="section-head">
+      <div class="section-title">${label}</div>
+      <div class="section-count">${entries.length}</div>
+    </div>
+    <div class="tag-grid">${cards}</div>
+  `;
+}
+
+function setComboMode(next) {
+  comboMode = Boolean(next);
+  if (!comboMode) comboSelection.clear();
+  render();
+}
+
+function toggleComboSelection(index) {
+  if (comboSelection.has(index)) comboSelection.delete(index);
+  else comboSelection.add(index);
+  renderTags();
+  renderComboBar();
+}
+
+function renderComboBar() {
+  const visible = activeTab === "tags" && comboMode;
+  comboBar.classList.toggle("show", visible);
+  document.body.classList.toggle("combo-active", visible);
+  comboModeBtn.classList.toggle("active", visible);
+  comboModeBtn.textContent = visible ? "조합 모드 켜짐" : "조합 모드";
+  if (!visible) return;
+
+  const selected = [...comboSelection]
+    .filter(i => data.tags[i])
+    .map(i => ({index:i,item:data.tags[i]}));
+
+  comboCount.textContent = `${selected.length}개`;
+  comboCopyBtn.disabled = selected.length === 0;
+  comboChips.innerHTML = selected.length
+    ? selected.map(({index,item}) => `
+        <span class="combo-chip">
+          ${escapeHtml(item.prompt)}
+          <button type="button" data-remove-index="${index}" aria-label="${escapeAttr(item.prompt)} 제거">×</button>
+        </span>
+      `).join("")
+    : '<span class="combo-empty">태그 카드를 눌러 조합에 추가하시와요.</span>';
+
+  comboChips.querySelectorAll("[data-remove-index]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      comboSelection.delete(Number(btn.dataset.removeIndex));
+      renderTags();
+      renderComboBar();
+    });
+  });
+}
+
+async function copyTag(i,card) {
+  const item = data.tags[i];
+  if (!item) return;
+  const ok = await copyText(item.prompt);
+  card.classList.remove("flash");
+  void card.offsetWidth;
+  card.classList.add("flash");
+  showToast(ok ? `${item.prompt} ${NAI_EMBEDDED ? "삽입됨" : "복사됨"}` : "복사에 실패했답니다.");
+}
+
+function bindPressable(element,type,index,onClick) {
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  let longPressed = false;
+  let suppressClick = false;
+
+  const cancelTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  element.addEventListener("click", e => {
+    if (suppressClick || longPressed) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClick = false;
+      longPressed = false;
+      return;
+    }
+    onClick?.(e);
+  });
+
+  element.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    cancelTimer();
+    suppressClick = true;
+    openContextMenu(type,index,e.clientX,e.clientY);
+    setTimeout(() => { suppressClick = false; }, 450);
+  });
+
+  element.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;
+    startX = e.clientX;
+    startY = e.clientY;
+    longPressed = false;
+    cancelTimer();
+    timer = setTimeout(() => {
+      longPressed = true;
+      suppressClick = true;
+      if (navigator.vibrate) navigator.vibrate(12);
+      openContextMenu(type,index,startX,startY);
+      setTimeout(() => { suppressClick = false; longPressed = false; }, 650);
+    }, 520);
+  }, {passive:true});
+
+  element.addEventListener("pointermove", e => {
+    if (Math.hypot(e.clientX - startX,e.clientY - startY) > 12) cancelTimer();
+  }, {passive:true});
+  element.addEventListener("pointerup", cancelTimer, {passive:true});
+  element.addEventListener("pointercancel", cancelTimer, {passive:true});
+}
+
+async function copyText(text) {
+  if (NAI_EMBEDDED) {
+    window.parent.postMessage({ source: NAI_BRIDGE_SOURCE, type: "insert", text: String(text ?? ""), tab: activeTab }, "*");
+    return true;
+  }
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}
+  ta.remove();
+  return ok;
+}
+
+async function copyArtist(i,row) {
+  const text = "artist:" + data.artists[i].name;
+  const ok = await copyText(text);
+  row.classList.remove("flash");
+  void row.offsetWidth;
+  row.classList.add("flash");
+  showToast(ok ? `${text} ${NAI_EMBEDDED ? "삽입됨" : "복사됨"}` : "복사에 실패했답니다.");
+}
+
+async function copyAction(i,card) {
+  const text = data.actions[i].prompt;
+  const ok = await copyText(text);
+  card.classList.remove("flash");
+  void card.offsetWidth;
+  card.classList.add("flash");
+  showToast(ok ? `${data.actions[i].title} 프롬프트 ${NAI_EMBEDDED ? "삽입됨" : "복사됨"}` : "복사에 실패했답니다.");
+}
+
+function openContextMenu(type,index,x,y) {
+  targetType = type;
+  targetIndex = index;
+  const item = type === "artist" ? data.artists[index] : type === "action" ? data.actions[index] : data.tags[index];
+  if (!item) return;
+
+  document.getElementById("pinBtn").textContent = item.pinned ? "고정 해제" : "상단에 고정";
+  document.getElementById("duplicateBtn").style.display = (type === "action" || type === "tag") ? "" : "none";
+  menu.classList.add("show");
+
+  requestAnimationFrame(() => {
+    if (matchMedia("(max-width: 600px)").matches) {
+      menu.style.left = "10px";
+      menu.style.right = "10px";
+      menu.style.top = "auto";
+      menu.style.bottom = "calc(10px + env(safe-area-inset-bottom))";
+      return;
+    }
+    const r = menu.getBoundingClientRect();
+    menu.style.right = "auto";
+    menu.style.bottom = "auto";
+    menu.style.left = Math.max(8,Math.min(x,innerWidth - r.width - 8)) + "px";
+    menu.style.top = Math.max(8,Math.min(y,innerHeight - r.height - 8)) + "px";
+  });
+}
+
+function hideMenu() {
+  menu.classList.remove("show");
+}
+
+function getTargetItem() {
+  if (targetType === "artist") return data.artists[targetIndex];
+  if (targetType === "action") return data.actions[targetIndex];
+  if (targetType === "tag") return data.tags[targetIndex];
+  return null;
+}
+
+function openArtistDialog(index=-1) {
+  artistEditIndex = index;
+  const isEdit = index >= 0;
+  const dialog = document.getElementById("artistDialog");
+
+  document.getElementById("artistDialogTitle").textContent = isEdit ? "작가 수정" : "작가 추가";
+  document.getElementById("artistNameInput").value = isEdit ? data.artists[index].name : "";
+  document.getElementById("artistNoteInput").value = isEdit ? data.artists[index].note : "";
+
+  dialog.showModal();
+  setTimeout(() => {
+    const input = document.getElementById("artistNameInput");
+    input.focus();
+    if (isEdit) input.select();
+  },30);
+}
+
+
+function openActionDuplicate(index) {
+  const item = data.actions[index];
+  if (!item) return;
+
+  actionEditIndex = -1;
+  const dialog = document.getElementById("actionDialog");
+
+  document.getElementById("actionDialogTitle").textContent = "행동·행위 복제";
+  document.getElementById("actionTitleInput").value = item.title + " 복제본";
+  document.getElementById("actionCategoryInput").value = item.category ?? "";
+  document.getElementById("actionPromptInput").value = item.prompt ?? "";
+  document.getElementById("actionNoteInput").value = item.note ?? "";
+
+  dialog.showModal();
+  setTimeout(() => {
+    const input = document.getElementById("actionTitleInput");
+    input.focus();
+    input.select();
+  }, 30);
+}
+
+function openActionDialog(index=-1) {
+  actionEditIndex = index;
+  const isEdit = index >= 0;
+  const item = isEdit ? data.actions[index] : null;
+  const dialog = document.getElementById("actionDialog");
+
+  document.getElementById("actionDialogTitle").textContent = isEdit ? "행동·행위 수정" : "행동·행위 추가";
+  document.getElementById("actionTitleInput").value = item?.title ?? "";
+  document.getElementById("actionCategoryInput").value = item?.category ?? "";
+  document.getElementById("actionPromptInput").value = item?.prompt ?? "";
+  document.getElementById("actionNoteInput").value = item?.note ?? "";
+
+  dialog.showModal();
+  setTimeout(() => document.getElementById("actionTitleInput").focus(),30);
+}
+
+
+function openTagDuplicate(index) {
+  const item = data.tags[index];
+  if (!item) return;
+  tagEditIndex = -1;
+  const dialog = document.getElementById("tagDialog");
+  document.getElementById("tagDialogTitle").textContent = "태그 복제";
+  document.getElementById("tagTitleInput").value = item.title + " 복제본";
+  document.getElementById("tagPromptInput").value = item.prompt ?? "";
+  document.getElementById("tagCategoryInput").value = item.category ?? "구도";
+  document.getElementById("tagDescriptionInput").value = item.description ?? "";
+  document.getElementById("tagAliasesInput").value = item.aliases ?? "";
+  document.getElementById("tagNoteInput").value = item.note ?? "";
+  dialog.showModal();
+  setTimeout(() => {
+    const input = document.getElementById("tagTitleInput");
+    input.focus();
+    input.select();
+  },30);
+}
+
+function openTagDialog(index=-1) {
+  tagEditIndex = index;
+  const isEdit = index >= 0;
+  const item = isEdit ? data.tags[index] : null;
+  const dialog = document.getElementById("tagDialog");
+  document.getElementById("tagDialogTitle").textContent = isEdit ? "태그 수정" : "태그 추가";
+  document.getElementById("tagTitleInput").value = item?.title ?? "";
+  document.getElementById("tagPromptInput").value = item?.prompt ?? "";
+  document.getElementById("tagCategoryInput").value = item?.category ?? "구도";
+  document.getElementById("tagDescriptionInput").value = item?.description ?? "";
+  document.getElementById("tagAliasesInput").value = item?.aliases ?? "";
+  document.getElementById("tagNoteInput").value = item?.note ?? "";
+  dialog.showModal();
+  setTimeout(() => document.getElementById("tagTitleInput").focus(),30);
+}
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    activeTab = btn.dataset.tab;
+    searchText = "";
+    searchInput.value = "";
+    activeCategory = "전체";
+    comboMode = false;
+    comboSelection.clear();
+    hideMenu();
+    render();
+  });
+});
+
+searchInput.addEventListener("input", () => {
+  searchText = searchInput.value;
+  render();
+});
+
+document.getElementById("addBtn").addEventListener("click", () => {
+  if (activeTab === "artists") openArtistDialog();
+  else if (activeTab === "actions") openActionDialog();
+  else openTagDialog();
+});
+
+comboModeBtn.addEventListener("click", () => setComboMode(!comboMode));
+document.getElementById("comboExitBtn").addEventListener("click", () => setComboMode(false));
+document.getElementById("comboClearBtn").addEventListener("click", () => {
+  comboSelection.clear();
+  renderTags();
+  renderComboBar();
+});
+comboCopyBtn.addEventListener("click", async () => {
+  const text = [...comboSelection]
+    .filter(i => data.tags[i])
+    .map(i => data.tags[i].prompt)
+    .join(", ");
+  if (!text) return;
+  const ok = await copyText(text);
+  showToast(ok ? `${comboSelection.size}개 태그 조합 복사됨` : "복사에 실패했답니다.");
+});
+
+document.getElementById("pinBtn").addEventListener("click", () => {
+  const item = getTargetItem();
+  if (!item) return;
+  item.pinned = !item.pinned;
+  const isPinned = item.pinned;
+  persist();
+  hideMenu();
+  render();
+  showToast(isPinned ? "상단에 고정했답니다." : "고정을 해제했답니다.");
+});
+
+
+document.getElementById("duplicateBtn").addEventListener("click", () => {
+  hideMenu();
+  if (targetType === "action" && targetIndex >= 0) openActionDuplicate(targetIndex);
+  if (targetType === "tag" && targetIndex >= 0) openTagDuplicate(targetIndex);
+});
+
+document.getElementById("editBtn").addEventListener("click", () => {
+  hideMenu();
+  if (targetType === "artist") openArtistDialog(targetIndex);
+  if (targetType === "action") openActionDialog(targetIndex);
+  if (targetType === "tag") openTagDialog(targetIndex);
+});
+
+document.getElementById("deleteBtn").addEventListener("click", () => {
+  if (targetIndex < 0) return;
+
+  if (targetType === "artist") {
+    const name = data.artists[targetIndex]?.name;
+    if (name == null) return;
+    data.artists.splice(targetIndex,1);
+    persist();
+    hideMenu();
+    render();
+    showToast(`${name} 삭제됨`);
+    return;
+  }
+
+  if (targetType === "action") {
+    const title = data.actions[targetIndex]?.title;
+    if (title == null) return;
+    data.actions.splice(targetIndex,1);
+    persist();
+    hideMenu();
+    render();
+    showToast(`${title} 삭제됨`);
+    return;
+  }
+
+  if (targetType === "tag") {
+    const prompt = data.tags[targetIndex]?.prompt;
+    if (prompt == null) return;
+    data.tags.splice(targetIndex,1);
+    comboSelection.clear();
+    persist();
+    hideMenu();
+    render();
+    showToast(`${prompt} 삭제됨`);
+  }
+});
+
+document.getElementById("artistForm").addEventListener("submit", e => {
+  const name = document.getElementById("artistNameInput").value.trim();
+  const note = document.getElementById("artistNoteInput").value.trim();
+
+  if (!name) {
+    e.preventDefault();
+    document.getElementById("artistNameInput").focus();
+    return;
+  }
+
+  const duplicate = data.artists.some((item,i) =>
+    i !== artistEditIndex && item.name.toLowerCase() === name.toLowerCase()
+  );
+  if (duplicate) {
+    e.preventDefault();
+    showToast("같은 작가명이 이미 있답니다.");
+    return;
+  }
+
+  if (artistEditIndex >= 0) {
+    data.artists[artistEditIndex].name = name;
+    data.artists[artistEditIndex].note = note;
+    showToast("작가 정보를 수정했답니다.");
+  } else {
+    data.artists.push({name,note,pinned:false});
+    showToast("작가를 추가했답니다.");
+  }
+
+  persist();
+  render();
+});
+
+document.getElementById("actionForm").addEventListener("submit", e => {
+  const title = document.getElementById("actionTitleInput").value.trim();
+  const category = document.getElementById("actionCategoryInput").value.trim() || "기타";
+  const prompt = document.getElementById("actionPromptInput").value.trim();
+  const note = document.getElementById("actionNoteInput").value.trim();
+
+  if (!title) {
+    e.preventDefault();
+    document.getElementById("actionTitleInput").focus();
+    return;
+  }
+  if (!prompt) {
+    e.preventDefault();
+    document.getElementById("actionPromptInput").focus();
+    return;
+  }
+
+  if (actionEditIndex >= 0) {
+    Object.assign(data.actions[actionEditIndex],{title,category,prompt,note});
+    showToast("행동 프롬프트를 수정했답니다.");
+  } else {
+    data.actions.push({title,category,prompt,note,pinned:false});
+    showToast("행동 프롬프트를 추가했답니다.");
+  }
+
+  persist();
+  activeCategory = "전체";
+  render();
+});
+
+
+
+document.getElementById("tagForm").addEventListener("submit", e => {
+  const title = document.getElementById("tagTitleInput").value.trim();
+  const prompt = document.getElementById("tagPromptInput").value.trim();
+  const category = document.getElementById("tagCategoryInput").value.trim() || "구도";
+  const description = document.getElementById("tagDescriptionInput").value.trim();
+  const aliases = document.getElementById("tagAliasesInput").value.trim();
+  const note = document.getElementById("tagNoteInput").value.trim();
+
+  if (!title) {
+    e.preventDefault();
+    document.getElementById("tagTitleInput").focus();
+    return;
+  }
+  if (!prompt) {
+    e.preventDefault();
+    document.getElementById("tagPromptInput").focus();
+    return;
+  }
+
+  const duplicate = data.tags.some((item,i) =>
+    i !== tagEditIndex && item.prompt.trim().toLowerCase() === prompt.toLowerCase()
+  );
+  if (duplicate) {
+    e.preventDefault();
+    showToast("같은 복사 태그가 이미 있답니다.");
+    return;
+  }
+
+  if (tagEditIndex >= 0) {
+    Object.assign(data.tags[tagEditIndex],{title,prompt,category,description,aliases,note});
+    showToast("태그 정보를 수정했답니다.");
+  } else {
+    data.tags.push({title,prompt,category,description,aliases,note,pinned:false});
+    showToast("태그를 추가했답니다.");
+  }
+
+  persist();
+  activeCategory = "전체";
+  render();
+});
+
+document.getElementById("backupBtn").addEventListener("click", exportBackup);
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  const input = document.getElementById("importFileInput");
+  input.value = "";
+  input.click();
+});
+
+document.getElementById("importFileInput").addEventListener("change", e => {
+  const file = e.target.files?.[0];
+  importBackupFile(file);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("작가, 행동 프롬프트, 태그사전을 모두 기본 상태로 되돌리겠사와요?")) return;
+  data = cloneDefaultData();
+  persist();
+  searchText = "";
+  searchInput.value = "";
+  activeCategory = "전체";
+  comboMode = false;
+  comboSelection.clear();
+  render();
+  showToast("기본 상태로 되돌렸답니다.");
+});
+
+document.addEventListener("click", e => {
+  if (!menu.contains(e.target)) hideMenu();
+});
+document.addEventListener("scroll",hideMenu,true);
+window.addEventListener("resize",hideMenu);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") hideMenu();
+});
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"),1400);
+}
+
+
+function exportBackup() {
+  const payload = {
+    app: "Artist / Tag Quick Copy",
+    version: 7,
+    exportedAt: new Date().toISOString(),
+    data: {
+      artists: data.artists.map(item => ({...item})),
+      actions: data.actions.map(item => ({...item})),
+      tags: data.tags.map(item => ({...item}))
+    }
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(payload, null, 2)],
+    {type: "application/json;charset=utf-8"}
+  );
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+  const filename = `artist_tag_quickcopy_backup_${stamp}.json`;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  showToast("전체 데이터를 JSON으로 백업했답니다.");
+}
+
+function parseImportedBackup(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("JSON 형식이 올바르지 않답니다.");
+  }
+
+  // v5 backup envelope
+  if (parsed && typeof parsed === "object" && parsed.data) {
+    parsed = parsed.data;
+  }
+
+  // Allow direct v4/v5 data object
+  if (parsed && typeof parsed === "object" && Array.isArray(parsed.artists) && Array.isArray(parsed.actions)) {
+    const artists = parsed.artists
+      .map(normalizeArtist)
+      .filter(x => x && x.name);
+
+    const actions = parsed.actions
+      .map(normalizeAction)
+      .filter(x => x && x.title && x.prompt);
+
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.map(normalizeTag).filter(x => x && x.title && x.prompt)
+      : DEFAULT_TAGS.map(x => ({...x}));
+
+    return {artists, actions, tags};
+  }
+
+  // Allow legacy artist-array backups
+  if (Array.isArray(parsed)) {
+    const artists = parsed
+      .map(normalizeArtist)
+      .filter(x => x && x.name);
+
+    return {artists, actions:[], tags:DEFAULT_TAGS.map(x => ({...x}))};
+  }
+
+  throw new Error("이 앱의 백업 파일 형식이 아니랍니다.");
+}
+
+let pendingImport = null;
+
+function mergeImportedData(imported, duplicatePolicy) {
+  const merged = {
+    artists: data.artists.map(item => ({...item})),
+    actions: data.actions.map(item => ({...item})),
+    tags: data.tags.map(item => ({...item}))
+  };
+
+  const artistIndex = new Map(
+    merged.artists.map((item, i) => [item.name.trim().toLowerCase(), i])
+  );
+
+  for (const importedArtist of imported.artists) {
+    const key = importedArtist.name.trim().toLowerCase();
+    if (!artistIndex.has(key)) {
+      artistIndex.set(key, merged.artists.length);
+      merged.artists.push({...importedArtist});
+    } else if (duplicatePolicy === "overwrite") {
+      merged.artists[artistIndex.get(key)] = {...importedArtist};
+    }
+  }
+
+  const actionKey = item =>
+    `${item.title.trim().toLowerCase()}|||${item.prompt.trim().toLowerCase()}`;
+
+  const actionIndex = new Map(
+    merged.actions.map((item, i) => [actionKey(item), i])
+  );
+
+  for (const importedAction of imported.actions) {
+    const key = actionKey(importedAction);
+    if (!actionIndex.has(key)) {
+      actionIndex.set(key, merged.actions.length);
+      merged.actions.push({...importedAction});
+    } else if (duplicatePolicy === "overwrite") {
+      merged.actions[actionIndex.get(key)] = {...importedAction};
+    }
+  }
+
+
+  const tagKey = item => item.prompt.trim().toLowerCase();
+  const tagIndex = new Map(
+    merged.tags.map((item, i) => [tagKey(item), i])
+  );
+  for (const importedTag of imported.tags) {
+    const key = tagKey(importedTag);
+    if (!tagIndex.has(key)) {
+      tagIndex.set(key, merged.tags.length);
+      merged.tags.push({...importedTag});
+    } else if (duplicatePolicy === "overwrite") {
+      merged.tags[tagIndex.get(key)] = {...importedTag};
+    }
+  }
+
+  return merged;
+}
+
+function updateImportModeUI() {
+  const mode = document.querySelector('input[name="importMode"]:checked')?.value || "replace";
+  document.getElementById("duplicatePolicyField").style.display =
+    mode === "merge" ? "" : "none";
+}
+
+function openImportDialog(imported) {
+  pendingImport = imported;
+
+  document.getElementById("importSummary").innerHTML =
+    `백업 내용: <strong>작가 ${imported.artists.length}명</strong> · ` +
+    `<strong>행동 프롬프트 ${imported.actions.length}개</strong> · ` +
+    `<strong>태그 ${imported.tags.length}개</strong>`;
+
+  const replaceRadio = document.querySelector('input[name="importMode"][value="replace"]');
+  if (replaceRadio) replaceRadio.checked = true;
+
+  updateImportModeUI();
+  document.getElementById("importDialog").showModal();
+}
+
+async function importBackupFile(file) {
+  if (!file) return;
+
+  let raw;
+  try {
+    raw = await file.text();
+  } catch {
+    showToast("백업 파일을 읽지 못했답니다.");
+    return;
+  }
+
+  let imported;
+  try {
+    imported = parseImportedBackup(raw);
+  } catch (err) {
+    alert(err.message || "백업 파일을 불러오지 못했답니다.");
+    return;
+  }
+
+  openImportDialog(imported);
+}
+
+document.querySelectorAll('input[name="importMode"]').forEach(input => {
+  input.addEventListener("change", updateImportModeUI);
+});
+
+document.getElementById("cancelImportBtn").addEventListener("click", () => {
+  pendingImport = null;
+  document.getElementById("importDialog").close();
+});
+
+document.getElementById("confirmImportBtn").addEventListener("click", () => {
+  if (!pendingImport) return;
+
+  const mode = document.querySelector('input[name="importMode"]:checked')?.value || "replace";
+  const duplicatePolicy = document.getElementById("duplicatePolicy").value;
+
+  if (mode === "replace") {
+    data = {
+      artists: pendingImport.artists.map(item => ({...item})),
+      actions: pendingImport.actions.map(item => ({...item})),
+      tags: pendingImport.tags.map(item => ({...item}))
+    };
+  } else {
+    data = mergeImportedData(pendingImport, duplicatePolicy);
+  }
+
+  const artistCount = data.artists.length;
+  const actionCount = data.actions.length;
+  const tagCount = data.tags.length;
+
+  persist();
+  pendingImport = null;
+
+  searchText = "";
+  searchInput.value = "";
+  activeCategory = "전체";
+  comboMode = false;
+  comboSelection.clear();
+
+  document.getElementById("importDialog").close();
+  render();
+
+  showToast(
+    mode === "merge"
+      ? `병합 완료 · 작가 ${artistCount}명 · 행동 ${actionCount}개 · 태그 ${tagCount}개`
+      : `복원 완료 · 작가 ${artistCount}명 · 행동 ${actionCount}개 · 태그 ${tagCount}개`
+  );
+});
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+render();
+</script>
+</body>
+</html>

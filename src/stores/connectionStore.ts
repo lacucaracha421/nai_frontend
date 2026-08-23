@@ -1,44 +1,103 @@
 import { create } from "zustand";
-import { clearNovelAiToken, isTauriRuntime, setNovelAiToken, testNovelAiConnection } from "../adapters/novelai/client";
+import {
+  clearNovelAiToken,
+  getNovelAiQuota,
+  isTauriRuntime,
+  restoreNovelAiToken,
+  setNovelAiToken,
+  testNovelAiConnection,
+  type NovelAiQuota,
+} from "../adapters/novelai/client";
 
-type ConnectionStatus = "disconnected" | "testing" | "connected" | "error";
+type Status = "disconnected" | "testing" | "connected" | "error";
+type QuotaStatus = "idle" | "loading" | "ready";
 
-type ConnectionState = {
+type State = {
   tokenInput: string;
-  status: ConnectionStatus;
+  status: Status;
   message: string;
-  desktopRuntime: boolean;
+  quota: NovelAiQuota | null;
+  quotaStatus: QuotaStatus;
   setTokenInput: (value: string) => void;
+  restore: () => Promise<void>;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  refreshQuota: () => Promise<void>;
 };
 
-export const useConnectionStore = create<ConnectionState>((set, get) => ({
+let restoreStarted = false;
+
+export const useConnectionStore = create<State>((set, get) => ({
   tokenInput: "",
   status: "disconnected",
-  message: isTauriRuntime()
-    ? "토큰은 현재 실행 세션의 Rust 메모리에만 보관됩니다."
-    : "브라우저 미리보기 모드 · 실제 연결은 Tauri 실행이 필요합니다.",
-  desktopRuntime: isTauriRuntime(),
+  message: "",
+  quota: null,
+  quotaStatus: "idle",
   setTokenInput: (tokenInput) => set({ tokenInput }),
-  connect: async () => {
-    const token = get().tokenInput.trim();
-    if (!token) {
-      set({ status: "error", message: "Persistent API Token을 입력해주시와요." });
-      return;
-    }
-    set({ status: "testing", message: "NovelAI 연결을 확인하는 중이랍니다…" });
+
+  refreshQuota: async () => {
+    if (!isTauriRuntime() || get().status !== "connected") return;
+    set({ quotaStatus: "loading" });
     try {
-      await setNovelAiToken(token);
-      const result = await testNovelAiConnection();
-      set({ status: "connected", message: result, tokenInput: "" });
+      const quota = await getNovelAiQuota();
+      set({ quota, quotaStatus: "ready" });
+    } catch {
+      // Quota display is convenience UI. A temporary status API failure must
+      // never break image generation or turn the connection red.
+      set({ quotaStatus: "idle" });
+    }
+  },
+
+  restore: async () => {
+    if (!isTauriRuntime() || restoreStarted) return;
+    restoreStarted = true;
+    try {
+      const restored = await restoreNovelAiToken();
+      if (restored) {
+        set({ status: "connected", message: "", tokenInput: "" });
+        await get().refreshQuota();
+      }
     } catch (error) {
-      await clearNovelAiToken().catch(() => undefined);
       set({ status: "error", message: error instanceof Error ? error.message : String(error) });
     }
   },
+
+  connect: async () => {
+    const token = get().tokenInput.trim();
+    if (!token) {
+      set({ status: "error", message: "Persistent API Token을 입력하시와요." });
+      return;
+    }
+
+    set({ status: "testing", message: "", quota: null, quotaStatus: "idle" });
+    try {
+      await setNovelAiToken(token);
+      await testNovelAiConnection();
+      set({ status: "connected", message: "", tokenInput: "" });
+      await get().refreshQuota();
+    } catch (error) {
+      await clearNovelAiToken().catch(() => undefined);
+      set({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        quota: null,
+        quotaStatus: "idle",
+      });
+    }
+  },
+
   disconnect: async () => {
-    await clearNovelAiToken().catch(() => undefined);
-    set({ status: "disconnected", message: "NovelAI 연결을 해제했답니다.", tokenInput: "" });
+    try {
+      await clearNovelAiToken();
+      set({
+        status: "disconnected",
+        message: "",
+        tokenInput: "",
+        quota: null,
+        quotaStatus: "idle",
+      });
+    } catch (error) {
+      set({ status: "error", message: error instanceof Error ? error.message : String(error) });
+    }
   },
 }));

@@ -1,15 +1,13 @@
-import { GenerationBar } from "../components/generation-bar/GenerationBar";
-import { Sidebar } from "../components/sidebar/Sidebar";
-import { Workspace } from "../components/workspace/Workspace";
-import { PromptLibraryDrawer } from "../features/library/PromptLibraryDrawer";
+import { useEffect } from "react";
+import { V5Studio } from "../features/generator/V5Studio";
+import { useConnectionStore } from "../stores/connectionStore";
 
 export function App() {
-  return (
-    <div className="app-shell">
-      <Sidebar />
-      <Workspace />
-      <GenerationBar />
-      <PromptLibraryDrawer />
-    </div>
-  );
+  const restoreConnection = useConnectionStore((state) => state.restore);
+
+  useEffect(() => {
+    void restoreConnection();
+  }, [restoreConnection]);
+
+  return <V5Studio />;
 }

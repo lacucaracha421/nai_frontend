@@ -1,3 +1,1 @@
-fn main() {
-    nai_frontend_lib::run();
-}
+fn main(){nai_frontend_lib::run();}
