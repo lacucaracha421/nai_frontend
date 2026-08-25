@@ -13,6 +13,15 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val naiKeystorePath = System.getenv("NAI_KEYSTORE_PATH") ?: "C:/chat_runner/signing/nai.keystore"
+val naiKeystoreFile = file(naiKeystorePath)
+if (!naiKeystoreFile.exists()) {
+    throw GradleException(
+        "NAI signing keystore is missing at $naiKeystorePath. " +
+            "Restore the backed-up keystore before building to avoid changing the app signature."
+    )
+}
+
 android {
     compileSdk = 36
     namespace = "local.nai.v5studio"
@@ -24,19 +33,30 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("naiStable") {
+            storeFile = naiKeystoreFile
+            storePassword = System.getenv("NAI_KEYSTORE_PASSWORD") ?: "android"
+            keyAlias = System.getenv("NAI_KEY_ALIAS") ?: "androiddebugkey"
+            keyPassword = System.getenv("NAI_KEY_PASSWORD") ?: "android"
+        }
+    }
     buildTypes {
         getByName("debug") {
+            signingConfig = signingConfigs.getByName("naiStable")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false
-            packaging {                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+            packaging {
+                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
                 jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86/*.so")
                 jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
             }
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("naiStable")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
