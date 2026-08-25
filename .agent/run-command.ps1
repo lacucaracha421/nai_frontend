@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$cmdExitToken = "__CHAT_COMMAND_EXIT_FILE__"
 
 function Write-ResultFile {
   param([hashtable]$Data)
@@ -80,8 +81,9 @@ if ([string]::IsNullOrWhiteSpace($scriptText) -and $null -ne $request.commands) 
     $lines.Add('setlocal EnableExtensions EnableDelayedExpansion')
     foreach ($command in $request.commands) {
       $lines.Add([string]$command)
-      $lines.Add('if errorlevel 1 exit /b !errorlevel!')
+      $lines.Add(('if errorlevel 1 (set "_chat_rc=!errorlevel!" & >"' + $cmdExitToken + '" echo !_chat_rc! & exit /b !_chat_rc!)'))
     }
+    $lines.Add(('>"' + $cmdExitToken + '" echo 0'))
   }
   $scriptText = $lines -join [Environment]::NewLine
 }
@@ -133,6 +135,7 @@ if ((Test-Path $markerPath) -and -not $force) {
 }
 
 $tempBase = Join-Path $env:RUNNER_TEMP ("chat-command-" + [Guid]::NewGuid().ToString("N"))
+$cmdExitPath = "$tempBase.exitcode"
 $started = Get-Date
 
 if ($shell -eq "powershell") {
@@ -150,6 +153,7 @@ if ($shell -eq "powershell") {
 } else {
   $tempScript = "$tempBase.cmd"
   if ($usingCommands) {
+    $scriptText = $scriptText.Replace($cmdExitToken, $cmdExitPath)
     $scriptText | Set-Content -Encoding ASCII -Path $tempScript
   } else {
     @(
@@ -185,6 +189,15 @@ if ($timedOut) {
   } catch {
     Write-Host "[chat-command] could not read child exit code; treating as failure"
     $exitCode = 1
+  }
+  if ($shell -eq "cmd" -and $usingCommands -and (Test-Path $cmdExitPath)) {
+    try {
+      $exitCode = [int]((Get-Content -Raw -Path $cmdExitPath).Trim())
+      Write-Host "[chat-command] CMD sidecar exit_code=$exitCode"
+    } catch {
+      Write-Host "[chat-command] invalid CMD sidecar exit code; treating as failure"
+      $exitCode = 1
+    }
   }
   if ($null -eq $exitCode) { $exitCode = 1 }
 }
@@ -226,6 +239,6 @@ Write-ResultFile @{
   finished_at = $finished.ToUniversalTime().ToString("o")
 } | ConvertTo-Json | Set-Content -Encoding UTF8 -Path $markerPath
 
-Remove-Item -Force -ErrorAction SilentlyContinue $tempScript
+Remove-Item -Force -ErrorAction SilentlyContinue $tempScript, $cmdExitPath
 Write-Host "[chat-command] completed status=$status exit_code=$exitCode duration=${durationSeconds}s"
 exit ([int]$exitCode)
