@@ -1,10 +1,19 @@
 {
-  "id": "idle-20260826-nai-signing",
-  "enabled": false,
+  "id": "verify-nai-signing-20260826-0048-02",
+  "enabled": true,
   "shell": "powershell",
   "cwd": ".",
-  "timeout_seconds": 120,
+  "timeout_seconds": 180,
   "commands": [
-    "echo IDLE"
+    "$apk = (Resolve-Path 'src-tauri\\gen\\android\\app\\build\\outputs\\apk\\universal\\debug\\app-universal-debug.apk').Path",
+    "$key = 'C:\\chat_runner\\signing\\nai.keystore'",
+    "if(-not (Test-Path $key)){ throw 'Pinned NAI keystore is missing' }",
+    "$apksigner = (Get-ChildItem 'C:\\Android\\sdk\\build-tools' -Recurse -Filter apksigner.bat | Sort-Object FullName -Descending | Select-Object -First 1).FullName",
+    "$cert = (& $apksigner verify --print-certs $apk | Select-String 'certificate SHA-256 digest').ToString()",
+    "Write-Host $cert",
+    "$expected = '5675d01891fab7c67edba9f455e98fd6281e6f4136a36b5f7516ecd664a596cf'",
+    "if($cert -notmatch $expected){ throw ('APK signature mismatch. Expected ' + $expected) }",
+    "keytool -list -v -keystore $key -storepass android -alias androiddebugkey -keypass android | Select-String 'SHA256:'",
+    "Write-Host 'NAI_SIGNING_PIN_VERIFIED'"
   ]
 }
