@@ -1,0 +1,48 @@
+name: Chat Agent - Windows
+
+on:
+  push:
+    branches:
+      - "agent/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chat-agent-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    name: Run on local Windows PC
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run agent task
+        shell: powershell
+        run: .\.agent\run.ps1
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-log-${{ github.run_id }}
+          path: .agent-output/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload frontend build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.run_id }}
+          path: dist/**
+          if-no-files-found: ignore
+          retention-days: 7
