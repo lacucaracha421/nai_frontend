@@ -1,10 +1,16 @@
 {
-  "id": "idle-20260826-nai-signing-final",
-  "enabled": false,
+  "id": "inspect-sex-tags-20260826-0138-01",
+  "enabled": true,
   "shell": "powershell",
   "cwd": ".",
-  "timeout_seconds": 120,
+  "timeout_seconds": 180,
   "commands": [
-    "echo IDLE"
+    "$ProgressPreference='SilentlyContinue'",
+    "$headers=@{'User-Agent'='nai-v5-studio-personal/1.0'}",
+    "$url='https://danbooru.donmai.us/wiki_pages/sex.json'",
+    "try { $page=Invoke-RestMethod -Uri $url -Headers $headers -TimeoutSec 30; Write-Host ('WIKI_TITLE=' + $page.title); Write-Host ('BODY_LEN=' + $page.body.Length); Write-Host '=== BODY SAMPLE ==='; Write-Host $page.body.Substring(0,[Math]::Min(6000,$page.body.Length)); $page.body | Set-Content -Encoding UTF8 .agent/sex-wiki-body.txt } catch { Write-Host ('WIKI_FETCH_ERROR=' + $_.Exception.Message); exit 2 }",
+    "$matches=[regex]::Matches($page.body,'\\[\\[([^\\]|#]+)'); $tags=@($matches | ForEach-Object { $_.Groups[1].Value.Trim() } | Where-Object { $_ -and $_ -notmatch '^wiki:' } | Sort-Object -Unique); Write-Host ('WIKI_LINK_TAGS=' + $tags.Count); $tags | Select-Object -First 120 | ForEach-Object { Write-Host ('TAG=' + $_) }",
+    "$gz='src-tauri/resources/danbooru.sqlite.gz'; $tmp=Join-Path $env:TEMP 'nai-danbooru-inspect.sqlite'; if(Test-Path $tmp){Remove-Item $tmp -Force}; $in=[IO.File]::OpenRead((Resolve-Path $gz)); $out=[IO.File]::Create($tmp); $dec=New-Object IO.Compression.GZipStream($in,[IO.Compression.CompressionMode]::Decompress); $dec.CopyTo($out); $dec.Dispose(); $out.Dispose(); $in.Dispose();",
+    "$py=@'\nimport sqlite3,sys\npath=sys.argv[1]\ntags=sys.argv[2:]\ncon=sqlite3.connect(path)\nmissing=[]\nfor tag in tags:\n    raw=tag.replace(' ','_')\n    row=con.execute('select raw,category,count from tags where raw=?',(raw,)).fetchone()\n    if not row: missing.append(tag)\nprint('DB_WIKI_HITS='+str(len(tags)-len(missing)))\nprint('DB_WIKI_MISSING='+str(len(missing)))\nfor x in missing[:120]: print('MISSING='+x)\nfor q in ['sex','vaginal','oral','anal','penetration','cum','fellatio','cunnilingus']:\n    rows=con.execute(\"select raw,category,count from tags where raw like ? order by count desc limit 12\",('%'+q+'%',)).fetchall()\n    print('QUERY='+q+' => '+str(rows))\ncon.close()\n'@; $pyPath=Join-Path $env:TEMP 'nai_check_sex.py'; Set-Content -Path $pyPath -Value $py -Encoding UTF8; & python $pyPath $tmp @tags; $code=$LASTEXITCODE; Remove-Item $tmp,$pyPath -Force -ErrorAction SilentlyContinue; exit $code"
   ]
 }
