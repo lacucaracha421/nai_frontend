@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PromptSectionKey } from "../../types/generation";
+import { SexTagDictionary } from "./SexTagDictionary";
 
 const BRIDGE_SOURCE = "artist-tag-quick-copy-v7";
 const DESTINATION_LABEL: Record<PromptSectionKey, string> = {
@@ -8,6 +9,8 @@ const DESTINATION_LABEL: Record<PromptSectionKey, string> = {
   quality: "Quality",
   negative: "Negative",
 };
+
+type DictionaryView = "classic" | "sex";
 
 export function QuickCopySheet({
   destination,
@@ -19,6 +22,7 @@ export function QuickCopySheet({
   onClose: () => void;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const [view, setView] = useState<DictionaryView>("classic");
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -38,17 +42,25 @@ export function QuickCopySheet({
     <div className="sheet quickcopy-sheet">
       <div className="quickcopy-hostbar">
         <div>
-          <strong>Artist / Tag Quick Copy v7</strong>
+          <strong>Tag Dictionary</strong>
           <span>삽입 대상 · {DESTINATION_LABEL[destination]}</span>
         </div>
-        <button className="icon-button" onClick={onClose} aria-label="Quick Copy 닫기">↓</button>
+        <div className="quickcopy-hostbar-tabs">
+          <button type="button" className={view === "classic" ? "active" : ""} onClick={() => setView("classic")}>기존 사전</button>
+          <button type="button" className={view === "sex" ? "active" : ""} onClick={() => setView("sex")}>Sex</button>
+          <button className="icon-button" onClick={onClose} aria-label="태그사전 닫기">↓</button>
+        </div>
       </div>
-      <iframe
-        ref={frameRef}
-        className="quickcopy-frame"
-        src="/quickcopy/index.html"
-        title="Artist / Tag Quick Copy v7"
-      />
+      {view === "classic" ? (
+        <iframe
+          ref={frameRef}
+          className="quickcopy-frame"
+          src="/quickcopy/index.html"
+          title="Artist / Tag Quick Copy v7"
+        />
+      ) : (
+        <SexTagDictionary onInsert={onInsert} />
+      )}
     </div>
   );
 }
