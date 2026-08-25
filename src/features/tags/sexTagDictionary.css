@@ -31,10 +31,16 @@
   top:0;
   z-index:2;
   display:flex;
-  align-items:center;
-  gap:10px;
+  flex-direction:column;
+  align-items:stretch;
+  gap:8px;
   padding:0 0 12px;
   background:#0f1115;
+}
+.sex-search-row {
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 .sex-dictionary-controls input {
   flex:1;
@@ -48,11 +54,50 @@
   color:#f2f4f6;
 }
 .sex-dictionary-controls input:focus { border-color:#5a6573; }
-.sex-dictionary-controls span {
+.sex-search-row>span {
   flex:0 0 auto;
   color:#77818e;
   font-size:10px;
   font-variant-numeric:tabular-nums;
+}
+.sex-filter-strip {
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  scrollbar-width:none;
+  padding:1px 0;
+}
+.sex-filter-strip::-webkit-scrollbar { display:none; }
+.sex-filter-strip button {
+  flex:0 0 auto;
+  min-height:34px;
+  padding:0 11px;
+  border:1px solid #2b313a;
+  border-radius:10px;
+  background:#15181d;
+  color:#929ba7;
+  font-size:11px;
+  font-weight:700;
+}
+.sex-filter-strip.primary button.active {
+  border-color:#e6e8ec;
+  background:#e6e8ec;
+  color:#111318;
+}
+.sex-filter-strip.secondary button {
+  min-height:30px;
+  border-radius:999px;
+  font-size:10px;
+}
+.sex-filter-strip.secondary button.active {
+  border-color:#687383;
+  background:#252b33;
+  color:#f0f2f5;
+}
+.sex-curation-note {
+  color:#697380;
+  font-size:9px;
+  line-height:1.35;
 }
 .sex-tag-grid {
   display:grid;
