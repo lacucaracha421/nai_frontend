@@ -64,8 +64,26 @@ if (-not (Test-Path -LiteralPath $cwd -PathType Container)) {
 }
 
 $scriptText = [string]$request.script
+$usingCommands = $false
 if ([string]::IsNullOrWhiteSpace($scriptText) -and $null -ne $request.commands) {
-  $scriptText = (($request.commands | ForEach-Object { [string]$_ }) -join [Environment]::NewLine)
+  $usingCommands = $true
+  $lines = New-Object System.Collections.Generic.List[string]
+  if ($shell -eq "powershell") {
+    $lines.Add('$ErrorActionPreference = "Stop"')
+    foreach ($command in $request.commands) {
+      $lines.Add('$global:LASTEXITCODE = 0')
+      $lines.Add([string]$command)
+      $lines.Add('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
+    }
+  } else {
+    $lines.Add('@echo on')
+    $lines.Add('setlocal EnableExtensions')
+    foreach ($command in $request.commands) {
+      $lines.Add([string]$command)
+      $lines.Add('if errorlevel 1 exit /b %errorlevel%')
+    }
+  }
+  $scriptText = $lines -join [Environment]::NewLine
 }
 if ([string]::IsNullOrWhiteSpace($scriptText)) {
   throw "request.script or request.commands is required"
@@ -92,6 +110,8 @@ if (-not $enabled) {
     cwd = $cwd
     exit_code = 0
     timed_out = $false
+    runner = $env:RUNNER_NAME
+    github_sha = $env:GITHUB_SHA
   }
   exit 0
 }
@@ -106,6 +126,8 @@ if ((Test-Path $markerPath) -and -not $force) {
     exit_code = 0
     timed_out = $false
     marker = $markerPath
+    runner = $env:RUNNER_NAME
+    github_sha = $env:GITHUB_SHA
   }
   exit 0
 }
@@ -115,18 +137,26 @@ $started = Get-Date
 
 if ($shell -eq "powershell") {
   $tempScript = "$tempBase.ps1"
-  @(
-    '$ErrorActionPreference = "Stop"'
-    $scriptText
-  ) | Set-Content -Encoding UTF8 -Path $tempScript
+  if ($usingCommands) {
+    $scriptText | Set-Content -Encoding UTF8 -Path $tempScript
+  } else {
+    @(
+      '$ErrorActionPreference = "Stop"'
+      $scriptText
+    ) | Set-Content -Encoding UTF8 -Path $tempScript
+  }
   $filePath = "$PSHOME\powershell.exe"
   $argumentList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $tempScript)
 } else {
   $tempScript = "$tempBase.cmd"
-  @(
-    '@echo on'
-    $scriptText
-  ) | Set-Content -Encoding ASCII -Path $tempScript
+  if ($usingCommands) {
+    $scriptText | Set-Content -Encoding ASCII -Path $tempScript
+  } else {
+    @(
+      '@echo on'
+      $scriptText
+    ) | Set-Content -Encoding ASCII -Path $tempScript
+  }
   $filePath = $env:ComSpec
   if ([string]::IsNullOrWhiteSpace($filePath)) { $filePath = "cmd.exe" }
   $argumentList = @("/D", "/E:ON", "/V:OFF", "/C", ('"' + $tempScript + '"'))
@@ -149,7 +179,14 @@ if ($timedOut) {
   $exitCode = 124
 } else {
   $process.WaitForExit()
-  $exitCode = $process.ExitCode
+  $process.Refresh()
+  try {
+    $exitCode = [int]$process.ExitCode
+  } catch {
+    Write-Host "[chat-command] could not read child exit code; treating as failure"
+    $exitCode = 1
+  }
+  if ($null -eq $exitCode) { $exitCode = 1 }
 }
 
 $finished = Get-Date
@@ -178,6 +215,8 @@ Write-ResultFile @{
   duration_seconds = $durationSeconds
   stdout_file = "stdout.txt"
   stderr_file = "stderr.txt"
+  runner = $env:RUNNER_NAME
+  github_sha = $env:GITHUB_SHA
 }
 
 @{
@@ -189,4 +228,4 @@ Write-ResultFile @{
 
 Remove-Item -Force -ErrorAction SilentlyContinue $tempScript
 Write-Host "[chat-command] completed status=$status exit_code=$exitCode duration=${durationSeconds}s"
-exit $exitCode
+exit ([int]$exitCode)
