@@ -1,10 +1,24 @@
 {
-  "id": "idle-20260826-prompt-block-ux",
-  "enabled": false,
+  "id": "backup-nai-signing-key-20260826-0042-01",
+  "enabled": true,
   "shell": "powershell",
   "cwd": ".",
-  "timeout_seconds": 120,
+  "timeout_seconds": 180,
   "commands": [
-    "echo IDLE"
+    "$src = Join-Path $env:USERPROFILE '.android\\debug.keystore'",
+    "$dir = 'C:\\chat_runner\\signing'",
+    "$dst = Join-Path $dir 'nai.keystore'",
+    "if(-not (Test-Path $src)){ throw ('Source keystore missing: ' + $src) }",
+    "New-Item -ItemType Directory -Force -Path $dir | Out-Null",
+    "Copy-Item -Path $src -Destination $dst -Force",
+    "$srcHash = (Get-FileHash -Algorithm SHA256 $src).Hash",
+    "$dstHash = (Get-FileHash -Algorithm SHA256 $dst).Hash",
+    "Write-Host ('SOURCE=' + $src)",
+    "Write-Host ('BACKUP=' + $dst)",
+    "Write-Host ('SOURCE_SHA256=' + $srcHash)",
+    "Write-Host ('BACKUP_SHA256=' + $dstHash)",
+    "if($srcHash -ne $dstHash){ throw 'Keystore backup hash mismatch' }",
+    "keytool -list -v -keystore $dst -storepass android -alias androiddebugkey -keypass android | Select-String 'Owner:|SHA256:'",
+    "Write-Host 'NAI_KEY_BACKUP_OK'"
   ]
 }
