@@ -1,0 +1,96 @@
+.quickcopy-hostbar-tabs {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-left:auto;
+}
+.quickcopy-hostbar-tabs button:not(.icon-button) {
+  min-height:34px;
+  padding:0 11px;
+  border:1px solid #303640;
+  border-radius:9px;
+  background:#171b20;
+  color:#9099a5;
+  font-size:11px;
+  font-weight:700;
+}
+.quickcopy-hostbar-tabs button.active:not(.icon-button) {
+  border-color:#e7eaee;
+  background:#e7eaee;
+  color:#111318;
+}
+.sex-tag-dictionary {
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:14px 16px calc(24px + env(safe-area-inset-bottom));
+  background:#0f1115;
+}
+.sex-dictionary-controls {
+  position:sticky;
+  top:0;
+  z-index:2;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:0 0 12px;
+  background:#0f1115;
+}
+.sex-dictionary-controls input {
+  flex:1;
+  min-width:0;
+  min-height:43px;
+  padding:0 12px;
+  border:1px solid #2b313a;
+  border-radius:11px;
+  outline:none;
+  background:#14171c;
+  color:#f2f4f6;
+}
+.sex-dictionary-controls input:focus { border-color:#5a6573; }
+.sex-dictionary-controls span {
+  flex:0 0 auto;
+  color:#77818e;
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+}
+.sex-tag-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.sex-tag-card {
+  min-width:0;
+  min-height:62px;
+  padding:10px 12px;
+  border:1px solid #2b313a;
+  border-radius:11px;
+  background:#171a20;
+  color:#f2f4f6;
+  text-align:left;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+}
+.sex-tag-card:active { background:#22272f; border-color:#414957; }
+.sex-tag-card strong {
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font-size:12px;
+}
+.sex-tag-card span { color:#757f8c; font-size:9px; }
+.sex-dictionary-state {
+  grid-column:1/-1;
+  padding:44px 16px;
+  border:1px dashed #2c323b;
+  border-radius:12px;
+  color:#7d8793;
+  text-align:center;
+  font-size:12px;
+}
+.sex-dictionary-state.error { color:#d69393; }
+@media (min-width:760px) {
+  .sex-tag-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
