@@ -17,7 +17,7 @@ jobs:
   agent:
     name: Run on local Windows PC
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 90
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -50,10 +50,10 @@ jobs:
         shell: cmd
         run: npm run build
 
-      - name: Android build
-        timeout-minutes: 40
+      - name: Android ARM64 debug APK
+        timeout-minutes: 20
         shell: cmd
-        run: npm run android:build
+        run: npm run tauri -- android build --debug --apk --target aarch64
 
       - name: Rust tests
         timeout-minutes: 20
@@ -69,13 +69,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload Android packages
+      - name: Upload Android APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-packages-${{ github.run_id }}
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          name: android-apk-${{ github.run_id }}
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: ignore
           retention-days: 7
