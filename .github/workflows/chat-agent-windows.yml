@@ -17,7 +17,7 @@ jobs:
   agent:
     name: Run on local Windows PC
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -35,16 +35,46 @@ jobs:
           rustc --version
 
       - name: Install Node dependencies
+        timeout-minutes: 10
         shell: cmd
         run: npm ci
 
       - name: Frontend build
+        timeout-minutes: 10
         shell: cmd
         run: npm run build
 
       - name: Rust tests
+        timeout-minutes: 20
         shell: cmd
         run: cargo test --manifest-path src-tauri\Cargo.toml
+
+      - name: Android environment check
+        timeout-minutes: 5
+        shell: cmd
+        run: |
+          set "JAVA_HOME=C:\Program Files\Java\jdk-17"
+          set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
+          set "ANDROID_SDK_ROOT=%LOCALAPPDATA%\Android\Sdk"
+          set "NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.15729638"
+          set "PATH=C:\Program Files\nodejs;%USERPROFILE%\.cargo\bin;%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
+          echo JAVA_HOME=%JAVA_HOME%
+          echo ANDROID_HOME=%ANDROID_HOME%
+          echo NDK_HOME=%NDK_HOME%
+          "%JAVA_HOME%\bin\java.exe" -version
+          if not exist "%ANDROID_HOME%" exit /b 20
+          if not exist "%NDK_HOME%" exit /b 21
+
+      - name: Android build
+        timeout-minutes: 30
+        shell: cmd
+        run: |
+          set "JAVA_HOME=C:\Program Files\Java\jdk-17"
+          set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
+          set "ANDROID_SDK_ROOT=%LOCALAPPDATA%\Android\Sdk"
+          set "NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.15729638"
+          set "PATH=C:\Program Files\nodejs;%USERPROFILE%\.cargo\bin;%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
+          npm run android:build
 
       - name: Upload frontend build
         if: success()
@@ -52,5 +82,16 @@ jobs:
         with:
           name: frontend-dist-${{ github.run_id }}
           path: dist/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload Android packages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-packages-${{ github.run_id }}
+          path: |
+            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
           if-no-files-found: ignore
           retention-days: 7
