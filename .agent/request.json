@@ -1,16 +1,16 @@
 {
-  "id": "inspect-sex-tags-20260826-0138-01",
+  "id": "inspect-sex-groups-20260826-0141-02",
   "enabled": true,
   "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 180,
   "commands": [
-    "$ProgressPreference='SilentlyContinue'",
-    "$headers=@{'User-Agent'='nai-v5-studio-personal/1.0'}",
-    "$url='https://danbooru.donmai.us/wiki_pages/sex.json'",
-    "try { $page=Invoke-RestMethod -Uri $url -Headers $headers -TimeoutSec 30; Write-Host ('WIKI_TITLE=' + $page.title); Write-Host ('BODY_LEN=' + $page.body.Length); Write-Host '=== BODY SAMPLE ==='; Write-Host $page.body.Substring(0,[Math]::Min(6000,$page.body.Length)); $page.body | Set-Content -Encoding UTF8 .agent/sex-wiki-body.txt } catch { Write-Host ('WIKI_FETCH_ERROR=' + $_.Exception.Message); exit 2 }",
-    "$matches=[regex]::Matches($page.body,'\\[\\[([^\\]|#]+)'); $tags=@($matches | ForEach-Object { $_.Groups[1].Value.Trim() } | Where-Object { $_ -and $_ -notmatch '^wiki:' } | Sort-Object -Unique); Write-Host ('WIKI_LINK_TAGS=' + $tags.Count); $tags | Select-Object -First 120 | ForEach-Object { Write-Host ('TAG=' + $_) }",
-    "$gz='src-tauri/resources/danbooru.sqlite.gz'; $tmp=Join-Path $env:TEMP 'nai-danbooru-inspect.sqlite'; if(Test-Path $tmp){Remove-Item $tmp -Force}; $in=[IO.File]::OpenRead((Resolve-Path $gz)); $out=[IO.File]::Create($tmp); $dec=New-Object IO.Compression.GZipStream($in,[IO.Compression.CompressionMode]::Decompress); $dec.CopyTo($out); $dec.Dispose(); $out.Dispose(); $in.Dispose();",
-    "$py=@'\nimport sqlite3,sys\npath=sys.argv[1]\ntags=sys.argv[2:]\ncon=sqlite3.connect(path)\nmissing=[]\nfor tag in tags:\n    raw=tag.replace(' ','_')\n    row=con.execute('select raw,category,count from tags where raw=?',(raw,)).fetchone()\n    if not row: missing.append(tag)\nprint('DB_WIKI_HITS='+str(len(tags)-len(missing)))\nprint('DB_WIKI_MISSING='+str(len(missing)))\nfor x in missing[:120]: print('MISSING='+x)\nfor q in ['sex','vaginal','oral','anal','penetration','cum','fellatio','cunnilingus']:\n    rows=con.execute(\"select raw,category,count from tags where raw like ? order by count desc limit 12\",('%'+q+'%',)).fetchall()\n    print('QUERY='+q+' => '+str(rows))\ncon.close()\n'@; $pyPath=Join-Path $env:TEMP 'nai_check_sex.py'; Set-Content -Path $pyPath -Value $py -Encoding UTF8; & python $pyPath $tmp @tags; $code=$LASTEXITCODE; Remove-Item $tmp,$pyPath -Force -ErrorAction SilentlyContinue; exit $code"
+    "$ProgressPreference='SilentlyContinue'; $headers=@{'User-Agent'='nai-v5-studio-personal/1.0'}",
+    "$slugs=@('sex','tag_group:sex_acts','tag_group:sexual_positions')",
+    "$all=New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)",
+    "foreach($slug in $slugs){ $url='https://danbooru.donmai.us/wiki_pages/' + [uri]::EscapeDataString($slug) + '.json'; try{$p=Invoke-RestMethod -Uri $url -Headers $headers -TimeoutSec 30; Write-Host ('PAGE=' + $slug + ' TITLE=' + $p.title + ' LEN=' + $p.body.Length); $ms=[regex]::Matches($p.body,'\\[\\[([^\\]|#]+)'); foreach($m in $ms){$name=$m.Groups[1].Value.Trim(); if($name -and $name -notmatch '^(?:Tag group:|wiki:)'){[void]$all.Add($name)}} } catch {Write-Host ('FETCH_FAIL=' + $slug + ' ' + $_.Exception.Message)} }",
+    "$tags=@($all | Sort-Object); Write-Host ('UNIQUE_LINKS=' + $tags.Count)",
+    "$gz='src-tauri/resources/danbooru.sqlite.gz'; $tmp=Join-Path $env:TEMP 'nai-danbooru-sexgroups.sqlite'; if(Test-Path $tmp){Remove-Item $tmp -Force}; $in=[IO.File]::OpenRead((Resolve-Path $gz)); $out=[IO.File]::Create($tmp); $dec=New-Object IO.Compression.GZipStream($in,[IO.Compression.CompressionMode]::Decompress); $dec.CopyTo($out); $dec.Dispose(); $out.Dispose(); $in.Dispose();",
+    "$py=@'\nimport sqlite3,sys,re\npath=sys.argv[1]; names=sys.argv[2:]\ncon=sqlite3.connect(path)\nrows=con.execute('select raw,category,count from tags').fetchall()\ndef norm(s): return re.sub(r'\\s+',' ',s.replace('_',' ').replace('\\\\(','(').replace('\\\\)',')').strip().lower())\nidx={norm(r):(r,c,n) for r,c,n in rows}\nhits=[]; miss=[]\nfor name in names:\n    row=idx.get(norm(name))\n    (hits if row else miss).append((name,row))\nprint('GROUP_TAGS='+str(len(names)))\nprint('DB_HITS='+str(len(hits)))\nprint('DB_MISSING='+str(len(miss)))\nprint('--- TOP HITS ---')\nfor name,row in sorted(hits,key=lambda x:x[1][2],reverse=True)[:160]: print(f'{row[2]:8d} | {row[0]}')\nprint('--- MISSING ---')\nfor name,_ in miss[:160]: print(name)\ncon.close()\n'@; $pyPath=Join-Path $env:TEMP 'nai_sex_groups.py'; Set-Content $pyPath $py -Encoding UTF8; & python $pyPath $tmp @tags; $code=$LASTEXITCODE; Remove-Item $tmp,$pyPath -Force -ErrorAction SilentlyContinue; exit $code"
   ]
 }
