@@ -1,17 +1,14 @@
 {
-  "id": "inspect-20260826-0007-prompt-ux-02",
+  "id": "inspect-20260826-0009-prompt-css-03",
   "enabled": true,
   "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
     "$env:Path = $env:Path + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
-    "Write-Host 'RG=' (Get-Command rg -ErrorAction Stop).Source",
-    "Write-Host '=== likely files ==='",
-    "rg -l -i \"autocomplete|suggestion|suggestions|prompt|danbooru|tag\" src | Select-Object -First 80",
-    "Write-Host '=== autocomplete/suggestion matches ==='",
-    "rg -n -i -C 3 \"autocomplete|suggestion|suggestions\" src | Select-Object -First 300",
-    "Write-Host '=== prompt input handlers ==='",
-    "rg -n -i -C 2 \"onChange|onBlur|onFocus|onKeyDown|textarea|contentEditable|prompt\" src | Select-Object -First 500"
+    "Write-Host '=== css files ==='",
+    "rg -l \"prompt-textarea|autocomplete-wrap|suggestion-list\" src | Select-Object -First 30",
+    "Write-Host '=== css matches ==='",
+    "rg -n -C 8 \"prompt-textarea|autocomplete-wrap|suggestion-list|suggestion-row\" src | Select-Object -First 500"
   ]
 }
