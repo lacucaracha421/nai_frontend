@@ -1,10 +1,12 @@
 {
-  "id": "inspect-20260826-0004-prompt-ux-01",
+  "id": "inspect-20260826-0007-prompt-ux-02",
   "enabled": true,
   "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
+    "$env:Path = $env:Path + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
+    "Write-Host 'RG=' (Get-Command rg -ErrorAction Stop).Source",
     "Write-Host '=== likely files ==='",
     "rg -l -i \"autocomplete|suggestion|suggestions|prompt|danbooru|tag\" src | Select-Object -First 80",
     "Write-Host '=== autocomplete/suggestion matches ==='",
