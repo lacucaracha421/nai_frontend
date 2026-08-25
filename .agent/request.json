@@ -1,14 +1,12 @@
 {
-  "id": "probe-20260825-2305-02",
+  "id": "probe-20260825-2307-cmd-03",
   "enabled": true,
-  "shell": "powershell",
+  "shell": "cmd",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
+    "echo CMD_OK",
     "whoami",
-    "Get-Location",
-    "git status --short",
-    "node --version",
-    "java -version"
+    "ver"
   ]
 }
