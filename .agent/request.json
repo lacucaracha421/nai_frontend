@@ -1,14 +1,10 @@
 {
-  "id": "inspect-20260826-0009-prompt-css-03",
-  "enabled": true,
+  "id": "idle-20260826-prompt-block-ux",
+  "enabled": false,
   "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
-    "$env:Path = $env:Path + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
-    "Write-Host '=== css files ==='",
-    "rg -l \"prompt-textarea|autocomplete-wrap|suggestion-list\" src | Select-Object -First 30",
-    "Write-Host '=== css matches ==='",
-    "rg -n -C 8 \"prompt-textarea|autocomplete-wrap|suggestion-list|suggestion-row\" src | Select-Object -First 500"
+    "echo IDLE"
   ]
 }
