@@ -1,12 +1,12 @@
 {
-  "id": "probe-20260825-2307-cmd-03",
+  "id": "probe-20260825-2308-fail-04",
   "enabled": true,
   "shell": "cmd",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
-    "echo CMD_OK",
-    "whoami",
-    "ver"
+    "echo BEFORE_FAIL",
+    "cmd /c exit 7",
+    "echo SHOULD_NOT_RUN"
   ]
 }
