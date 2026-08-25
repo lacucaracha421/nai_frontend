@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagIndex";
 import { useTagStore } from "../../stores/tagStore";
+import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import "./promptBlocks.css";
 
 type Props = {
@@ -207,6 +208,8 @@ export function AutocompleteTextarea({
   const [unlockedIndex, setUnlockedIndex] = useState<number | null>(null);
   const favorites = useTagStore((s) => s.favorites);
   const toggle = useTagStore((s) => s.toggleFavorite);
+  const characterEntries = useCharacterLibraryStore((s) => s.entries);
+  const toggleCharacter = useCharacterLibraryStore((s) => s.toggleTag);
   const blocks = useMemo(() => promptBlocks(value), [value]);
 
   useEffect(() => {
@@ -364,25 +367,32 @@ export function AutocompleteTextarea({
         maxHeight: popup.maxHeight,
       }}
     >
-      {suggestions.map((tag) => (
-        <div className="suggestion-row" key={tag.raw}>
-          <button
-            className="suggestion-main"
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => choose(tag)}
-          >
-            <span className={`tag-dot ${tag.category}`} />
-            <span>{tag.display}</span>
-          </button>
-          <button
-            className={`favorite-button ${favorites.includes(tag.raw) ? "active" : ""}`}
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => toggle(tag.raw)}
-          >
-            ★
-          </button>
-        </div>
-      ))}
+      {suggestions.map((tag) => {
+        const isCharacter = tag.category === "character";
+        const saved = isCharacter
+          ? characterEntries.some((entry) => entry.raw === tag.raw)
+          : favorites.includes(tag.raw);
+        return (
+          <div className="suggestion-row" key={tag.raw}>
+            <button
+              className="suggestion-main"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => choose(tag)}
+            >
+              <span className={`tag-dot ${tag.category}`} />
+              <span>{tag.display}</span>
+            </button>
+            <button
+              className={`favorite-button ${saved ? "active" : ""}`}
+              title={isCharacter ? "캐릭터 도감에 저장" : "즐겨찾기"}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => isCharacter ? toggleCharacter(tag) : toggle(tag.raw)}
+            >
+              ★
+            </button>
+          </div>
+        );
+      })}
     </div>
   ) : null;
 
