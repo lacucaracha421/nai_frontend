@@ -1,10 +1,15 @@
 {
-  "id": "idle-20260825-2316",
-  "enabled": false,
+  "id": "inspect-20260826-0004-prompt-ux-01",
+  "enabled": true,
   "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
-    "echo IDLE"
+    "Write-Host '=== likely files ==='",
+    "rg -l -i \"autocomplete|suggestion|suggestions|prompt|danbooru|tag\" src | Select-Object -First 80",
+    "Write-Host '=== autocomplete/suggestion matches ==='",
+    "rg -n -i -C 3 \"autocomplete|suggestion|suggestions\" src | Select-Object -First 300",
+    "Write-Host '=== prompt input handlers ==='",
+    "rg -n -i -C 2 \"onChange|onBlur|onFocus|onKeyDown|textarea|contentEditable|prompt\" src | Select-Object -First 500"
   ]
 }
