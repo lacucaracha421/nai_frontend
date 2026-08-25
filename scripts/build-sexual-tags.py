@@ -48,6 +48,10 @@ def wiki_tags(slug: str) -> set[str]:
     return result
 
 
+def contains_any(value: str, terms: tuple[str, ...]) -> bool:
+    return any(term in value for term in terms)
+
+
 def act_subgroups(name: str) -> list[str]:
     n = normalize(name)
     groups: list[str] = []
@@ -56,22 +60,74 @@ def act_subgroups(name: str) -> list[str]:
         if group not in groups:
             groups.append(group)
 
-    if any(word in n for word in ("anal", "anilingus", "ass insertion", "pegging")):
+    if contains_any(n, ("anal", "anilingus", "ass insertion", "pegging")):
         add("anal")
-    if any(word in n for word in ("fellatio", "cunnilingus", "oral", "deepthroat", "irrumatio", "anilingus", "gokkun", "sucking", "licking")):
+
+    if contains_any(
+        n,
+        (
+            "fellatio",
+            "cunnilingus",
+            "oral",
+            "deepthroat",
+            "irrumatio",
+            "anilingus",
+            "gokkun",
+            "sucking",
+            "licking",
+            "autofellatio",
+        ),
+    ):
         add("oral")
-    if any(word in n for word in ("vaginal", "penetration", "insert", "sex", "defloration")):
+
+    if n == "sex" or contains_any(
+        n,
+        (
+            "vaginal",
+            "penetration",
+            "penetrated",
+            "insertion",
+            "insert",
+            "defloration",
+            "fisting",
+            "pegging",
+        ),
+    ):
         add("penetration")
-    if any(word in n for word in ("handjob", "fingering", "masturbation", "footjob", "crotch rub", "frottage", "tribadism", "job")):
+
+    if contains_any(
+        n,
+        (
+            "handjob",
+            "fingering",
+            "masturbation",
+            "footjob",
+            "crotch rub",
+            "frottage",
+            "tribadism",
+            "hairjob",
+            "tailjob",
+            "buttjob",
+            "thigh sex",
+            "armpit sex",
+            "pecjob",
+            "glansjob",
+        ),
+    ):
         add("manual")
-    if any(word in n for word in ("paizuri", "breast", "nipple", "pectoral", "lactation")):
+
+    if contains_any(n, ("paizuri", "breast", "nipple", "pectoral", "lactation")):
         add("breast")
-    if any(word in n for word in ("threesome", "gangbang", "group sex", "orgy", "foursome", "fivesome", "spitroast")):
+
+    if contains_any(n, ("threesome", "gangbang", "group sex", "orgy", "foursome", "fivesome", "spitroast")):
         add("group")
-    if any(word in n for word in ("object", "strap-on", "vibrator", "dildo", "enema", "sounding", "machine")):
+
+    if contains_any(n, ("object", "strap-on", "vibrator", "dildo", "enema", "sounding", "machine", "toy")):
         add("toys")
-    if any(word in n for word in ("cum", "ejaculat", "bukkake", "facial", "pussy juice")):
+
+    if contains_any(n, ("cum", "ejaculat", "bukkake", "facial", "pussy juice", "lactation", "peeing", "urine")):
         add("fluids")
+
     if not groups:
         add("other")
     return groups
@@ -85,19 +141,19 @@ def position_subgroups(name: str) -> list[str]:
         if group not in groups:
             groups.append(group)
 
-    if any(word in n for word in ("behind", "doggystyle", "prone bone")):
+    if contains_any(n, ("behind", "doggystyle", "prone bone")):
         add("rear")
-    if any(word in n for word in ("cowgirl", "on top", "straddle", "amazon position")):
+    if contains_any(n, ("cowgirl", "on top", "straddle", "amazon position")):
         add("top")
-    if any(word in n for word in ("missionary", "mating press", "piledriver", "anvil position")):
+    if contains_any(n, ("missionary", "mating press", "piledriver", "anvil position")):
         add("front")
-    if any(word in n for word in ("standing", "upright")):
+    if contains_any(n, ("standing", "upright", "suspended congress")):
         add("standing")
-    if any(word in n for word in ("sitting", "lap")):
+    if contains_any(n, ("sitting", "lap", "sitting on face")):
         add("sitting")
-    if any(word in n for word in ("on side", "spooning", "folded", "knees to chest", "lying")):
+    if contains_any(n, ("on side", "spooning", "folded", "knees to chest", "lying", "prone")):
         add("lying")
-    if any(word in n for word in ("kneel", "kneepit")):
+    if contains_any(n, ("kneel", "kneepit")):
         add("kneeling")
     if not groups:
         add("other")
