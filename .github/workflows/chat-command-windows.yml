@@ -37,6 +37,11 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .agent\run-command.ps1
 
+      - name: Show result
+        if: always()
+        shell: cmd
+        run: if exist .agent\out\result.json type .agent\out\result.json
+
       - name: Upload command result
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,3 +50,8 @@ jobs:
           path: .agent/out/**
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Clean command output
+        if: always()
+        shell: cmd
+        run: if exist .agent\out rmdir /s /q .agent\out
