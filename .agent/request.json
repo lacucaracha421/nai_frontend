@@ -1,12 +1,10 @@
 {
-  "id": "probe-20260825-2312-fail-06",
-  "enabled": true,
-  "shell": "cmd",
+  "id": "idle-20260825-2314",
+  "enabled": false,
+  "shell": "powershell",
   "cwd": ".",
   "timeout_seconds": 120,
   "commands": [
-    "echo BEFORE_FAIL",
-    "cmd /c exit 7",
-    "echo SHOULD_NOT_RUN"
+    "echo IDLE"
   ]
 }
