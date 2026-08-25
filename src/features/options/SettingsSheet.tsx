@@ -1,6 +1,7 @@
 import { useGenerationStore } from "../../stores/generationStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { SAMPLERS, V5_MODELS } from "../../adapters/novelai/models";
+import { BackupSection } from "./BackupSection";
 
 const normalResolutions = [
   ["Portrait", 832, 1216],
@@ -133,6 +134,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             {SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
           </select>
         </section>
+
+        <BackupSection />
       </div>
     </div>
   );
