@@ -1,0 +1,14 @@
+{
+  "id": "probe-20260825-2301-01",
+  "enabled": true,
+  "shell": "powershell",
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "commands": [
+    "whoami",
+    "Get-Location",
+    "git status --short",
+    "node --version",
+    "java -version"
+  ]
+}
