@@ -18,6 +18,8 @@ type SexualTagPayload = {
   tags?: SexualTag[];
 };
 
+const DEFAULT_MIN_POST_COUNT = 1_000;
+
 const PRIMARY_LABELS: Array<[PrimaryGroup, string]> = [
   ["all", "전체"],
   ["core", "기본 Sex"],
@@ -65,7 +67,7 @@ export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => vo
   const [query, setQuery] = useState("");
   const [primary, setPrimary] = useState<PrimaryGroup>("all");
   const [secondary, setSecondary] = useState("all");
-  const [minPostCount, setMinPostCount] = useState<number | null>(null);
+  const [minPostCount, setMinPostCount] = useState(DEFAULT_MIN_POST_COUNT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -78,11 +80,20 @@ export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => vo
       })
       .then((payload) => {
         if (cancelled) return;
+        const threshold = typeof payload.minPostCount === "number"
+          ? payload.minPostCount
+          : DEFAULT_MIN_POST_COUNT;
         const next = Array.isArray(payload.tags)
-          ? payload.tags.filter((tag) => tag && typeof tag.display === "string" && tag.display.trim())
+          ? payload.tags.filter((tag) => (
+              tag
+              && typeof tag.display === "string"
+              && tag.display.trim()
+              && Number.isFinite(tag.count)
+              && tag.count >= threshold
+            ))
           : [];
         setTags(next);
-        setMinPostCount(typeof payload.minPostCount === "number" ? payload.minPostCount : null);
+        setMinPostCount(threshold);
         setLoading(false);
       })
       .catch((reason) => {
@@ -94,6 +105,33 @@ export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => vo
   }, []);
 
   const secondaryGroups = primary === "acts" ? ACT_GROUPS : primary === "positions" ? POSITION_GROUPS : [];
+
+  const primaryCounts = useMemo(() => {
+    const counts: Record<PrimaryGroup, number> = {
+      all: tags.length,
+      core: 0,
+      acts: 0,
+      positions: 0,
+    };
+    for (const tag of tags) {
+      if (tag.groups?.includes("core")) counts.core += 1;
+      if (tag.groups?.includes("acts")) counts.acts += 1;
+      if (tag.groups?.includes("positions")) counts.positions += 1;
+    }
+    return counts;
+  }, [tags]);
+
+  const secondaryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (primary !== "acts" && primary !== "positions") return counts;
+    const field = primary === "acts" ? "actGroups" : "positionGroups";
+    const matching = tags.filter((tag) => tag.groups?.includes(primary));
+    counts.set("all", matching.length);
+    for (const tag of matching) {
+      for (const group of tag[field] ?? []) counts.set(group, (counts.get(group) ?? 0) + 1);
+    }
+    return counts;
+  }, [tags, primary]);
 
   const visible = useMemo(() => {
     const q = normalized(query);
@@ -131,7 +169,8 @@ export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => vo
                 setSecondary("all");
               }}
             >
-              {label}
+              <span>{label}</span>
+              <small>{primaryCounts[key]}</small>
             </button>
           ))}
         </div>
@@ -144,14 +183,13 @@ export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => vo
                 className={secondary === key ? "active" : ""}
                 onClick={() => setSecondary(key)}
               >
-                {label}
+                <span>{label}</span>
+                <small>{secondaryCounts.get(key) ?? 0}</small>
               </button>
             ))}
           </div>
         )}
-        {minPostCount !== null && (
-          <small className="sex-curation-note">Danbooru {minPostCount.toLocaleString()} posts 이상 · 희귀 태그는 일반 자동완성에서 검색 가능</small>
-        )}
+        <small className="sex-curation-note">Danbooru {minPostCount.toLocaleString()} posts 이상 · 희귀 태그는 일반 자동완성에서 검색 가능</small>
       </div>
 
       {loading ? (
