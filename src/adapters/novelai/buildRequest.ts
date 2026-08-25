@@ -8,10 +8,35 @@ function cleanPart(value: string) {
     .replace(/,\s*,+/g, ",");
 }
 
+const BASE_SUBJECT_TAG = /^(?:1girl|1boy|1other|[2-9]\d*\+?(?:girls|boys|others)|multiple (?:girls|boys|others)|solo|no humans)$/i;
+
+function splitBaseSubjectTags(value: string) {
+  const subject: string[] = [];
+  const rest: string[] = [];
+
+  for (const raw of cleanPart(value).split(",")) {
+    const tag = raw.trim();
+    if (!tag) continue;
+    if (BASE_SUBJECT_TAG.test(tag)) subject.push(tag);
+    else rest.push(tag);
+  }
+
+  return {
+    subject: subject.join(", "),
+    rest: rest.join(", "),
+  };
+}
+
 export function joinPositivePrompt(
   draft: Pick<GenerationDraft, "artistPrompt" | "otherPrompt" | "qualityPrompt">,
 ) {
-  return [draft.artistPrompt, draft.otherPrompt, draft.qualityPrompt]
+  const other = splitBaseSubjectTags(draft.otherPrompt);
+
+  // NovelAI's official tagging guidance expects subject/count tags at the start.
+  // Style/media tags are most effective near the front, while automatic quality
+  // tags on recent models are appended at the end. Keep user-entered Other order
+  // intact apart from lifting unambiguous base subject tags to the front.
+  return [other.subject, draft.artistPrompt, other.rest, draft.qualityPrompt]
     .map(cleanPart)
     .filter(Boolean)
     .join(", ")
