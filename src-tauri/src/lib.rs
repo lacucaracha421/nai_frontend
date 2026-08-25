@@ -21,6 +21,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::set_novelai_token,
             commands::restore_novelai_token,
+            commands::export_novelai_token,
             commands::clear_novelai_token,
             commands::test_novelai_connection,
             commands::novelai_quota,
@@ -32,7 +33,6 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running NAI V5 Studio");
 }
-
 
 /// Initialize Android's ndk-context for the native credential store.
 ///
