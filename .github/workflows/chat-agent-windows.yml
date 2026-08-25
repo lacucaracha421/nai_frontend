@@ -34,45 +34,29 @@ jobs:
           cargo --version
           rustc --version
 
-      - name: Android tool discovery
-        timeout-minutes: 3
-        shell: cmd
-        run: |
-          echo Existing JAVA_HOME=%JAVA_HOME%
-          echo Existing ANDROID_HOME=%ANDROID_HOME%
-          echo Existing ANDROID_SDK_ROOT=%ANDROID_SDK_ROOT%
-          echo Existing NDK_HOME=%NDK_HOME%
-          where java 2>nul || echo [probe] java not on PATH
-          where javac 2>nul || echo [probe] javac not on PATH
-          where adb 2>nul || echo [probe] adb not on PATH
-          where sdkmanager 2>nul || echo [probe] sdkmanager not on PATH
-          if exist "C:\Program Files\Android\Android Studio\jbr\bin\java.exe" echo [probe] Android Studio JBR=C:\Program Files\Android\Android Studio\jbr
-          if exist "C:\Program Files\Android\Android Studio\jre\bin\java.exe" echo [probe] Android Studio JRE=C:\Program Files\Android\Android Studio\jre
-          if exist "C:\Program Files\Java\jdk-17\bin\java.exe" echo [probe] JDK17=C:\Program Files\Java\jdk-17
-          if exist "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" echo [probe] SDK=%LOCALAPPDATA%\Android\Sdk
-          if exist "C:\Android\Sdk\platform-tools\adb.exe" echo [probe] SDK=C:\Android\Sdk
-          if exist "D:\Android\Sdk\platform-tools\adb.exe" echo [probe] SDK=D:\Android\Sdk
-          dir /b "C:\Program Files\Android" 2>nul || echo [probe] no C:\Program Files\Android
-          dir /b "%LOCALAPPDATA%\Android" 2>nul || echo [probe] no %%LOCALAPPDATA%%\Android
-          dir /b "C:\Android" 2>nul || echo [probe] no C:\Android
-          dir /b "D:\Android" 2>nul || echo [probe] no D:\Android
-
-      - name: Android environment check
+      - name: Prepare Android environment
         timeout-minutes: 5
         shell: cmd
         run: |
-          set "JAVA_HOME=C:\Program Files\Java\jdk-17"
-          set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
-          set "ANDROID_SDK_ROOT=%LOCALAPPDATA%\Android\Sdk"
-          set "NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.15729638"
-          set "PATH=C:\Program Files\nodejs;%USERPROFILE%\.cargo\bin;%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
+          if not defined JAVA_HOME set "JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot"
+          if not defined ANDROID_HOME set "ANDROID_HOME=C:\Android\sdk"
+          if not exist "%JAVA_HOME%\bin\java.exe" exit /b 19
+          if not exist "%ANDROID_HOME%" exit /b 20
+          if not defined NDK_HOME for /f "delims=" %%D in ('dir /b /ad /o-n "%ANDROID_HOME%\ndk" 2^>nul') do if not defined NDK_HOME set "NDK_HOME=%ANDROID_HOME%\ndk\%%D"
+          if not defined NDK_HOME exit /b 21
+          if not exist "%NDK_HOME%" exit /b 22
           echo JAVA_HOME=%JAVA_HOME%
           echo ANDROID_HOME=%ANDROID_HOME%
           echo NDK_HOME=%NDK_HOME%
-          if not exist "%JAVA_HOME%\bin\java.exe" exit /b 19
-          if not exist "%ANDROID_HOME%" exit /b 20
-          if not exist "%NDK_HOME%" exit /b 21
           "%JAVA_HOME%\bin\java.exe" -version
+          dir /b "%ANDROID_HOME%\ndk"
+          echo JAVA_HOME=%JAVA_HOME%>>"%GITHUB_ENV%"
+          echo ANDROID_HOME=%ANDROID_HOME%>>"%GITHUB_ENV%"
+          echo ANDROID_SDK_ROOT=%ANDROID_HOME%>>"%GITHUB_ENV%"
+          echo NDK_HOME=%NDK_HOME%>>"%GITHUB_ENV%"
+          echo ANDROID_NDK_HOME=%NDK_HOME%>>"%GITHUB_ENV%"
+          echo %JAVA_HOME%\bin>>"%GITHUB_PATH%"
+          echo %ANDROID_HOME%\platform-tools>>"%GITHUB_PATH%"
 
       - name: Install Node dependencies
         timeout-minutes: 10
@@ -92,13 +76,7 @@ jobs:
       - name: Android build
         timeout-minutes: 30
         shell: cmd
-        run: |
-          set "JAVA_HOME=C:\Program Files\Java\jdk-17"
-          set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
-          set "ANDROID_SDK_ROOT=%LOCALAPPDATA%\Android\Sdk"
-          set "NDK_HOME=%LOCALAPPDATA%\Android\Sdk\ndk\30.0.15729638"
-          set "PATH=C:\Program Files\nodejs;%USERPROFILE%\.cargo\bin;%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
-          npm run android:build
+        run: npm run android:build
 
       - name: Upload frontend build
         if: success()
