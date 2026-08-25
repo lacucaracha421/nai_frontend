@@ -25,6 +25,11 @@ pub fn restore_novelai_token(state: State<'_, NovelAiState>) -> Result<bool, Str
 }
 
 #[tauri::command]
+pub fn export_novelai_token() -> Result<Option<String>, String> {
+    novelai::load_persistent_token()
+}
+
+#[tauri::command]
 pub fn clear_novelai_token(state: State<'_, NovelAiState>) -> Result<(), String> {
     state.clear_token()?;
     novelai::delete_persistent_token()
@@ -35,7 +40,6 @@ pub async fn test_novelai_connection(state: State<'_, NovelAiState>) -> Result<S
     let token = state.token()?;
     novelai::test_connection(&token).await
 }
-
 
 #[tauri::command]
 pub async fn novelai_quota(state: State<'_, NovelAiState>) -> Result<NovelAiQuota, String> {
