@@ -14,7 +14,13 @@ type SexualTagPayload = {
 };
 
 function normalized(value: string) {
-  return value.replace(/_/g, " ").replace(/\\([(){}[\]])/g, "$1").replace(/\s+/g, " ").trim().toLowerCase();
+  return value
+    .replace(/_/g, " ")
+    .replaceAll("\\(", "(")
+    .replaceAll("\\)", ")")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 export function SexTagDictionary({ onInsert }: { onInsert: (value: string) => void }) {
