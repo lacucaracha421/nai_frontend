@@ -25,8 +25,24 @@ export const UNCATEGORIZED_SERIES = "미분류";
 
 export function inferCharacterSeries(display: string) {
   const clean = display.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-  const match = clean.match(/\(([^()]+)\)\s*$/);
-  return match?.[1]?.trim() || UNCATEGORIZED_SERIES;
+  if (!clean.endsWith(")")) return UNCATEGORIZED_SERIES;
+
+  let depth = 0;
+  for (let index = clean.length - 1; index >= 0; index -= 1) {
+    const character = clean[index];
+    if (character === ")") {
+      depth += 1;
+      continue;
+    }
+    if (character !== "(") continue;
+    depth -= 1;
+    if (depth === 0) {
+      const suffix = clean.slice(index + 1, -1).trim();
+      return suffix || UNCATEGORIZED_SERIES;
+    }
+  }
+
+  return UNCATEGORIZED_SERIES;
 }
 
 function makeEntry(tag: Pick<LocalTag, "raw" | "display">, series?: string): CharacterLibraryEntry {
