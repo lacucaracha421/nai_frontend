@@ -77,10 +77,10 @@ if ([string]::IsNullOrWhiteSpace($scriptText) -and $null -ne $request.commands) 
     }
   } else {
     $lines.Add('@echo on')
-    $lines.Add('setlocal EnableExtensions')
+    $lines.Add('setlocal EnableExtensions EnableDelayedExpansion')
     foreach ($command in $request.commands) {
       $lines.Add([string]$command)
-      $lines.Add('if errorlevel 1 exit /b %errorlevel%')
+      $lines.Add('if errorlevel 1 exit /b !errorlevel!')
     }
   }
   $scriptText = $lines -join [Environment]::NewLine
@@ -159,7 +159,7 @@ if ($shell -eq "powershell") {
   }
   $filePath = $env:ComSpec
   if ([string]::IsNullOrWhiteSpace($filePath)) { $filePath = "cmd.exe" }
-  $argumentList = @("/D", "/E:ON", "/V:OFF", "/C", ('"' + $tempScript + '"'))
+  $argumentList = @("/D", "/E:ON", "/V:ON", "/C", ('"' + $tempScript + '"'))
 }
 
 Write-Host "[chat-command] id=$id"
