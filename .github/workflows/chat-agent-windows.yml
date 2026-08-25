@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - "agent/**"
+    paths-ignore:
+      - ".agent/request.json"
+      - ".agent/run-command.ps1"
+      - ".github/workflows/chat-command-windows.yml"
   workflow_dispatch:
 
 permissions:
