@@ -16,11 +16,36 @@ function normalized(value: string) {
   return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function appendCharacterTag(prompt: string, tag: string) {
-  const key = normalized(tag);
-  const blocks = prompt.split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
-  if (blocks.some((value) => normalized(value) === key)) return prompt;
-  return blocks.length ? `${blocks.join(", ")}, ${tag}` : tag;
+const CHARACTER_SUBJECT_TAGS = new Set([
+  "girl",
+  "boy",
+  "female",
+  "male",
+  "other",
+  "1girl",
+  "1boy",
+  "1other",
+]);
+
+function chooseCharacterTag(prompt: string, previousName: string, tag: string) {
+  const tagKey = normalized(tag);
+  const previousKey = normalized(previousName);
+  const blocks = prompt
+    .split(/[,\n]/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalized(value);
+      if (key === tagKey) return false;
+      return !previousKey || key !== previousKey;
+    });
+
+  let insertAt = 0;
+  while (insertAt < blocks.length && CHARACTER_SUBJECT_TAGS.has(normalized(blocks[insertAt]))) {
+    insertAt += 1;
+  }
+  blocks.splice(insertAt, 0, tag);
+  return blocks.join(", ");
 }
 
 export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
@@ -55,7 +80,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
     if (!active) return;
     update(active.id, {
       name: entry.display,
-      prompt: appendCharacterTag(active.prompt, entry.display),
+      prompt: chooseCharacterTag(active.prompt, active.name, entry.display),
     });
     setLibraryOpen(false);
   };
