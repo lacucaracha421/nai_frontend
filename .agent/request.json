@@ -1,5 +1,5 @@
 {
-  "id": "probe-20260825-2301-01",
+  "id": "probe-20260825-2305-02",
   "enabled": true,
   "shell": "powershell",
   "cwd": ".",
