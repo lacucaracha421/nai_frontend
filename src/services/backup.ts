@@ -173,7 +173,7 @@ export function previewBackup(backup: NaiBackup): BackupPreview {
 export async function restoreFullBackup(backup: NaiBackup) {
   validateBackup(backup);
   const currentKeys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index))
-    .filter((key): key is string => Boolean(key) && isAppStorageKey(key));
+    .filter((key): key is string => typeof key === "string" && isAppStorageKey(key));
   const affected = new Set([...currentKeys, ...Object.keys(backup.storage)]);
   const snapshot = new Map<string, string | null>();
   for (const key of affected) snapshot.set(key, localStorage.getItem(key));
