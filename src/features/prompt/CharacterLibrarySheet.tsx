@@ -13,18 +13,20 @@ function normalized(value: string) {
 function CharacterCard({
   entry,
   onSelect,
+  onMoveRequest,
 }: {
   entry: CharacterLibraryEntry;
   onSelect: (entry: CharacterLibraryEntry) => void;
+  onMoveRequest: (entry: CharacterLibraryEntry) => void;
 }) {
   const remove = useCharacterLibraryStore((state) => state.removeTag);
-  const move = useCharacterLibraryStore((state) => state.moveTag);
   const pressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
 
-  const editSeries = () => {
-    const next = window.prompt("이 캐릭터를 넣을 시리즈 폴더", entry.series);
-    if (next !== null) move(entry.raw, next);
+  const cancelPressTimer = () => {
+    if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
   };
 
   return (
@@ -32,25 +34,32 @@ function CharacterCard({
       <button
         type="button"
         className="character-library-main"
-        onPointerDown={() => {
+        onContextMenu={(event) => event.preventDefault()}
+        onPointerDown={(event) => {
+          cancelPressTimer();
           longPressed.current = false;
+          pressStart.current = { x: event.clientX, y: event.clientY };
           pressTimer.current = window.setTimeout(() => {
             longPressed.current = true;
-            editSeries();
+            onMoveRequest(entry);
             pressTimer.current = null;
           }, 500);
         }}
+        onPointerMove={(event) => {
+          const start = pressStart.current;
+          if (!start || pressTimer.current === null) return;
+          if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelPressTimer();
+        }}
         onPointerUp={() => {
-          if (pressTimer.current !== null) {
-            window.clearTimeout(pressTimer.current);
-            pressTimer.current = null;
-          }
-          if (!longPressed.current) onSelect(entry);
+          const wasWaiting = pressTimer.current !== null;
+          cancelPressTimer();
+          pressStart.current = null;
+          if (wasWaiting && !longPressed.current) onSelect(entry);
           longPressed.current = false;
         }}
         onPointerCancel={() => {
-          if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
-          pressTimer.current = null;
+          cancelPressTimer();
+          pressStart.current = null;
           longPressed.current = false;
         }}
         title="길게 눌러 시리즈 폴더 이동"
@@ -78,8 +87,11 @@ export function CharacterLibrarySheet({
   onSelect: (entry: CharacterLibraryEntry) => void;
 }) {
   const entries = useCharacterLibraryStore((state) => state.entries);
+  const moveTag = useCharacterLibraryStore((state) => state.moveTag);
   const [series, setSeries] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [moving, setMoving] = useState<CharacterLibraryEntry | null>(null);
+  const [newSeries, setNewSeries] = useState("");
 
   const grouped = useMemo(() => {
     const map = new Map<string, CharacterLibraryEntry[]>();
@@ -106,6 +118,33 @@ export function CharacterLibrarySheet({
         .sort((a, b) => a.display.localeCompare(b.display, "ko"))
     : [];
   const currentEntries = series ? grouped.find(([name]) => name === series)?.[1] ?? [] : [];
+  const knownSeries = useMemo(() => {
+    const names = grouped.map(([name]) => name);
+    if (!names.includes(UNCATEGORIZED_SERIES)) names.push(UNCATEGORIZED_SERIES);
+    return names;
+  }, [grouped]);
+
+  const requestMove = (entry: CharacterLibraryEntry) => {
+    setMoving(entry);
+    setNewSeries("");
+  };
+
+  const finishMove = (target: string) => {
+    if (!moving) return;
+    const clean = target.trim() || UNCATEGORIZED_SERIES;
+    moveTag(moving.raw, clean);
+    setMoving(null);
+    setNewSeries("");
+  };
+
+  const characterCard = (entry: CharacterLibraryEntry) => (
+    <CharacterCard
+      key={entry.raw}
+      entry={entry}
+      onSelect={onSelect}
+      onMoveRequest={requestMove}
+    />
+  );
 
   return (
     <div className="sheet character-library-sheet">
@@ -139,12 +178,13 @@ export function CharacterLibrarySheet({
           </div>
         ) : q ? (
           <div className="character-library-grid characters">
-            {searched.map((entry) => <CharacterCard key={entry.raw} entry={entry} onSelect={onSelect} />)}
+            {searched.map(characterCard)}
             {!searched.length && <div className="character-library-empty">검색 결과가 없습니다.</div>}
           </div>
         ) : series ? (
           <div className="character-library-grid characters">
-            {currentEntries.map((entry) => <CharacterCard key={entry.raw} entry={entry} onSelect={onSelect} />)}
+            {currentEntries.map(characterCard)}
+            {!currentEntries.length && <div className="character-library-empty">이 시리즈 폴더가 비었습니다.</div>}
           </div>
         ) : (
           <div className="character-series-grid">
@@ -158,6 +198,49 @@ export function CharacterLibrarySheet({
           </div>
         )}
       </div>
+
+      {moving && (
+        <div className="character-library-move-backdrop" onPointerDown={() => setMoving(null)}>
+          <div className="character-library-move-panel" onPointerDown={(event) => event.stopPropagation()}>
+            <div className="character-library-move-head">
+              <div>
+                <strong>시리즈 이동</strong>
+                <span>{moving.display}</span>
+              </div>
+              <button type="button" onClick={() => setMoving(null)}>×</button>
+            </div>
+
+            <div className="character-library-move-grid">
+              {knownSeries.map((name) => (
+                <button
+                  type="button"
+                  key={name}
+                  className={moving.series === name ? "active" : ""}
+                  onClick={() => finishMove(name)}
+                >
+                  <span aria-hidden="true">▰</span>
+                  <strong>{name}</strong>
+                </button>
+              ))}
+            </div>
+
+            <div className="character-library-new-series">
+              <input
+                value={newSeries}
+                onChange={(event) => setNewSeries(event.target.value)}
+                placeholder="새 시리즈 폴더 이름"
+                autoComplete="off"
+                spellCheck={false}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && newSeries.trim()) finishMove(newSeries);
+                }}
+              />
+              <button type="button" disabled={!newSeries.trim()} onClick={() => finishMove(newSeries)}>이동</button>
+            </div>
+            <small className="character-library-move-help">캐릭터 카드를 길게 누르면 언제든 폴더를 다시 바꿀 수 있습니다.</small>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
