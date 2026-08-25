@@ -25,18 +25,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run agent task
+      - name: Environment check
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .agent\run.ps1
+        run: |
+          git status --short
+          node --version
+          npm --version
+          cargo --version
+          rustc --version
 
-      - name: Upload agent logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-log-${{ github.run_id }}
-          path: .agent-output/**
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: Install Node dependencies
+        shell: cmd
+        run: npm ci
+
+      - name: Frontend build
+        shell: cmd
+        run: npm run build
+
+      - name: Rust tests
+        shell: cmd
+        run: cargo test --manifest-path src-tauri\Cargo.toml
 
       - name: Upload frontend build
         if: success()
