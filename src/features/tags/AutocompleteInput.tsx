@@ -11,10 +11,6 @@ type Props = {
   placeholder?: string;
 };
 
-function normalized(value: string) {
-  return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
 export function AutocompleteInput({ value, onChange, onPick, categories, placeholder }: Props) {
   const [list, setList] = useState<LocalTag[]>([]);
   const favorites = useTagStore((state) => state.favorites);
@@ -31,13 +27,10 @@ export function AutocompleteInput({ value, onChange, onPick, categories, placeho
 
     let cancelled = false;
     const id = window.setTimeout(() => {
-      void searchLocalTags(query, categories, 24).then((next) => {
-        if (cancelled) return;
-        const key = normalized(query);
-        const exact = next.some((tag) => normalized(tag.display) === key || normalized(tag.raw) === key);
-        setList(exact ? [] : next);
+      void searchLocalTags(query, categories, 12).then((next) => {
+        if (!cancelled) setList(next.slice(0, 8));
       });
-    }, 180);
+    }, 110);
 
     return () => {
       cancelled = true;
