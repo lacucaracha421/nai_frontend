@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { PromptSectionKey } from "../../types/generation";
 import { useGenerationStore } from "../../stores/generationStore";
+import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { adjustEmphasis } from "./weight";
 import type { TagCategory } from "../tags/localTagIndex";
@@ -53,12 +54,19 @@ export function PromptSheet({
   const setPrompt = useGenerationStore((state) => state.setPrompt);
   const generate = useGenerationStore((state) => state.generate);
   const status = useGenerationStore((state) => state.status);
+  const checkpoint = usePromptHistoryStore((state) => state.checkpoint);
   const busy = status === "generating" || status === "upscaling";
+  const historyKey = `prompt:${section}`;
 
   const weight = (delta: number) => {
     const element = document.activeElement;
 
     if (element instanceof HTMLTextAreaElement) {
+      checkpoint(historyKey, {
+        value,
+        selectionStart: element.selectionStart,
+        selectionEnd: element.selectionEnd,
+      });
       const out = adjustEmphasis(value, element.selectionStart, element.selectionEnd, delta);
       setPrompt(section, out.text);
       requestAnimationFrame(() => {
@@ -79,6 +87,12 @@ export function PromptSheet({
     const localStart = element.selectionStart ?? 0;
     const localEnd = element.selectionEnd ?? localStart;
     if (localStart === localEnd) return;
+    checkpoint(historyKey, {
+      value,
+      selectionStart: localStart,
+      selectionEnd: localEnd,
+      activeIndex: order,
+    });
     const out = adjustEmphasis(value, range.start + localStart, range.start + localEnd, delta);
     setPrompt(section, out.text);
 
@@ -122,6 +136,7 @@ export function PromptSheet({
           value={value}
           onChange={(next) => setPrompt(section, next)}
           categories={filters[section]}
+          historyKey={historyKey}
           tagPrefix={section === "artist" ? "artist:" : undefined}
           autoFocus
           placeholder={
