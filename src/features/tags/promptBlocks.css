@@ -100,9 +100,106 @@
   margin:0;
 }
 
+.prompt-history-controls{
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  margin:0 0 8px;
+}
+
+.prompt-history-controls button{
+  min-width:36px;
+  height:32px;
+  border:1px solid #343b48;
+  border-radius:9px;
+  background:#181c23;
+  color:#d9dce4;
+  padding:0 10px;
+  font-size:14px;
+}
+
+.prompt-history-controls button:first-child,
+.prompt-history-controls button:nth-child(2){
+  width:36px;
+  padding:0;
+  font-size:19px;
+  line-height:1;
+}
+
+.prompt-history-controls button:disabled{
+  opacity:.28;
+}
+
+.prompt-history-controls button:not(:disabled):active{
+  background:#29243f;
+  border-color:#7466ca;
+}
+
+.prompt-translate-button{
+  width:auto!important;
+  min-width:58px!important;
+}
+
+.prompt-translation-error{
+  margin:-2px 0 8px;
+  color:#ff9caf;
+  font-size:12px;
+  line-height:1.4;
+}
+
 .character-editor .prompt-token-editor{
   min-height:150px!important;
   max-height:32dvh;
+}
+
+.character-editor .prompt-history-controls{
+  margin-top:4px;
+}
+
+.translation-settings .muted{
+  margin-top:-4px;
+  color:#8f96a5;
+  font-size:12px;
+}
+
+.translation-provider{
+  margin-bottom:12px;
+}
+
+.translation-field{
+  display:block;
+  margin-top:10px;
+  color:#cdd1da;
+  font-size:13px;
+}
+
+.translation-field>input,
+.translation-field .token-row{
+  margin-top:6px;
+}
+
+.translation-field small{
+  display:block;
+  margin-top:5px;
+  color:#808796;
+  line-height:1.35;
+}
+
+.translation-actions{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+
+.translation-status{
+  color:#9fa6b4;
+  font-size:12px;
+}
+
+.translation-status.error{
+  color:#ff9caf;
 }
 
 @media(max-width:600px){
