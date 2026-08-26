@@ -1,0 +1,64 @@
+name: Build Danbooru Tag DB
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/danbooru-official-db-impl
+    paths:
+      - scripts/import-danbooru-official.py
+      - .github/workflows/build-danbooru-db.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Danbooru snapshot
+        uses: actions/cache@v4
+        with:
+          path: .cache/danbooru-official
+          key: danbooru-official-snapshot-20260408-v1
+
+      - name: Build official Danbooru autocomplete DB
+        run: python scripts/import-danbooru-official.py --min-post-count 10
+
+      - name: Show generated resource
+        run: |
+          ls -lh src-tauri/resources/danbooru.sqlite.gz src-tauri/resources/danbooru.version
+          python - <<'PY'
+          import gzip, shutil, sqlite3, tempfile
+          from pathlib import Path
+
+          gz = Path('src-tauri/resources/danbooru.sqlite.gz')
+          with tempfile.NamedTemporaryFile(suffix='.sqlite') as tmp:
+              with gzip.open(gz, 'rb') as src:
+                  shutil.copyfileobj(src, tmp)
+              tmp.flush()
+              db = sqlite3.connect(tmp.name)
+              print('tags:', db.execute('select count(*) from tags').fetchone()[0])
+              print('runami_yachiyo:', db.execute("select raw,category,count from tags where raw='runami_yachiyo'").fetchall())
+              print('version:', db.execute("select value from metadata where key='version'").fetchone()[0])
+              db.close()
+          PY
+
+      - name: Upload Danbooru DB
+        uses: actions/upload-artifact@v4
+        with:
+          name: danbooru-official-db-${{ github.run_id }}
+          path: |
+            src-tauri/resources/danbooru.sqlite.gz
+            src-tauri/resources/danbooru.version
+          if-no-files-found: error
+          retention-days: 7
