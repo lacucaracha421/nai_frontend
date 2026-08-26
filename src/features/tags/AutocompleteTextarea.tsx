@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagIndex";
 import { useTagStore } from "../../stores/tagStore";
@@ -23,17 +23,18 @@ type PopupPosition = {
   maxHeight: number;
 };
 
-type PromptBlock = {
-  index: number;
-  text: string;
-  start: number;
-  end: number;
-};
+function splitPrompt(value: string) {
+  return value
+    .split(/[,\n]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
-function currentTerm(value: string, caret: number) {
-  const left = value.slice(0, caret);
-  const start = Math.max(left.lastIndexOf(","), left.lastIndexOf("\n")) + 1;
-  return { start, query: left.slice(start).trimStart() };
+function serializeItems(items: string[]) {
+  return items
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function stripArtistPrefix(query: string) {
@@ -49,104 +50,9 @@ function autocompleteQuery(query: string, tagPrefix?: string) {
   return query.trim();
 }
 
-function normalizedTag(value: string) {
-  return stripArtistPrefix(value)
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-function promptBlocks(value: string): PromptBlock[] {
-  const blocks: PromptBlock[] = [];
-  let segmentStart = 0;
-
-  for (let cursor = 0; cursor <= value.length; cursor += 1) {
-    const atEnd = cursor === value.length;
-    const separator = !atEnd && (value[cursor] === "," || value[cursor] === "\n");
-    if (!atEnd && !separator) continue;
-
-    const segment = value.slice(segmentStart, cursor);
-    const leading = segment.match(/^\s*/)?.[0].length ?? 0;
-    const trailing = segment.match(/\s*$/)?.[0].length ?? 0;
-    const start = segmentStart + leading;
-    const end = cursor - trailing;
-    if (end > start) {
-      blocks.push({ index: blocks.length, text: value.slice(start, end), start, end });
-    }
-    segmentStart = cursor + 1;
-  }
-
-  return blocks;
-}
-
-function blockIndexAtCaret(blocks: PromptBlock[], value: string, caret: number) {
-  const direct = blocks.find((block) => caret >= block.start && caret <= block.end);
-  if (direct) return direct.index;
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (block.end > caret) continue;
-    if (/^[,\s]*$/.test(value.slice(block.end, caret))) return block.index;
-    break;
-  }
-
-  return -1;
-}
-
-const mirrorProperties = [
-  "boxSizing",
-  "width",
-  "borderTopWidth",
-  "borderRightWidth",
-  "borderBottomWidth",
-  "borderLeftWidth",
-  "paddingTop",
-  "paddingRight",
-  "paddingBottom",
-  "paddingLeft",
-  "fontFamily",
-  "fontSize",
-  "fontWeight",
-  "fontStyle",
-  "letterSpacing",
-  "textTransform",
-  "textAlign",
-  "textIndent",
-  "lineHeight",
-  "wordSpacing",
-  "tabSize",
-] as const;
-
-function caretPopupPosition(textarea: HTMLTextAreaElement, caret: number): PopupPosition {
-  const rect = textarea.getBoundingClientRect();
-  const computed = window.getComputedStyle(textarea);
-  const mirror = document.createElement("div");
-
-  mirror.style.position = "fixed";
-  mirror.style.visibility = "hidden";
-  mirror.style.pointerEvents = "none";
-  mirror.style.zIndex = "-1";
-  mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.overflowWrap = "break-word";
-  mirror.style.wordBreak = "break-word";
-  mirror.style.overflow = "hidden";
-  mirror.style.left = `${rect.left - textarea.scrollLeft}px`;
-  mirror.style.top = `${rect.top - textarea.scrollTop}px`;
-
-  for (const property of mirrorProperties) {
-    mirror.style[property] = computed[property];
-  }
-
-  mirror.textContent = textarea.value.slice(0, caret);
-  const marker = document.createElement("span");
-  marker.textContent = "\u200b";
-  mirror.appendChild(marker);
-  document.body.appendChild(mirror);
-
-  const markerRect = marker.getBoundingClientRect();
-  mirror.remove();
-
+function popupPositionForInput(input: HTMLInputElement): PopupPosition {
+  const rect = input.getBoundingClientRect();
+  const hostRect = input.closest(".prompt-token-editor")?.getBoundingClientRect() ?? rect;
   const viewport = window.visualViewport;
   const viewportLeft = viewport?.offsetLeft ?? 0;
   const viewportTop = viewport?.offsetTop ?? 0;
@@ -156,25 +62,23 @@ function caretPopupPosition(textarea: HTMLTextAreaElement, caret: number): Popup
   const viewportBottom = viewportTop + viewportHeight;
 
   const width = Math.min(
-    Math.max(300, rect.width * 0.72),
+    Math.max(280, hostRect.width * 0.72),
     520,
     Math.max(220, viewportWidth - 16),
   );
-
   const left = Math.min(
-    Math.max(markerRect.left, viewportLeft + 8),
+    Math.max(rect.left, viewportLeft + 8),
     Math.max(viewportLeft + 8, viewportRight - width - 8),
   );
-
-  const below = viewportBottom - markerRect.bottom - 10;
-  const above = markerRect.top - viewportTop - 10;
+  const below = viewportBottom - rect.bottom - 10;
+  const above = rect.top - viewportTop - 10;
   const preferAbove = below < 150 && above > below;
 
   if (preferAbove) {
     const maxHeight = Math.max(96, Math.min(280, above - 8));
     return {
       left,
-      top: Math.max(viewportTop + 8, markerRect.top - maxHeight - 6),
+      top: Math.max(viewportTop + 8, rect.top - maxHeight - 6),
       width,
       maxHeight,
     };
@@ -182,7 +86,7 @@ function caretPopupPosition(textarea: HTMLTextAreaElement, caret: number): Popup
 
   return {
     left,
-    top: markerRect.bottom + 6,
+    top: rect.bottom + 6,
     width,
     maxHeight: Math.max(96, Math.min(280, below)),
   };
@@ -198,19 +102,175 @@ export function AutocompleteTextarea({
   onSelectTag,
   tagPrefix,
 }: Props) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const longPressRef = useRef<number | null>(null);
-  const longPressTriggeredRef = useRef(false);
+  const initial = splitPrompt(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const removeArmTimerRef = useRef<number | null>(null);
+  const [items, setItems] = useState<string[]>(() => [...initial, ""]);
+  const [activeIndex, setActiveIndex] = useState(initial.length);
+  const [armedIndex, setArmedIndex] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
-  const [caret, setCaret] = useState(0);
   const [popup, setPopup] = useState<PopupPosition | null>(null);
   const [focused, setFocused] = useState(false);
-  const [unlockedIndex, setUnlockedIndex] = useState<number | null>(null);
-  const favorites = useTagStore((s) => s.favorites);
-  const toggle = useTagStore((s) => s.toggleFavorite);
-  const characterEntries = useCharacterLibraryStore((s) => s.entries);
-  const toggleCharacter = useCharacterLibraryStore((s) => s.toggleTag);
-  const blocks = useMemo(() => promptBlocks(value), [value]);
+  const favorites = useTagStore((state) => state.favorites);
+  const toggle = useTagStore((state) => state.toggleFavorite);
+  const characterEntries = useCharacterLibraryStore((state) => state.entries);
+  const toggleCharacter = useCharacterLibraryStore((state) => state.toggleTag);
+  const activeText = items[activeIndex] ?? "";
+
+  const clearRemovalArm = () => {
+    if (removeArmTimerRef.current !== null) {
+      window.clearTimeout(removeArmTimerRef.current);
+      removeArmTimerRef.current = null;
+    }
+    setArmedIndex(null);
+  };
+
+  const armRemoval = (index: number) => {
+    if (index < 0 || !items[index]?.trim()) return;
+    if (removeArmTimerRef.current !== null) window.clearTimeout(removeArmTimerRef.current);
+    setArmedIndex(index);
+    removeArmTimerRef.current = window.setTimeout(() => {
+      setArmedIndex(null);
+      removeArmTimerRef.current = null;
+    }, 1400);
+  };
+
+  const emitItems = (next: string[]) => {
+    setItems(next);
+    onChange(serializeItems(next));
+  };
+
+  const focusActive = (selectAll = false) => {
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(selectAll ? 0 : end, end);
+    });
+  };
+
+  const ensureEndSlot = () => {
+    let next = [...items];
+    let index = next.length - 1;
+    if (index < 0 || next[index].trim()) {
+      next.push("");
+      index = next.length - 1;
+      setItems(next);
+    }
+    setActiveIndex(index);
+    setFocused(true);
+    clearRemovalArm();
+    setSuggestions([]);
+    focusActive();
+  };
+
+  const activateChip = (index: number) => {
+    if (!items[index]?.trim()) return;
+    setActiveIndex(index);
+    setFocused(true);
+    clearRemovalArm();
+    setSuggestions([]);
+    focusActive();
+  };
+
+  const previousNonEmpty = (before: number) => {
+    for (let index = Math.min(before - 1, items.length - 1); index >= 0; index -= 1) {
+      if (items[index]?.trim()) return index;
+    }
+    return -1;
+  };
+
+  const nextNonEmpty = (after: number) => {
+    for (let index = Math.max(0, after + 1); index < items.length; index += 1) {
+      if (items[index]?.trim()) return index;
+    }
+    return -1;
+  };
+
+  const deleteItem = (index: number) => {
+    if (index < 0 || index >= items.length) return;
+    const next = [...items];
+    next.splice(index, 1);
+    let nextActive = activeIndex;
+    if (index < activeIndex) nextActive -= 1;
+    if (next.length === 0) {
+      next.push("");
+      nextActive = 0;
+    } else if (nextActive >= next.length) {
+      next.push("");
+      nextActive = next.length - 1;
+    }
+    emitItems(next);
+    setActiveIndex(Math.max(0, nextActive));
+    clearRemovalArm();
+    setSuggestions([]);
+    focusActive();
+  };
+
+  const commitAndAdvance = () => {
+    const next = [...items];
+    const current = (next[activeIndex] ?? "").trim();
+    if (!current) {
+      clearRemovalArm();
+      return;
+    }
+    next[activeIndex] = current;
+    const nextIndex = activeIndex + 1;
+    if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
+    emitItems(next);
+    setActiveIndex(nextIndex);
+    clearRemovalArm();
+    setSuggestions([]);
+    focusActive();
+  };
+
+  const updateActiveText = (nextText: string) => {
+    clearRemovalArm();
+
+    if (!/[,\n]/.test(nextText)) {
+      const next = [...items];
+      while (next.length <= activeIndex) next.push("");
+      next[activeIndex] = nextText;
+      emitItems(next);
+      return;
+    }
+
+    const pieces = nextText.split(/[,\n]/);
+    const tail = pieces.pop() ?? "";
+    const committed = pieces.map((piece) => piece.trim()).filter(Boolean);
+    const next = [...items];
+    next.splice(activeIndex, 1, ...committed, tail);
+    const nextIndex = activeIndex + committed.length;
+    emitItems(next);
+    setActiveIndex(nextIndex);
+    setSuggestions([]);
+    focusActive();
+  };
+
+  useEffect(() => {
+    const external = splitPrompt(value).join(", ");
+    const local = serializeItems(items);
+    if (external === local) return;
+    const next = splitPrompt(value);
+    next.push("");
+    setItems(next);
+    setActiveIndex((current) => Math.min(current, next.length - 1));
+    setSuggestions([]);
+    setArmedIndex(null);
+  }, [value]);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    setFocused(true);
+    focusActive();
+  }, [autoFocus]);
+
+  useEffect(() => {
+    return () => {
+      if (removeArmTimerRef.current !== null) window.clearTimeout(removeArmTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!focused) {
@@ -219,153 +279,70 @@ export function AutocompleteTextarea({
       return;
     }
 
-    const term = currentTerm(value, caret);
-    const query = autocompleteQuery(term.query, tagPrefix);
-    let cancelled = false;
-    const commit = (next: LocalTag[]) => {
-      if (cancelled) return;
-      const queryKey = normalizedTag(query);
-      const hasExactMatch = next.some((tag) => {
-        return normalizedTag(tag.display) === queryKey || normalizedTag(tag.raw) === queryKey;
-      });
-      setSuggestions(hasExactMatch ? [] : next);
-    };
-
+    const query = autocompleteQuery(activeText, tagPrefix);
     if (query.length < 2) {
       setSuggestions([]);
-      return;
-    }
-
-    const id = window.setTimeout(() => {
-      searchLocalTags(query, categories, 24).then(commit);
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [value, caret, categories, tagPrefix, focused]);
-
-  useEffect(() => {
-    if (!focused || !suggestions.length || !ref.current) {
       setPopup(null);
       return;
     }
 
-    const textarea = ref.current;
-    const update = () => setPopup(caretPopupPosition(textarea, textarea.selectionStart ?? caret));
-    update();
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void searchLocalTags(query, categories, 12).then((next) => {
+        if (cancelled) return;
+        setSuggestions(next.slice(0, 8));
+      });
+    }, 110);
 
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeText, categories, focused, tagPrefix]);
+
+  useEffect(() => {
+    if (!focused || !suggestions.length || !inputRef.current) {
+      setPopup(null);
+      return;
+    }
+
+    const input = inputRef.current;
+    const update = () => setPopup(popupPositionForInput(input));
+    update();
     const viewport = window.visualViewport;
-    textarea.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
     viewport?.addEventListener("resize", update);
     viewport?.addEventListener("scroll", update);
 
     return () => {
-      textarea.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
       viewport?.removeEventListener("resize", update);
       viewport?.removeEventListener("scroll", update);
     };
-  }, [suggestions.length, caret, value, focused]);
-
-  const syncCaret = (element: HTMLTextAreaElement) => {
-    const next = element.selectionStart ?? 0;
-    setCaret(next);
-    const nextBlock = blockIndexAtCaret(promptBlocks(element.value), element.value, next);
-    if (unlockedIndex !== null && nextBlock !== unlockedIndex) setUnlockedIndex(null);
-    if (focused && suggestions.length) setPopup(caretPopupPosition(element, next));
-  };
-
-  const focusBlock = (block: PromptBlock, unlock: boolean) => {
-    setSuggestions([]);
-    setPopup(null);
-    setUnlockedIndex(unlock ? block.index : null);
-    requestAnimationFrame(() => {
-      const element = ref.current;
-      if (!element) return;
-      element.focus();
-      element.setSelectionRange(block.end, block.end);
-      setCaret(block.end);
-      setFocused(true);
-    });
-  };
-
-  const removeBlock = (index: number) => {
-    const nextValue = blocks
-      .filter((block) => block.index !== index)
-      .map((block) => block.text)
-      .join(", ");
-    const previousStart = blocks[index]?.start ?? nextValue.length;
-    onChange(nextValue);
-    setUnlockedIndex(null);
-    setSuggestions([]);
-    setPopup(null);
-    requestAnimationFrame(() => {
-      const element = ref.current;
-      if (!element) return;
-      const nextCaret = Math.min(previousStart, nextValue.length);
-      element.focus();
-      element.setSelectionRange(nextCaret, nextCaret);
-      setCaret(nextCaret);
-      setFocused(true);
-    });
-  };
+  }, [suggestions.length, focused, activeIndex]);
 
   const choose = (tag: LocalTag) => {
-    const element = ref.current;
-    const position = element?.selectionStart ?? caret;
-    const term = currentTerm(value, position);
-    const before = value.slice(0, term.start);
-    const after = value.slice(position);
-    const prefix = before.endsWith(",") ? `${before} ` : before && !/[\s,]$/.test(before) ? `${before}, ` : before;
     const inserted = `${tagPrefix ?? ""}${tag.display}`;
-    const suffix = after.startsWith(",") ? "" : ", ";
-    const next = `${prefix}${inserted}${suffix}${after}`;
-    onChange(next);
+    const next = [...items];
+    while (next.length <= activeIndex) next.push("");
+    next[activeIndex] = inserted;
+    const nextIndex = activeIndex + 1;
+    if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
+    emitItems(next);
+    setActiveIndex(nextIndex);
     setSuggestions([]);
     setPopup(null);
-    setUnlockedIndex(null);
+    clearRemovalArm();
     onSelectTag?.(tag);
-
-    requestAnimationFrame(() => {
-      if (!element) return;
-      const nextCaret = (prefix + inserted + suffix).length;
-      element.focus();
-      element.setSelectionRange(nextCaret, nextCaret);
-      setCaret(nextCaret);
-    });
-  };
-
-  const startBlockPress = (block: PromptBlock) => {
-    if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
-    longPressTriggeredRef.current = false;
-    longPressRef.current = window.setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      focusBlock(block, true);
-      longPressRef.current = null;
-    }, 430);
-  };
-
-  const endBlockPress = (block: PromptBlock) => {
-    if (longPressRef.current !== null) {
-      window.clearTimeout(longPressRef.current);
-      longPressRef.current = null;
-    }
-    if (!longPressTriggeredRef.current) focusBlock(block, false);
-    longPressTriggeredRef.current = false;
+    focusActive();
   };
 
   const suggestionList = suggestions.length > 0 && popup && focused ? (
     <div
       className="suggestion-list caret-suggestion-list"
-      style={{
-        left: popup.left,
-        top: popup.top,
-        width: popup.width,
-        maxHeight: popup.maxHeight,
-      }}
+      style={{ left: popup.left, top: popup.top, width: popup.width, maxHeight: popup.maxHeight }}
     >
       {suggestions.map((tag) => {
         const isCharacter = tag.category === "character";
@@ -396,89 +373,123 @@ export function AutocompleteTextarea({
     </div>
   ) : null;
 
+  const minHeight = Math.max(118, rows * 23 + 22);
+
   return (
     <div className="autocomplete-wrap prompt-block-editor">
-      {blocks.length > 0 && (
-        <div className="prompt-block-list" aria-label="Prompt blocks">
-          {blocks.map((block) => (
-            <div
-              className={`prompt-block ${unlockedIndex === block.index ? "unlocked" : ""}`}
-              key={`${block.start}-${block.text}`}
-            >
+      <div
+        className={`prompt-token-editor ${focused ? "focused" : ""}`}
+        style={{ minHeight }}
+        role="group"
+        aria-label="Prompt editor"
+        onPointerDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.preventDefault();
+          ensureEndSlot();
+        }}
+      >
+        {items.map((item, index) => {
+          const text = item.trim();
+          const isActive = focused && index === activeIndex;
+          if (isActive) {
+            const tokenOrder = items.slice(0, index).filter((candidate) => candidate.trim()).length;
+            return (
+              <input
+                key={`active-${index}`}
+                ref={inputRef}
+                className="prompt-token-input"
+                value={item}
+                placeholder={items.every((candidate) => !candidate.trim()) ? placeholder : undefined}
+                autoComplete="off"
+                spellCheck={false}
+                data-prompt-token-order={tokenOrder}
+                style={{ width: `${Math.max(7, Math.min(34, item.length + 2))}ch` }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => {
+                  setFocused(false);
+                  setSuggestions([]);
+                  setPopup(null);
+                  clearRemovalArm();
+                }}
+                onChange={(event) => updateActiveText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "," || event.key === "Enter") {
+                    event.preventDefault();
+                    commitAndAdvance();
+                    return;
+                  }
+                  if (event.key === "Escape") {
+                    setSuggestions([]);
+                    clearRemovalArm();
+                    return;
+                  }
+                  if (event.key === "Backspace") {
+                    const start = event.currentTarget.selectionStart ?? 0;
+                    const end = event.currentTarget.selectionEnd ?? 0;
+                    if (start !== end || start > 0) {
+                      clearRemovalArm();
+                      return;
+                    }
+                    const previous = previousNonEmpty(activeIndex);
+                    if (previous < 0) return;
+                    event.preventDefault();
+                    if (armedIndex === previous) deleteItem(previous);
+                    else armRemoval(previous);
+                    return;
+                  }
+                  if (event.key === "Delete") {
+                    const start = event.currentTarget.selectionStart ?? 0;
+                    const end = event.currentTarget.selectionEnd ?? 0;
+                    if (start !== end || end < event.currentTarget.value.length) {
+                      clearRemovalArm();
+                      return;
+                    }
+                    const next = nextNonEmpty(activeIndex);
+                    if (next < 0) return;
+                    event.preventDefault();
+                    if (armedIndex === next) deleteItem(next);
+                    else armRemoval(next);
+                    return;
+                  }
+                  clearRemovalArm();
+                }}
+              />
+            );
+          }
+
+          if (!text) return null;
+          const armed = armedIndex === index;
+          return (
+            <span className={`prompt-token-chip ${armed ? "armed" : ""}`} key={`${index}-${text}`}>
               <button
                 type="button"
-                className="prompt-block-main"
-                onPointerDown={() => startBlockPress(block)}
-                onPointerUp={() => endBlockPress(block)}
-                onPointerCancel={() => {
-                  if (longPressRef.current !== null) window.clearTimeout(longPressRef.current);
-                  longPressRef.current = null;
-                  longPressTriggeredRef.current = false;
-                }}
-                title="길게 눌러 글자 단위 편집"
+                className="prompt-token-chip-main"
+                title="눌러서 이 태그 편집"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => activateChip(index)}
               >
-                {block.text}
+                {text}
               </button>
               <button
                 type="button"
-                className="prompt-block-remove"
-                aria-label={`${block.text} 블록 삭제`}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  removeBlock(block.index);
+                className="prompt-token-chip-remove"
+                aria-label={`${text} 삭제`}
+                title={armed ? "한 번 더 누르면 삭제" : "삭제 준비"}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  if (armed) deleteItem(index);
+                  else armRemoval(index);
                 }}
               >
                 ×
               </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={ref}
-        className="prompt-textarea"
-        value={value}
-        rows={rows}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        onFocus={(event) => {
-          setFocused(true);
-          syncCaret(event.currentTarget);
-        }}
-        onBlur={() => {
-          setFocused(false);
-          setSuggestions([]);
-          setPopup(null);
-          setUnlockedIndex(null);
-        }}
-        onChange={(event) => {
-          const nextValue = event.target.value;
-          const nextCaret = event.target.selectionStart ?? 0;
-          const nextBlocks = promptBlocks(nextValue);
-          const nextBlock = blockIndexAtCaret(nextBlocks, nextValue, nextCaret);
-          const insertedSeparator = /[,\n]/.test(nextValue.slice(Math.max(0, nextCaret - 1), nextCaret));
-          if (nextValue.length > value.length && nextBlock >= 0 && !insertedSeparator) {
-            setUnlockedIndex(nextBlock);
-          } else if (unlockedIndex !== null) {
-            setUnlockedIndex(nextBlock >= 0 ? nextBlock : null);
-          }
-          onChange(nextValue);
-          setCaret(nextCaret);
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Backspace") return;
-          if (event.currentTarget.selectionStart !== event.currentTarget.selectionEnd) return;
-          const position = event.currentTarget.selectionStart ?? 0;
-          const blockIndex = blockIndexAtCaret(blocks, value, position);
-          if (blockIndex < 0 || blockIndex === unlockedIndex) return;
-          event.preventDefault();
-          removeBlock(blockIndex);
-        }}
-        onClick={(event) => syncCaret(event.currentTarget)}
-        onKeyUp={(event) => syncCaret(event.currentTarget)}
-        onSelect={(event) => syncCaret(event.currentTarget)}
-      />
+            </span>
+          );
+        })}
+        {!focused && !items.some((item) => item.trim()) && (
+          <span className="prompt-token-placeholder">{placeholder}</span>
+        )}
+      </div>
       {suggestionList && createPortal(suggestionList, document.body)}
     </div>
   );
