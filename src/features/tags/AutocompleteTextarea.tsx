@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagIndex";
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
+import { usePromptHistoryStore, type PromptSnapshot } from "../../stores/promptHistoryStore";
 import "./promptBlocks.css";
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   rows?: number;
   onSelectTag?: (tag: LocalTag) => void;
   tagPrefix?: string;
+  historyKey?: string;
 };
 
 type PopupPosition = {
@@ -197,10 +199,13 @@ export function AutocompleteTextarea({
   rows = 12,
   onSelectTag,
   tagPrefix,
+  historyKey,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const longPressRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
+  const lastTextEditAtRef = useRef(0);
+  const selectionRef = useRef({ start: 0, end: 0 });
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [caret, setCaret] = useState(0);
   const [popup, setPopup] = useState<PopupPosition | null>(null);
@@ -211,6 +216,17 @@ export function AutocompleteTextarea({
   const characterEntries = useCharacterLibraryStore((s) => s.entries);
   const toggleCharacter = useCharacterLibraryStore((s) => s.toggleTag);
   const blocks = useMemo(() => promptBlocks(value), [value]);
+  const checkpoint = usePromptHistoryStore((s) => s.checkpoint);
+  const clearHistoryFuture = usePromptHistoryStore((s) => s.clearFuture);
+  const undoHistory = usePromptHistoryStore((s) => s.undo);
+  const redoHistory = usePromptHistoryStore((s) => s.redo);
+  const canUndo = usePromptHistoryStore((s) => !!historyKey && (s.histories[historyKey]?.past.length ?? 0) > 0);
+  const canRedo = usePromptHistoryStore((s) => !!historyKey && (s.histories[historyKey]?.future.length ?? 0) > 0);
+
+  useEffect(() => {
+    lastTextEditAtRef.current = 0;
+    selectionRef.current = { start: 0, end: 0 };
+  }, [historyKey]);
 
   useEffect(() => {
     if (!focused) {
@@ -270,8 +286,55 @@ export function AutocompleteTextarea({
     };
   }, [suggestions.length, caret, value, focused]);
 
+  const currentSnapshot = (): PromptSnapshot => {
+    const element = ref.current;
+    return {
+      value,
+      selectionStart: element?.selectionStart ?? selectionRef.current.start,
+      selectionEnd: element?.selectionEnd ?? selectionRef.current.end,
+    };
+  };
+
+  const restoreSnapshot = (snapshot: PromptSnapshot) => {
+    lastTextEditAtRef.current = 0;
+    onChange(snapshot.value);
+    setSuggestions([]);
+    setPopup(null);
+    setUnlockedIndex(null);
+    requestAnimationFrame(() => {
+      const element = ref.current;
+      if (!element) return;
+      const start = Math.min(snapshot.selectionStart, snapshot.value.length);
+      const end = Math.min(snapshot.selectionEnd, snapshot.value.length);
+      element.focus();
+      element.setSelectionRange(start, end);
+      selectionRef.current = { start, end };
+      setCaret(start);
+      setFocused(true);
+    });
+  };
+
+  const commitAtomicHistory = () => {
+    if (!historyKey) return;
+    checkpoint(historyKey, currentSnapshot());
+    lastTextEditAtRef.current = 0;
+  };
+
+  const runUndo = () => {
+    if (!historyKey) return;
+    const target = undoHistory(historyKey, currentSnapshot());
+    if (target) restoreSnapshot(target);
+  };
+
+  const runRedo = () => {
+    if (!historyKey) return;
+    const target = redoHistory(historyKey, currentSnapshot());
+    if (target) restoreSnapshot(target);
+  };
+
   const syncCaret = (element: HTMLTextAreaElement) => {
     const next = element.selectionStart ?? 0;
+    selectionRef.current = { start: next, end: element.selectionEnd ?? next };
     setCaret(next);
     const nextBlock = blockIndexAtCaret(promptBlocks(element.value), element.value, next);
     if (unlockedIndex !== null && nextBlock !== unlockedIndex) setUnlockedIndex(null);
@@ -287,6 +350,7 @@ export function AutocompleteTextarea({
       if (!element) return;
       element.focus();
       element.setSelectionRange(block.end, block.end);
+      selectionRef.current = { start: block.end, end: block.end };
       setCaret(block.end);
       setFocused(true);
     });
@@ -298,6 +362,7 @@ export function AutocompleteTextarea({
       .map((block) => block.text)
       .join(", ");
     const previousStart = blocks[index]?.start ?? nextValue.length;
+    commitAtomicHistory();
     onChange(nextValue);
     setUnlockedIndex(null);
     setSuggestions([]);
@@ -308,6 +373,7 @@ export function AutocompleteTextarea({
       const nextCaret = Math.min(previousStart, nextValue.length);
       element.focus();
       element.setSelectionRange(nextCaret, nextCaret);
+      selectionRef.current = { start: nextCaret, end: nextCaret };
       setCaret(nextCaret);
       setFocused(true);
     });
@@ -323,6 +389,7 @@ export function AutocompleteTextarea({
     const inserted = `${tagPrefix ?? ""}${tag.display}`;
     const suffix = after.startsWith(",") ? "" : ", ";
     const next = `${prefix}${inserted}${suffix}${after}`;
+    commitAtomicHistory();
     onChange(next);
     setSuggestions([]);
     setPopup(null);
@@ -334,6 +401,7 @@ export function AutocompleteTextarea({
       const nextCaret = (prefix + inserted + suffix).length;
       element.focus();
       element.setSelectionRange(nextCaret, nextCaret);
+      selectionRef.current = { start: nextCaret, end: nextCaret };
       setCaret(nextCaret);
     });
   };
@@ -398,6 +466,26 @@ export function AutocompleteTextarea({
 
   return (
     <div className="autocomplete-wrap prompt-block-editor">
+      {historyKey && (
+        <div className="prompt-history-controls" aria-label="Prompt history">
+          <button
+            type="button"
+            disabled={!canUndo}
+            title="되돌리기 (Ctrl+Z)"
+            aria-label="되돌리기"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={runUndo}
+          >↶</button>
+          <button
+            type="button"
+            disabled={!canRedo}
+            title="다시 실행 (Ctrl+Shift+Z / Ctrl+Y)"
+            aria-label="다시 실행"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={runRedo}
+          >↷</button>
+        </div>
+      )}
       {blocks.length > 0 && (
         <div className="prompt-block-list" aria-label="Prompt blocks">
           {blocks.map((block) => (
@@ -455,6 +543,28 @@ export function AutocompleteTextarea({
         onChange={(event) => {
           const nextValue = event.target.value;
           const nextCaret = event.target.selectionStart ?? 0;
+          const nextEnd = event.target.selectionEnd ?? nextCaret;
+          const inputType = (event.nativeEvent as InputEvent).inputType ?? "";
+          const mergeableTextEdit = [
+            "insertText",
+            "insertCompositionText",
+            "deleteContentBackward",
+            "deleteContentForward",
+          ].includes(inputType);
+          if (historyKey) {
+            const now = Date.now();
+            const previous: PromptSnapshot = {
+              value,
+              selectionStart: selectionRef.current.start,
+              selectionEnd: selectionRef.current.end,
+            };
+            if (!mergeableTextEdit || now - lastTextEditAtRef.current > 700) {
+              checkpoint(historyKey, previous);
+            } else {
+              clearHistoryFuture(historyKey);
+            }
+            lastTextEditAtRef.current = mergeableTextEdit ? now : 0;
+          }
           const nextBlocks = promptBlocks(nextValue);
           const nextBlock = blockIndexAtCaret(nextBlocks, nextValue, nextCaret);
           const insertedSeparator = /[,\n]/.test(nextValue.slice(Math.max(0, nextCaret - 1), nextCaret));
@@ -464,9 +574,23 @@ export function AutocompleteTextarea({
             setUnlockedIndex(nextBlock >= 0 ? nextBlock : null);
           }
           onChange(nextValue);
+          selectionRef.current = { start: nextCaret, end: nextEnd };
           setCaret(nextCaret);
         }}
         onKeyDown={(event) => {
+          const modifier = event.ctrlKey || event.metaKey;
+          const key = event.key.toLowerCase();
+          if (historyKey && modifier && key === "z") {
+            event.preventDefault();
+            if (event.shiftKey) runRedo();
+            else runUndo();
+            return;
+          }
+          if (historyKey && modifier && key === "y") {
+            event.preventDefault();
+            runRedo();
+            return;
+          }
           if (event.key !== "Backspace") return;
           if (event.currentTarget.selectionStart !== event.currentTarget.selectionEnd) return;
           const position = event.currentTarget.selectionStart ?? 0;
