@@ -4,6 +4,7 @@ import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagInde
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { usePromptHistoryStore, type PromptSnapshot } from "../../stores/promptHistoryStore";
+import { useTranslationStore } from "../../stores/translationStore";
 import "./promptBlocks.css";
 
 type Props = {
@@ -208,9 +209,11 @@ export function AutocompleteTextarea({
   const selectionRef = useRef({ start: 0, end: 0 });
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [caret, setCaret] = useState(0);
+  const [selectionEnd, setSelectionEnd] = useState(0);
   const [popup, setPopup] = useState<PopupPosition | null>(null);
   const [focused, setFocused] = useState(false);
   const [unlockedIndex, setUnlockedIndex] = useState<number | null>(null);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const favorites = useTagStore((s) => s.favorites);
   const toggle = useTagStore((s) => s.toggleFavorite);
   const characterEntries = useCharacterLibraryStore((s) => s.entries);
@@ -222,10 +225,15 @@ export function AutocompleteTextarea({
   const redoHistory = usePromptHistoryStore((s) => s.redo);
   const canUndo = usePromptHistoryStore((s) => !!historyKey && (s.histories[historyKey]?.past.length ?? 0) > 0);
   const canRedo = usePromptHistoryStore((s) => !!historyKey && (s.histories[historyKey]?.future.length ?? 0) > 0);
+  const translateSelected = useTranslationStore((s) => s.translate);
+  const translating = useTranslationStore((s) => s.translating);
 
   useEffect(() => {
     lastTextEditAtRef.current = 0;
     selectionRef.current = { start: 0, end: 0 };
+    setCaret(0);
+    setSelectionEnd(0);
+    setTranslationError(null);
   }, [historyKey]);
 
   useEffect(() => {
@@ -310,6 +318,7 @@ export function AutocompleteTextarea({
       element.setSelectionRange(start, end);
       selectionRef.current = { start, end };
       setCaret(start);
+      setSelectionEnd(end);
       setFocused(true);
     });
   };
@@ -332,10 +341,69 @@ export function AutocompleteTextarea({
     if (target) restoreSnapshot(target);
   };
 
+  const runTranslate = async () => {
+    if (!historyKey || translating) return;
+    const element = ref.current;
+    if (!element) return;
+    const start = element.selectionStart ?? 0;
+    const end = element.selectionEnd ?? start;
+    if (end <= start) return;
+
+    const originalValue = value;
+    const selectedText = originalValue.slice(start, end);
+    const contentStart = selectedText.search(/\S/);
+    const trailingLength = selectedText.match(/\s*$/)?.[0].length ?? 0;
+    const contentEnd = selectedText.length - trailingLength;
+    if (contentStart < 0 || contentEnd <= contentStart) {
+      setTranslationError("번역할 텍스트를 선택하시와요.");
+      return;
+    }
+    const content = selectedText.slice(contentStart, contentEnd);
+    setTranslationError(null);
+
+    try {
+      const translatedContent = await translateSelected(content);
+      const translated = `${selectedText.slice(0, contentStart)}${translatedContent}${selectedText.slice(contentEnd)}`;
+      if (ref.current?.value !== originalValue) {
+        setTranslationError("번역 중 프롬프트가 변경되어 결과를 적용하지 않았사와요.");
+        return;
+      }
+
+      checkpoint(historyKey, {
+        value: originalValue,
+        selectionStart: start,
+        selectionEnd: end,
+      });
+      lastTextEditAtRef.current = 0;
+
+      const nextValue = `${originalValue.slice(0, start)}${translated}${originalValue.slice(end)}`;
+      const nextEnd = start + translated.length;
+      onChange(nextValue);
+      setSuggestions([]);
+      setPopup(null);
+      setUnlockedIndex(null);
+
+      requestAnimationFrame(() => {
+        const target = ref.current;
+        if (!target) return;
+        target.focus();
+        target.setSelectionRange(start, nextEnd);
+        selectionRef.current = { start, end: nextEnd };
+        setCaret(start);
+        setSelectionEnd(nextEnd);
+        setFocused(true);
+      });
+    } catch (error) {
+      setTranslationError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const syncCaret = (element: HTMLTextAreaElement) => {
     const next = element.selectionStart ?? 0;
-    selectionRef.current = { start: next, end: element.selectionEnd ?? next };
+    const nextEnd = element.selectionEnd ?? next;
+    selectionRef.current = { start: next, end: nextEnd };
     setCaret(next);
+    setSelectionEnd(nextEnd);
     const nextBlock = blockIndexAtCaret(promptBlocks(element.value), element.value, next);
     if (unlockedIndex !== null && nextBlock !== unlockedIndex) setUnlockedIndex(null);
     if (focused && suggestions.length) setPopup(caretPopupPosition(element, next));
@@ -352,6 +420,7 @@ export function AutocompleteTextarea({
       element.setSelectionRange(block.end, block.end);
       selectionRef.current = { start: block.end, end: block.end };
       setCaret(block.end);
+      setSelectionEnd(block.end);
       setFocused(true);
     });
   };
@@ -375,6 +444,7 @@ export function AutocompleteTextarea({
       element.setSelectionRange(nextCaret, nextCaret);
       selectionRef.current = { start: nextCaret, end: nextCaret };
       setCaret(nextCaret);
+      setSelectionEnd(nextCaret);
       setFocused(true);
     });
   };
@@ -403,6 +473,7 @@ export function AutocompleteTextarea({
       element.setSelectionRange(nextCaret, nextCaret);
       selectionRef.current = { start: nextCaret, end: nextCaret };
       setCaret(nextCaret);
+      setSelectionEnd(nextCaret);
     });
   };
 
@@ -484,8 +555,17 @@ export function AutocompleteTextarea({
             onPointerDown={(event) => event.preventDefault()}
             onClick={runRedo}
           >↷</button>
+          <button
+            type="button"
+            className="prompt-translate-button"
+            disabled={translating || selectionEnd <= caret}
+            title={selectionEnd <= caret ? "번역할 텍스트를 먼저 선택하시와요." : "선택 영역을 한국어에서 영어로 번역"}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => void runTranslate()}
+          >{translating ? "번역 중…" : "번역"}</button>
         </div>
       )}
+      {translationError && <div className="prompt-translation-error">{translationError}</div>}
       {blocks.length > 0 && (
         <div className="prompt-block-list" aria-label="Prompt blocks">
           {blocks.map((block) => (
@@ -576,6 +656,7 @@ export function AutocompleteTextarea({
           onChange(nextValue);
           selectionRef.current = { start: nextCaret, end: nextEnd };
           setCaret(nextCaret);
+          setSelectionEnd(nextEnd);
         }}
         onKeyDown={(event) => {
           const modifier = event.ctrlKey || event.metaKey;

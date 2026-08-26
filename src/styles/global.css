@@ -274,3 +274,4 @@
     padding-right:9px!important;
   }
 }
+.translation-settings{display:flex;flex-direction:column;gap:10px}.translation-settings>h3{margin-bottom:0}.translation-provider{margin-top:2px}.translation-field{display:flex;flex-direction:column;gap:6px;color:#aeb4bf;font-size:11px}.translation-field>input{height:44px;border:1px solid #303641;background:#15181e;border-radius:12px;padding:0 11px;color:inherit}.translation-field small{color:#858c99;line-height:1.4}.translation-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.translation-actions button{height:38px;border:1px solid var(--line);background:#22252d;border-radius:11px;padding:0 13px}.translation-status{flex:1;min-width:160px;color:#9299a8;font-size:11px;line-height:1.35}.translation-status.error{color:#ffb4c1}
