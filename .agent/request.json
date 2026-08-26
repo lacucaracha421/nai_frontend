@@ -1,16 +1,8 @@
 {
-  "id": "commit-curated-sex-tags-20260826-1132-01",
-  "enabled": true,
+  "id": "idle-tag-library-backup-20260826-1137-01",
+  "enabled": false,
   "shell": "powershell",
   "cwd": ".",
-  "timeout_seconds": 300,
-  "commands": [
-    "$env:Path = $env:Path + ';' + [Environment]::GetEnvironmentVariable('Path','User'); $ProgressPreference='SilentlyContinue'",
-    "Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue; Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue",
-    "git fetch origin agent/tag-library-backup; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}; git reset --hard origin/agent/tag-library-backup; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}",
-    "python scripts/build-sexual-tags.py; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}",
-    "$payload = Get-Content public/data/sexual-tags.json -Raw | ConvertFrom-Json; Write-Host ('SEX_TAG_COUNT=' + $payload.tags.Count); Write-Host ('MIN_POST_COUNT=' + $payload.minPostCount); if($payload.minPostCount -ne 1000){throw 'Unexpected Sex tag threshold'}; if($payload.tags.Count -lt 200 -or $payload.tags.Count -gt 400){throw 'Unexpected curated Sex tag count'}",
-    "git config --local --unset-all http.https://github.com/.extraheader 2>$null; gh auth setup-git; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}",
-    "git add public/data/sexual-tags.json; if(git diff --cached --quiet){Write-Host 'NO_DATA_CHANGE'; exit 0}; git commit -m 'Curate and group Danbooru sexual tags'; if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}; git push origin HEAD:agent/tag-library-backup; exit $LASTEXITCODE"
-  ]
+  "timeout_seconds": 60,
+  "commands": []
 }
