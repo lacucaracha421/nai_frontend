@@ -25,22 +25,23 @@ SNAPSHOT_METADATA_URL = (
 )
 DANBOORU_BASE = "https://danbooru.donmai.us"
 DEFAULT_MIN_POST_COUNT = 10
-DEFAULT_USER_AGENT = "nai-frontend-tag-sync/1.0 (+https://github.com/lacucaracha421/nai_frontend)"
+DEFAULT_USER_AGENT = "nai-frontend-tag-sync/1.1 (+https://github.com/lacucaracha421/nai_frontend)"
 VALID_CATEGORIES = (0, 1, 3, 4, 5)
 DEFAULT_REQUIRED_TAGS = ("runami_yachiyo",)
+SNAPSHOT_BUILT_AT_FALLBACK = "2026-04-08T09:15:30Z"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build the NAI local autocomplete database from a public Danbooru snapshot, "
-            "then apply only official Danbooru API changes made after that snapshot."
+            "Build the NAI autocomplete DB from a Danbooru API snapshot, refresh every currently "
+            "eligible tag, then apply tag-alias changes made after the snapshot."
         )
     )
     parser.add_argument("--cache-dir", type=Path, default=Path(".cache/danbooru-official"))
     parser.add_argument("--output", type=Path, default=Path("src-tauri/resources/danbooru.sqlite"))
     parser.add_argument("--min-post-count", type=int, default=DEFAULT_MIN_POST_COUNT)
-    parser.add_argument("--api-delay", type=float, default=0.20, help="Delay between Danbooru API requests in seconds.")
+    parser.add_argument("--api-delay", type=float, default=0.15)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--refresh-snapshot", action="store_true")
     parser.add_argument("--keep-sqlite", action="store_true")
@@ -50,12 +51,12 @@ def parse_args() -> argparse.Namespace:
         "--require-tag",
         action="append",
         default=list(DEFAULT_REQUIRED_TAGS),
-        help="Canonical tag that must exist in the final database. May be repeated.",
+        help="Canonical tag that must exist in the final DB. May be repeated.",
     )
     return parser.parse_args()
 
 
-def request_bytes(url: str, user_agent: str, timeout: float, retries: int = 5) -> bytes:
+def fetch_bytes(url: str, user_agent: str, timeout: float, retries: int = 5) -> bytes:
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
@@ -64,7 +65,7 @@ def request_bytes(url: str, user_agent: str, timeout: float, retries: int = 5) -
                 return response.read()
         except (HTTPError, URLError, TimeoutError) as error:
             last_error = error
-            if attempt + 1 >= retries:
+            if attempt + 1 == retries:
                 break
             wait = min(8.0, 0.75 * (2**attempt))
             print(f"request failed ({error}); retrying in {wait:.2f}s", file=sys.stderr)
@@ -80,21 +81,15 @@ def download_file(url: str, target: Path, user_agent: str, timeout: float) -> No
         with urlopen(request, timeout=timeout) as response, temp.open("wb") as output:
             total_header = response.headers.get("Content-Length")
             total = int(total_header) if total_header and total_header.isdigit() else 0
-            downloaded = 0
+            copied = 0
             last_report = time.monotonic()
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
+            while chunk := response.read(1024 * 1024):
                 output.write(chunk)
-                downloaded += len(chunk)
-                now = time.monotonic()
-                if now - last_report >= 2.0:
-                    if total:
-                        print(f"  {downloaded / 1024 / 1024:.1f} / {total / 1024 / 1024:.1f} MiB")
-                    else:
-                        print(f"  {downloaded / 1024 / 1024:.1f} MiB")
-                    last_report = now
+                copied += len(chunk)
+                if time.monotonic() - last_report >= 2.0:
+                    suffix = f" / {total / 1024 / 1024:.1f} MiB" if total else ""
+                    print(f"  {copied / 1024 / 1024:.1f}{suffix}")
+                    last_report = time.monotonic()
         temp.replace(target)
     except Exception:
         temp.unlink(missing_ok=True)
@@ -108,19 +103,18 @@ def ensure_snapshot(args: argparse.Namespace) -> tuple[Path, dict]:
 
     if args.refresh_snapshot or not metadata_path.exists():
         print("Downloading Danbooru snapshot metadata...")
-        metadata_path.write_bytes(request_bytes(SNAPSHOT_METADATA_URL, args.user_agent, args.timeout))
-
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata_path.write_bytes(fetch_bytes(SNAPSHOT_METADATA_URL, args.user_agent, args.timeout))
     if args.refresh_snapshot or not database.exists():
         print("Downloading Danbooru SQLite snapshot...")
         download_file(SNAPSHOT_DB_URL, database, args.user_agent, args.timeout)
 
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     return database, metadata
 
 
 def api_pages(
     endpoint: str,
-    since: str,
+    search: dict[str, str | int | bool],
     *,
     user_agent: str,
     timeout: float,
@@ -131,14 +125,14 @@ def api_pages(
     page_no = 0
 
     while True:
-        params: dict[str, str | int] = {
-            "limit": 1000,
-            "search[updated_at]": f">{since}",
-        }
+        params: dict[str, str | int] = {"limit": 1000}
+        for key, value in search.items():
+            params[f"search[{key}]"] = str(value).lower() if isinstance(value, bool) else value
         if cursor is not None:
             params["page"] = f"b{cursor}"
+
         url = f"{DANBOORU_BASE}/{endpoint}.json?{urlencode(params)}"
-        payload = json.loads(request_bytes(url, user_agent, timeout).decode("utf-8"))
+        payload = json.loads(fetch_bytes(url, user_agent, timeout).decode("utf-8"))
         if not isinstance(payload, list):
             raise RuntimeError(f"Unexpected {endpoint} API response: {type(payload).__name__}")
         rows = [row for row in payload if isinstance(row, dict)]
@@ -146,7 +140,7 @@ def api_pages(
             break
 
         page_no += 1
-        print(f"  {endpoint}: page {page_no}, {len(rows)} changed rows")
+        print(f"  {endpoint}: page {page_no}, {len(rows)} rows")
         yield rows
 
         ids = [int(row["id"]) for row in rows if row.get("id") is not None]
@@ -225,13 +219,18 @@ def seed_from_snapshot(
     )
     tag_count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
     alias_count = int(connection.execute("SELECT count(*) FROM source_aliases").fetchone()[0])
-    connection.execute("DETACH DATABASE snapshot")
     connection.commit()
+    connection.execute("DETACH DATABASE snapshot")
     return tag_count, alias_count
 
 
-def apply_tag_changes(connection: sqlite3.Connection, pages: Iterable[list[dict]], min_post_count: int) -> int:
-    changed = 0
+def refresh_current_tags(
+    connection: sqlite3.Connection,
+    pages: Iterable[list[dict]],
+    min_post_count: int,
+) -> int:
+    connection.execute("CREATE TEMP TABLE seen_tag_ids(id INTEGER PRIMARY KEY)")
+    refreshed = 0
     for rows in pages:
         with connection:
             for row in rows:
@@ -240,18 +239,22 @@ def apply_tag_changes(connection: sqlite3.Connection, pages: Iterable[list[dict]
                 category = int(row.get("category") if row.get("category") is not None else -1)
                 post_count = int(row.get("post_count") or 0)
                 deprecated = bool(row.get("is_deprecated"))
-                if tag_id <= 0:
+                if tag_id <= 0 or not raw:
                     continue
-                connection.execute("DELETE FROM tags WHERE id=?", (tag_id,))
-                if raw:
-                    connection.execute("DELETE FROM tags WHERE raw=? AND id<>?", (raw, tag_id))
-                if raw and not deprecated and category in VALID_CATEGORIES and post_count >= min_post_count:
-                    connection.execute(
-                        "INSERT INTO tags(id,raw,category,count) VALUES(?,?,?,?)",
-                        (tag_id, raw, category, post_count),
-                    )
-                changed += 1
-    return changed
+                if deprecated or category not in VALID_CATEGORIES or post_count < min_post_count:
+                    continue
+                connection.execute("DELETE FROM tags WHERE id=? OR (raw=? AND id<>?)", (tag_id, raw, tag_id))
+                connection.execute(
+                    "INSERT INTO tags(id,raw,category,count) VALUES(?,?,?,?)",
+                    (tag_id, raw, category, post_count),
+                )
+                connection.execute("INSERT OR IGNORE INTO seen_tag_ids(id) VALUES(?)", (tag_id,))
+                refreshed += 1
+
+    with connection:
+        connection.execute("DELETE FROM tags WHERE id NOT IN (SELECT id FROM seen_tag_ids)")
+        connection.execute("DROP TABLE seen_tag_ids")
+    return refreshed
 
 
 def apply_alias_changes(connection: sqlite3.Connection, pages: Iterable[list[dict]]) -> int:
@@ -277,7 +280,6 @@ def apply_alias_changes(connection: sqlite3.Connection, pages: Iterable[list[dic
 
 def build_fts(connection: sqlite3.Connection) -> None:
     print("Building FTS5 index...")
-    connection.execute("DELETE FROM tag_fts")
     connection.execute(
         """
         INSERT INTO tag_fts(rowid,terms)
@@ -305,17 +307,18 @@ def write_metadata(
     *,
     snapshot_built_at: str,
     min_post_count: int,
-    tag_changes: int,
+    refreshed_tags: int,
     alias_changes: int,
 ) -> str:
     synced_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    version = "danbooru-official-" + synced_at.replace("-", "").replace(":", "").replace("T", "-").replace("Z", "Z")
+    stamp = synced_at.replace("-", "").replace(":", "").replace("T", "-")
+    version = f"danbooru-official-{stamp}"
     tag_count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
     connection.execute("CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
     connection.executemany(
         "INSERT INTO metadata(key,value) VALUES(?,?)",
         [
-            ("source", "Danbooru official API"),
+            ("source", "Danbooru official tags API"),
             ("snapshot_source", SNAPSHOT_REPO),
             ("snapshot_built_at", snapshot_built_at),
             ("synced_at", synced_at),
@@ -323,7 +326,7 @@ def write_metadata(
             ("schema", "nai-tagdb-v2"),
             ("minimum_post_count", str(min_post_count)),
             ("tag_count", str(tag_count)),
-            ("incremental_tag_rows", str(tag_changes)),
+            ("refreshed_tag_rows", str(refreshed_tags)),
             ("incremental_alias_rows", str(alias_changes)),
         ],
     )
@@ -334,8 +337,8 @@ def write_metadata(
 def validate(connection: sqlite3.Connection, required_tags: list[str]) -> None:
     count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
     if count < 1000:
-        raise RuntimeError(f"Generated Danbooru database is unexpectedly small ({count} tags).")
-    missing = []
+        raise RuntimeError(f"Generated Danbooru DB is unexpectedly small ({count} tags).")
+    missing: list[str] = []
     for raw in dict.fromkeys(required_tags):
         row = connection.execute("SELECT category,count FROM tags WHERE raw=?", (raw,)).fetchone()
         if row is None:
@@ -343,7 +346,7 @@ def validate(connection: sqlite3.Connection, required_tags: list[str]) -> None:
         else:
             print(f"validated tag: {raw} (category={row[0]}, posts={row[1]})")
     if missing:
-        raise RuntimeError("Required Danbooru tag(s) missing from generated database: " + ", ".join(missing))
+        raise RuntimeError("Required Danbooru tag(s) missing: " + ", ".join(missing))
 
 
 def compress_database(path: Path) -> Path:
@@ -360,11 +363,12 @@ def main() -> None:
     if args.min_post_count < 0:
         raise SystemExit("--min-post-count must be zero or greater")
 
-    snapshot_path, snapshot_metadata = ensure_snapshot(args)
-    snapshot_built_at = str(snapshot_metadata.get("snapshot_built_at") or "").strip()
-    if not snapshot_built_at:
-        raise RuntimeError("Snapshot metadata does not contain snapshot_built_at")
-
+    snapshot_path, metadata = ensure_snapshot(args)
+    snapshot_built_at = str(
+        metadata.get("snapshot_built_at")
+        or (metadata.get("metadata") or {}).get("snapshot_built_at")
+        or SNAPSHOT_BUILT_AT_FALLBACK
+    ).strip()
     print(f"Snapshot: {snapshot_built_at}")
     print(f"Minimum post count: {args.min_post_count}")
 
@@ -373,12 +377,14 @@ def main() -> None:
         seeded_tags, seeded_aliases = seed_from_snapshot(connection, snapshot_path, args.min_post_count)
         print(f"Seeded {seeded_tags:,} tags and {seeded_aliases:,} aliases from snapshot")
 
-        print("Applying official Danbooru tag changes after snapshot...")
-        tag_changes = apply_tag_changes(
+        # Danbooru updates post_count with UPDATE ALL, which doesn't reliably touch tags.updated_at.
+        # Therefore refresh the complete *eligible* set instead of relying on updated_at deltas for tags.
+        print(f"Refreshing all current Danbooru tags with >= {args.min_post_count} posts...")
+        refreshed_tags = refresh_current_tags(
             connection,
             api_pages(
                 "tags",
-                snapshot_built_at,
+                {"post_count": f">={args.min_post_count}"},
                 user_agent=args.user_agent,
                 timeout=args.timeout,
                 delay=args.api_delay,
@@ -386,12 +392,12 @@ def main() -> None:
             args.min_post_count,
         )
 
-        print("Applying official Danbooru alias changes after snapshot...")
+        print("Applying tag-alias changes made after the snapshot...")
         alias_changes = apply_alias_changes(
             connection,
             api_pages(
                 "tag_aliases",
-                snapshot_built_at,
+                {"updated_at": f">{snapshot_built_at}"},
                 user_agent=args.user_agent,
                 timeout=args.timeout,
                 delay=args.api_delay,
@@ -403,19 +409,18 @@ def main() -> None:
             connection,
             snapshot_built_at=snapshot_built_at,
             min_post_count=args.min_post_count,
-            tag_changes=tag_changes,
+            refreshed_tags=refreshed_tags,
             alias_changes=alias_changes,
         )
         validate(connection, args.require_tag)
         connection.execute("VACUUM")
-        connection.commit()
     finally:
         connection.close()
 
     version_path = args.output.parent / "danbooru.version"
     version_path.write_text(version + "\n", encoding="utf-8")
-
     print(f"database -> {args.output} ({args.output.stat().st_size / 1024 / 1024:.1f} MiB)")
+
     if not args.no_gzip:
         compressed = compress_database(args.output)
         print(f"compressed -> {compressed} ({compressed.stat().st_size / 1024 / 1024:.1f} MiB)")
