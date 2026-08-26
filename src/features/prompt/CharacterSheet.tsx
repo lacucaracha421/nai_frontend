@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
+import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { favoriteLocalTags } from "../tags/localTagIndex";
 import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
@@ -78,6 +79,12 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
 
   const selectFromLibrary = (entry: CharacterLibraryEntry) => {
     if (!active) return;
+    usePromptHistoryStore.getState().checkpoint(`character:${active.id}:prompt`, {
+      value: active.prompt,
+      selectionStart: active.prompt.length,
+      selectionEnd: active.prompt.length,
+      activeIndex: active.prompt.split(/[,\n]/).filter((value) => value.trim()).length,
+    });
     update(active.id, {
       name: entry.display,
       prompt: chooseCharacterTag(active.prompt, active.name, entry.display),
@@ -157,6 +164,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
                 value={active.prompt}
                 onChange={(prompt) => update(active.id, { prompt })}
                 categories={["character", "general", "copyright", "meta"]}
+                historyKey={`character:${active.id}:prompt`}
                 rows={7}
                 placeholder="캐릭터 외형과 의상 태그"
                 onSelectTag={(tag) => {
@@ -170,6 +178,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
                   value={active.negative}
                   onChange={(negative) => update(active.id, { negative })}
                   categories={["general", "meta"]}
+                  historyKey={`character:${active.id}:negative`}
                   rows={4}
                   placeholder="이 캐릭터에만 적용할 네거티브"
                 />
