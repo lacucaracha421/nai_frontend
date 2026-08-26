@@ -49,6 +49,13 @@ jobs:
         shell: cmd
         run: npm ci
 
+      - name: Prepare app icons
+        timeout-minutes: 5
+        shell: cmd
+        run: |
+          node scripts\prepare-app-icon.mjs
+          npm run tauri -- icon src-tauri\icons\nai-v5-studio-source.png
+
       - name: Frontend build
         timeout-minutes: 10
         shell: cmd
