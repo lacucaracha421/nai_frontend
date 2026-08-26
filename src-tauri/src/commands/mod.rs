@@ -1,6 +1,7 @@
 use crate::{
     novelai::{self, GeneratedImage, ImageCacheState, NovelAiQuota, NovelAiState},
     tagdb::{self, LocalTagResult, TagDbState},
+    translation::{self, TranslationConfig, TranslationKeyStatus, TranslationProvider},
 };
 use serde_json::Value;
 use tauri::State;
@@ -65,6 +66,33 @@ pub async fn novelai_upscale(
 ) -> Result<Vec<GeneratedImage>, String> {
     let token = state.token()?;
     novelai::upscale(&token, image_path, &cache).await
+}
+
+#[tauri::command]
+pub fn set_translation_api_key(provider: String, api_key: String) -> Result<(), String> {
+    let provider = TranslationProvider::parse(&provider)?;
+    translation::save_api_key(&provider, &api_key)
+}
+
+#[tauri::command]
+pub fn clear_translation_api_key(provider: String) -> Result<(), String> {
+    let provider = TranslationProvider::parse(&provider)?;
+    translation::clear_api_key(&provider)
+}
+
+#[tauri::command]
+pub fn translation_key_status() -> Result<TranslationKeyStatus, String> {
+    translation::key_status()
+}
+
+#[tauri::command]
+pub async fn test_translation_provider(config: TranslationConfig) -> Result<String, String> {
+    translation::test(&config).await
+}
+
+#[tauri::command]
+pub async fn translate_selection(config: TranslationConfig, text: String) -> Result<String, String> {
+    translation::translate(&config, &text).await
 }
 
 #[tauri::command]
