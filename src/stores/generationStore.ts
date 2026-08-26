@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/buildRequest";
 import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
+import { usePromptHistoryStore } from "./promptHistoryStore";
 import type {
   CharacterPrompt,
   GenerationImage,
@@ -104,10 +105,20 @@ export const useGenerationStore = create<State>()(
       errorMessage: null,
 
       setPrompt: (key, value) => set({ [`${key}Prompt`]: value } as Partial<State>),
-      appendPrompt: (key, value) =>
-        set((state) => ({
-          [`${key}Prompt`]: append((state as unknown as Record<string, string>)[`${key}Prompt`], value),
-        } as Partial<State>)),
+      appendPrompt: (key, value) => {
+        const field = `${key}Prompt`;
+        const current = (get() as unknown as Record<string, string>)[field];
+        const next = append(current, value);
+        if (next === current) return;
+        const tokenCount = current.split(/[,\n]/).filter((part) => part.trim()).length;
+        usePromptHistoryStore.getState().checkpoint(`prompt:${key}`, {
+          value: current,
+          selectionStart: 0,
+          selectionEnd: 0,
+          activeIndex: tokenCount,
+        });
+        set({ [field]: next } as Partial<State>);
+      },
       setSetting: (key, value) => set((state) => ({ settings: { ...state.settings, [key]: value } })),
       addCharacter: () => set((state) => ({ characters: [...state.characters, newCharacter(state.characters.length)] })),
       removeCharacter: (id) => set((state) => ({ characters: state.characters.filter((character) => character.id !== id) })),
@@ -201,7 +212,6 @@ export const useGenerationStore = create<State>()(
           ...current,
           ...migrated,
           settings: { ...DEFAULT_SETTINGS, ...(migrated.settings ?? {}) },
-          // Session output is deliberately never restored across app launches.
           images: [],
           activeImage: 0,
           status: "idle",
