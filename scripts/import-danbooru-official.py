@@ -25,7 +25,7 @@ SNAPSHOT_METADATA_URL = (
 )
 DANBOORU_BASE = "https://danbooru.donmai.us"
 DEFAULT_MIN_POST_COUNT = 10
-DEFAULT_USER_AGENT = "nai-frontend-tag-sync/1.1 (+https://github.com/lacucaracha421/nai_frontend)"
+DEFAULT_USER_AGENT = "nai-frontend-tag-sync/1.2 (+https://github.com/lacucaracha421/nai_frontend)"
 VALID_CATEGORIES = (0, 1, 3, 4, 5)
 DEFAULT_REQUIRED_TAGS = ("runami_yachiyo",)
 SNAPSHOT_BUILT_AT_FALLBACK = "2026-04-08T09:15:30Z"
@@ -34,8 +34,9 @@ SNAPSHOT_BUILT_AT_FALLBACK = "2026-04-08T09:15:30Z"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build the NAI autocomplete DB from a Danbooru API snapshot, refresh every currently "
-            "eligible tag, then apply tag-alias changes made after the snapshot."
+            "Build the NAI autocomplete DB from a Danbooru snapshot and apply only tags/aliases "
+            "whose updated_at changed after the snapshot. This intentionally favors fast refreshes "
+            "over perfectly tracking post_count-only changes."
         )
     )
     parser.add_argument("--cache-dir", type=Path, default=Path(".cache/danbooru-official"))
@@ -79,17 +80,8 @@ def download_file(url: str, target: Path, user_agent: str, timeout: float) -> No
     request = Request(url, headers={"User-Agent": user_agent, "Accept": "*/*"})
     try:
         with urlopen(request, timeout=timeout) as response, temp.open("wb") as output:
-            total_header = response.headers.get("Content-Length")
-            total = int(total_header) if total_header and total_header.isdigit() else 0
-            copied = 0
-            last_report = time.monotonic()
             while chunk := response.read(1024 * 1024):
                 output.write(chunk)
-                copied += len(chunk)
-                if time.monotonic() - last_report >= 2.0:
-                    suffix = f" / {total / 1024 / 1024:.1f} MiB" if total else ""
-                    print(f"  {copied / 1024 / 1024:.1f}{suffix}")
-                    last_report = time.monotonic()
         temp.replace(target)
     except Exception:
         temp.unlink(missing_ok=True)
@@ -108,13 +100,12 @@ def ensure_snapshot(args: argparse.Namespace) -> tuple[Path, dict]:
         print("Downloading Danbooru SQLite snapshot...")
         download_file(SNAPSHOT_DB_URL, database, args.user_agent, args.timeout)
 
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    return database, metadata
+    return database, json.loads(metadata_path.read_text(encoding="utf-8"))
 
 
 def api_pages(
     endpoint: str,
-    search: dict[str, str | int | bool],
+    since: str,
     *,
     user_agent: str,
     timeout: float,
@@ -125,12 +116,12 @@ def api_pages(
     page_no = 0
 
     while True:
-        params: dict[str, str | int] = {"limit": 1000}
-        for key, value in search.items():
-            params[f"search[{key}]"] = str(value).lower() if isinstance(value, bool) else value
+        params: dict[str, str | int] = {
+            "limit": 1000,
+            "search[updated_at]": f">{since}",
+        }
         if cursor is not None:
             params["page"] = f"b{cursor}"
-
         url = f"{DANBOORU_BASE}/{endpoint}.json?{urlencode(params)}"
         payload = json.loads(fetch_bytes(url, user_agent, timeout).decode("utf-8"))
         if not isinstance(payload, list):
@@ -140,7 +131,7 @@ def api_pages(
             break
 
         page_no += 1
-        print(f"  {endpoint}: page {page_no}, {len(rows)} rows")
+        print(f"  {endpoint}: page {page_no}, {len(rows)} changed rows")
         yield rows
 
         ids = [int(row["id"]) for row in rows if row.get("id") is not None]
@@ -148,7 +139,7 @@ def api_pages(
             break
         cursor = min(ids)
         if cursor == previous_cursor:
-            raise RuntimeError(f"Danbooru {endpoint} pagination cursor stopped advancing at {cursor}")
+            raise RuntimeError(f"Danbooru {endpoint} cursor stopped advancing at {cursor}")
         previous_cursor = cursor
         if delay > 0:
             time.sleep(delay)
@@ -157,8 +148,8 @@ def api_pages(
 def create_output_database(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
-    connection = sqlite3.connect(path)
-    connection.executescript(
+    db = sqlite3.connect(path)
+    db.executescript(
         """
         PRAGMA journal_mode=OFF;
         PRAGMA synchronous=OFF;
@@ -189,17 +180,13 @@ def create_output_database(path: Path) -> sqlite3.Connection:
         );
         """
     )
-    return connection
+    return db
 
 
-def seed_from_snapshot(
-    connection: sqlite3.Connection,
-    snapshot_path: Path,
-    min_post_count: int,
-) -> tuple[int, int]:
-    connection.execute("ATTACH DATABASE ? AS snapshot", (str(snapshot_path.resolve()),))
+def seed_from_snapshot(db: sqlite3.Connection, snapshot_path: Path, min_post_count: int) -> tuple[int, int]:
+    db.execute("ATTACH DATABASE ? AS snapshot", (str(snapshot_path.resolve()),))
     allowed = ",".join(str(value) for value in VALID_CATEGORIES)
-    connection.execute(
+    db.execute(
         f"""
         INSERT INTO tags(id,raw,category,count)
         SELECT id,name,category,post_count
@@ -210,57 +197,48 @@ def seed_from_snapshot(
         """,
         (min_post_count,),
     )
-    connection.execute(
+    db.execute(
         """
         INSERT INTO source_aliases(id,antecedent_name,consequent_name,status)
         SELECT id,antecedent_name,consequent_name,status
         FROM snapshot.tag_aliases
         """
     )
-    tag_count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
-    alias_count = int(connection.execute("SELECT count(*) FROM source_aliases").fetchone()[0])
-    connection.commit()
-    connection.execute("DETACH DATABASE snapshot")
+    tag_count = int(db.execute("SELECT count(*) FROM tags").fetchone()[0])
+    alias_count = int(db.execute("SELECT count(*) FROM source_aliases").fetchone()[0])
+    db.commit()
+    db.execute("DETACH DATABASE snapshot")
     return tag_count, alias_count
 
 
-def refresh_current_tags(
-    connection: sqlite3.Connection,
-    pages: Iterable[list[dict]],
-    min_post_count: int,
-) -> int:
-    connection.execute("CREATE TEMP TABLE seen_tag_ids(id INTEGER PRIMARY KEY)")
-    refreshed = 0
+def apply_tag_changes(db: sqlite3.Connection, pages: Iterable[list[dict]], min_post_count: int) -> int:
+    changed = 0
     for rows in pages:
-        with connection:
+        with db:
             for row in rows:
                 tag_id = int(row.get("id") or 0)
                 raw = str(row.get("name") or "").strip()
                 category = int(row.get("category") if row.get("category") is not None else -1)
                 post_count = int(row.get("post_count") or 0)
                 deprecated = bool(row.get("is_deprecated"))
-                if tag_id <= 0 or not raw:
+                if tag_id <= 0:
                     continue
-                if deprecated or category not in VALID_CATEGORIES or post_count < min_post_count:
-                    continue
-                connection.execute("DELETE FROM tags WHERE id=? OR (raw=? AND id<>?)", (tag_id, raw, tag_id))
-                connection.execute(
-                    "INSERT INTO tags(id,raw,category,count) VALUES(?,?,?,?)",
-                    (tag_id, raw, category, post_count),
-                )
-                connection.execute("INSERT OR IGNORE INTO seen_tag_ids(id) VALUES(?)", (tag_id,))
-                refreshed += 1
-
-    with connection:
-        connection.execute("DELETE FROM tags WHERE id NOT IN (SELECT id FROM seen_tag_ids)")
-        connection.execute("DROP TABLE seen_tag_ids")
-    return refreshed
+                db.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+                if raw:
+                    db.execute("DELETE FROM tags WHERE raw=? AND id<>?", (raw, tag_id))
+                if raw and not deprecated and category in VALID_CATEGORIES and post_count >= min_post_count:
+                    db.execute(
+                        "INSERT INTO tags(id,raw,category,count) VALUES(?,?,?,?)",
+                        (tag_id, raw, category, post_count),
+                    )
+                changed += 1
+    return changed
 
 
-def apply_alias_changes(connection: sqlite3.Connection, pages: Iterable[list[dict]]) -> int:
+def apply_alias_changes(db: sqlite3.Connection, pages: Iterable[list[dict]]) -> int:
     changed = 0
     for rows in pages:
-        with connection:
+        with db:
             for row in rows:
                 alias_id = int(row.get("id") or 0)
                 antecedent = str(row.get("antecedent_name") or "").strip()
@@ -268,9 +246,9 @@ def apply_alias_changes(connection: sqlite3.Connection, pages: Iterable[list[dic
                 status = str(row.get("status") or "").strip().lower()
                 if alias_id <= 0:
                     continue
-                connection.execute("DELETE FROM source_aliases WHERE id=?", (alias_id,))
+                db.execute("DELETE FROM source_aliases WHERE id=?", (alias_id,))
                 if antecedent and consequent and status:
-                    connection.execute(
+                    db.execute(
                         "INSERT INTO source_aliases(id,antecedent_name,consequent_name,status) VALUES(?,?,?,?)",
                         (alias_id, antecedent, consequent, status),
                     )
@@ -278,9 +256,9 @@ def apply_alias_changes(connection: sqlite3.Connection, pages: Iterable[list[dic
     return changed
 
 
-def build_fts(connection: sqlite3.Connection) -> None:
+def build_fts(db: sqlite3.Connection) -> None:
     print("Building FTS5 index...")
-    connection.execute(
+    db.execute(
         """
         INSERT INTO tag_fts(rowid,terms)
         SELECT
@@ -297,28 +275,27 @@ def build_fts(connection: sqlite3.Connection) -> None:
         GROUP BY t.id
         """
     )
-    connection.execute("DROP TABLE source_aliases")
-    connection.execute("PRAGMA optimize")
-    connection.commit()
+    db.execute("DROP TABLE source_aliases")
+    db.execute("PRAGMA optimize")
+    db.commit()
 
 
 def write_metadata(
-    connection: sqlite3.Connection,
+    db: sqlite3.Connection,
     *,
     snapshot_built_at: str,
     min_post_count: int,
-    refreshed_tags: int,
+    tag_changes: int,
     alias_changes: int,
 ) -> str:
     synced_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    stamp = synced_at.replace("-", "").replace(":", "").replace("T", "-")
-    version = f"danbooru-official-{stamp}"
-    tag_count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
-    connection.execute("CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
-    connection.executemany(
+    version = "danbooru-official-fast-" + synced_at.replace("-", "").replace(":", "").replace("T", "-")
+    tag_count = int(db.execute("SELECT count(*) FROM tags").fetchone()[0])
+    db.execute("CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
+    db.executemany(
         "INSERT INTO metadata(key,value) VALUES(?,?)",
         [
-            ("source", "Danbooru official tags API"),
+            ("source", "Danbooru snapshot + official updated_at deltas"),
             ("snapshot_source", SNAPSHOT_REPO),
             ("snapshot_built_at", snapshot_built_at),
             ("synced_at", synced_at),
@@ -326,21 +303,21 @@ def write_metadata(
             ("schema", "nai-tagdb-v2"),
             ("minimum_post_count", str(min_post_count)),
             ("tag_count", str(tag_count)),
-            ("refreshed_tag_rows", str(refreshed_tags)),
+            ("incremental_tag_rows", str(tag_changes)),
             ("incremental_alias_rows", str(alias_changes)),
+            ("post_count_delta_policy", "best-effort; post_count-only changes may lag until tag metadata changes"),
         ],
     )
-    connection.commit()
+    db.commit()
     return version
 
 
-def validate(connection: sqlite3.Connection, required_tags: list[str]) -> None:
-    count = int(connection.execute("SELECT count(*) FROM tags").fetchone()[0])
-    if count < 1000:
-        raise RuntimeError(f"Generated Danbooru DB is unexpectedly small ({count} tags).")
+def validate(db: sqlite3.Connection, required_tags: list[str]) -> None:
+    if int(db.execute("SELECT count(*) FROM tags").fetchone()[0]) < 1000:
+        raise RuntimeError("Generated Danbooru DB is unexpectedly small")
     missing: list[str] = []
     for raw in dict.fromkeys(required_tags):
-        row = connection.execute("SELECT category,count FROM tags WHERE raw=?", (raw,)).fetchone()
+        row = db.execute("SELECT category,count FROM tags WHERE raw=?", (raw,)).fetchone()
         if row is None:
             missing.append(raw)
         else:
@@ -372,19 +349,17 @@ def main() -> None:
     print(f"Snapshot: {snapshot_built_at}")
     print(f"Minimum post count: {args.min_post_count}")
 
-    connection = create_output_database(args.output)
+    db = create_output_database(args.output)
     try:
-        seeded_tags, seeded_aliases = seed_from_snapshot(connection, snapshot_path, args.min_post_count)
+        seeded_tags, seeded_aliases = seed_from_snapshot(db, snapshot_path, args.min_post_count)
         print(f"Seeded {seeded_tags:,} tags and {seeded_aliases:,} aliases from snapshot")
 
-        # Danbooru updates post_count with UPDATE ALL, which doesn't reliably touch tags.updated_at.
-        # Therefore refresh the complete *eligible* set instead of relying on updated_at deltas for tags.
-        print(f"Refreshing all current Danbooru tags with >= {args.min_post_count} posts...")
-        refreshed_tags = refresh_current_tags(
-            connection,
+        print("Applying tag metadata changes after snapshot...")
+        tag_changes = apply_tag_changes(
+            db,
             api_pages(
                 "tags",
-                {"post_count": f">={args.min_post_count}"},
+                snapshot_built_at,
                 user_agent=args.user_agent,
                 timeout=args.timeout,
                 delay=args.api_delay,
@@ -392,30 +367,30 @@ def main() -> None:
             args.min_post_count,
         )
 
-        print("Applying tag-alias changes made after the snapshot...")
+        print("Applying tag-alias changes after snapshot...")
         alias_changes = apply_alias_changes(
-            connection,
+            db,
             api_pages(
                 "tag_aliases",
-                {"updated_at": f">{snapshot_built_at}"},
+                snapshot_built_at,
                 user_agent=args.user_agent,
                 timeout=args.timeout,
                 delay=args.api_delay,
             ),
         )
 
-        build_fts(connection)
+        build_fts(db)
         version = write_metadata(
-            connection,
+            db,
             snapshot_built_at=snapshot_built_at,
             min_post_count=args.min_post_count,
-            refreshed_tags=refreshed_tags,
+            tag_changes=tag_changes,
             alias_changes=alias_changes,
         )
-        validate(connection, args.require_tag)
-        connection.execute("VACUUM")
+        validate(db, args.require_tag)
+        db.execute("VACUUM")
     finally:
-        connection.close()
+        db.close()
 
     version_path = args.output.parent / "danbooru.version"
     version_path.write_text(version + "\n", encoding="utf-8")
