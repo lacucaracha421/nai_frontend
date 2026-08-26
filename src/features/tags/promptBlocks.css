@@ -1,1 +1,111 @@
-.prompt-block-list{display:flex;flex-wrap:wrap;gap:7px;max-height:22dvh;overflow:auto;margin:0 0 10px;padding:10px;border:1px solid #2c313b;border-radius:14px;background:#11141a;overscroll-behavior:contain}.prompt-block{display:flex;align-items:center;max-width:100%;min-height:36px;border:1px solid #3b4250;border-radius:11px;background:#1a1e26;overflow:hidden}.prompt-block.unlocked{border-color:#8b7cf2;background:#242039;box-shadow:0 0 0 2px rgba(139,124,242,.12)}.prompt-block-main{min-width:0;max-width:min(58vw,360px);height:34px;border:0;background:transparent;padding:0 9px 0 11px;color:#e8eaf0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}.prompt-block.unlocked .prompt-block-main{color:#f0edff}.prompt-block-remove{flex:0 0 34px;width:34px;height:34px;border:0;border-left:1px solid #333945;background:transparent;color:#7f8795;font-size:19px;line-height:1}.prompt-block-remove:active{background:#33202a;color:#ff9caf}.prompt-block-editor .prompt-textarea{min-height:40dvh}.character-editor .prompt-block-list{max-height:132px}.character-editor .prompt-block-editor .prompt-textarea{min-height:150px}@media(max-width:600px){.prompt-block-list{max-height:20dvh}.prompt-block-main{max-width:66vw}}
+.prompt-token-editor{
+  width:100%;
+  display:flex;
+  flex-wrap:wrap;
+  align-content:flex-start;
+  align-items:flex-start;
+  gap:7px;
+  overflow:auto;
+  padding:13px;
+  border:1px solid #303641;
+  border-radius:16px;
+  background:#15181e;
+  line-height:1.45;
+  overscroll-behavior:contain;
+  cursor:text;
+}
+
+.prompt-token-editor.focused{
+  border-color:#7469c8;
+  box-shadow:0 0 0 3px rgba(116,105,200,.13);
+}
+
+.prompt-token-chip{
+  display:inline-flex;
+  align-items:stretch;
+  max-width:100%;
+  min-height:35px;
+  border:1px solid #3b4250;
+  border-radius:10px;
+  background:#1b1f27;
+  overflow:hidden;
+  transition:border-color .12s ease,background .12s ease,box-shadow .12s ease;
+}
+
+.prompt-token-chip.armed{
+  border-color:#b45b6c;
+  background:#321f26;
+  box-shadow:0 0 0 2px rgba(180,91,108,.15);
+}
+
+.prompt-token-chip-main{
+  min-width:0;
+  max-width:min(62vw,420px);
+  min-height:33px;
+  border:0;
+  background:transparent;
+  padding:6px 9px 6px 11px;
+  color:#e8eaf0;
+  font-size:13px;
+  line-height:1.35;
+  text-align:left;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+.prompt-token-chip-remove{
+  flex:0 0 31px;
+  width:31px;
+  min-height:33px;
+  border:0;
+  border-left:1px solid #333945;
+  background:transparent;
+  color:#747d8c;
+  font-size:18px;
+  line-height:1;
+}
+
+.prompt-token-chip.armed .prompt-token-chip-remove{
+  color:#ff9caf;
+  background:#3a222a;
+}
+
+.prompt-token-input{
+  min-width:7ch;
+  max-width:100%;
+  min-height:35px;
+  border:1px solid #7065cd;
+  border-radius:10px;
+  outline:none;
+  background:#24213b;
+  padding:5px 9px;
+  color:#f0edff;
+  font-size:14px;
+  line-height:1.4;
+  box-shadow:0 0 0 2px rgba(112,101,205,.10);
+}
+
+.prompt-token-input::placeholder{
+  color:#747c8a;
+}
+
+.prompt-token-placeholder{
+  padding:8px 3px;
+  color:#747c8a;
+  font-size:15px;
+  pointer-events:none;
+}
+
+.prompt-block-editor .caret-suggestion-list{
+  margin:0;
+}
+
+.character-editor .prompt-token-editor{
+  min-height:150px!important;
+  max-height:32dvh;
+}
+
+@media(max-width:600px){
+  .prompt-token-editor{padding:11px;gap:6px}
+  .prompt-token-chip-main{max-width:68vw}
+}
