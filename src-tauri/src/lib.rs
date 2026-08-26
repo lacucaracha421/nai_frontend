@@ -1,6 +1,7 @@
 mod commands;
 mod novelai;
 mod tagdb;
+mod translation;
 
 use novelai::NovelAiState;
 use tauri::Manager;
@@ -27,6 +28,11 @@ pub fn run() {
             commands::novelai_quota,
             commands::novelai_generate,
             commands::novelai_upscale,
+            commands::set_translation_api_key,
+            commands::clear_translation_api_key,
+            commands::translation_key_status,
+            commands::test_translation_provider,
+            commands::translate_selection,
             commands::search_local_tags,
             commands::favorite_local_tags
         ])
@@ -51,7 +57,6 @@ pub extern "system" fn Java_local_nai_v5studio_MainActivity_initNdkContext(
     use std::ffi::c_void;
     use std::sync::OnceLock;
 
-    // Keep the Android Context alive for as long as the Rust process lives.
     static CONTEXT_REF: OnceLock<Option<GlobalRef>> = OnceLock::new();
 
     CONTEXT_REF.get_or_init(|| match env.new_global_ref(&context) {
