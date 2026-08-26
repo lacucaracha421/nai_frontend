@@ -31,6 +31,40 @@ const mapCategory = (value: unknown): TagCategory => {
   return "unknown";
 };
 
+function visibleMatchTier(tag: LocalTag, query: string) {
+  const name = norm(tag.display);
+  const tokens = name.split(/[\s()\-:]+/).filter(Boolean);
+  if (name === query) return 0;
+  if (name.startsWith(query)) return 1;
+  if (tokens.some((token) => token === query)) return 2;
+  if (tokens.some((token) => token.startsWith(query))) return 3;
+  // No visible canonical match usually means the native FTS hit an alias.
+  if (!name.includes(query)) return 4;
+  return 5;
+}
+
+function rerankTags(rows: LocalTag[], query: string, categories: TagCategory[] | undefined, limit: number) {
+  const categoryOrder = new Map((categories ?? []).map((category, index) => [category, index]));
+  const fallbackCategoryRank = categories?.length ?? 0;
+  return rows
+    .map((tag, originalIndex) => ({
+      tag,
+      originalIndex,
+      tier: visibleMatchTier(tag, query),
+      categoryRank: categoryOrder.get(tag.category) ?? fallbackCategoryRank,
+      completionLength: Math.max(0, norm(tag.display).length - query.length),
+    }))
+    .sort((a, b) =>
+      a.tier - b.tier
+      || a.categoryRank - b.categoryRank
+      || b.tag.count - a.tag.count
+      || a.completionLength - b.completionLength
+      || a.originalIndex - b.originalIndex
+    )
+    .slice(0, limit)
+    .map(({ tag }) => tag);
+}
+
 let previewPromise: Promise<Array<LocalTag & { aliases: string[] }>> | null = null;
 async function previewTags() {
   if (!previewPromise) {
@@ -71,13 +105,13 @@ async function previewSearch(query: string, categories?: TagCategory[], limit = 
   const q = norm(query);
   if (q.length < 2) return [];
   const allowed = categories?.length ? new Set(categories) : null;
-  return (await previewTags())
+  const rows = (await previewTags())
     .filter((tag) => !allowed || allowed.has(tag.category))
     .map((tag) => ({ tag, score: previewScore(tag, q) }))
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score || b.tag.count - a.tag.count)
-    .slice(0, limit)
     .map(({ tag }) => ({ raw: tag.raw, display: tag.display, category: tag.category, count: tag.count }));
+  return rerankTags(rows, q, categories, limit);
 }
 
 export async function searchLocalTags(query: string, categories?: TagCategory[], limit = 36): Promise<LocalTag[]> {
@@ -85,7 +119,10 @@ export async function searchLocalTags(query: string, categories?: TagCategory[],
   if (q.length < 2) return [];
   if (!isTauriRuntime()) return previewSearch(q, categories, limit);
   try {
-    return await invoke<LocalTag[]>("search_local_tags", { query: q, categories, limit });
+    // Ask native search for a slightly wider candidate pool, then apply context-aware ordering in JS.
+    const nativeLimit = Math.min(96, Math.max(24, limit * 3));
+    const rows = await invoke<LocalTag[]>("search_local_tags", { query: q, categories, limit: nativeLimit });
+    return rerankTags(rows, q, categories, limit);
   } catch (error) {
     console.error("[tags] SQLite search failed; using tiny browser preview index instead.", error);
     return previewSearch(q, categories, limit);
