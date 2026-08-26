@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="70" x2="900" y2="950" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#252c50"/>
+      <stop offset="0.48" stop-color="#171c35"/>
+      <stop offset="1" stop-color="#0e1224"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="180" y1="80" x2="850" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8590c7" stop-opacity="0.68"/>
+      <stop offset="0.48" stop-color="#56608d" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#252a4b" stop-opacity="0.72"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="310" y1="250" x2="790" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b8baff"/>
+      <stop offset="0.5" stop-color="#9ea8de"/>
+      <stop offset="1" stop-color="#6973b2"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="270" y1="300" x2="780" y2="770" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e0e1ff"/>
+      <stop offset="0.22" stop-color="#aaa9ee"/>
+      <stop offset="0.55" stop-color="#756fc3"/>
+      <stop offset="0.78" stop-color="#535b9f"/>
+      <stop offset="1" stop-color="#9aa8df"/>
+    </linearGradient>
+    <linearGradient id="ribbonShade" x1="350" y1="430" x2="720" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34385f" stop-opacity="0.78"/>
+      <stop offset="0.55" stop-color="#55569b" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#0b0f24" stop-opacity="0.16"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0" cy="0" r="1" gradientTransform="translate(661 395) rotate(90) scale(94)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.36" stop-color="#cbd8ff"/>
+      <stop offset="1" stop-color="#6d83c7"/>
+    </radialGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#050711" flood-opacity="0.58"/>
+    </filter>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="transparent"/>
+  <rect x="30" y="30" width="964" height="964" rx="222" fill="url(#bg)" filter="url(#softShadow)"/>
+  <rect x="43" y="43" width="938" height="938" rx="210" fill="none" stroke="url(#edge)" stroke-width="5"/>
+  <path d="M205 145C355 91 671 88 817 127" fill="none" stroke="#939dce" stroke-opacity="0.18" stroke-width="5" stroke-linecap="round"/>
+
+  <path d="M430 238H714C757 238 786 267 786 310V472" fill="none" stroke="url(#frame)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity="0.94"/>
+  <path d="M237 431V704C237 750 267 778 313 778H473" fill="none" stroke="url(#frame)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity="0.86"/>
+
+  <path d="M248 410C248 342 300 296 360 307C410 315 451 365 496 421L598 548C637 596 666 611 699 599C726 589 748 555 773 540C802 523 832 532 848 558C870 594 857 652 823 697C788 743 742 772 692 770C633 767 588 726 541 669L398 492C355 439 328 414 302 417C279 419 262 433 248 451Z" fill="url(#ribbonShade)" opacity="0.72"/>
+  <path d="M249 405C249 340 302 294 361 306C412 316 456 370 501 426L603 551C642 598 671 612 703 600C731 590 753 552 779 538C808 522 836 535 850 560C868 593 855 646 825 688C792 735 747 765 699 768C640 771 593 733 544 674L400 495C355 439 329 415 301 417C278 419 260 433 249 452Z" fill="url(#ribbon)"/>
+  <path d="M269 365C289 320 329 299 366 308C412 318 455 369 499 423" fill="none" stroke="#f2f2ff" stroke-opacity="0.42" stroke-width="8" stroke-linecap="round"/>
+  <path d="M545 674C593 732 640 769 699 767C747 765 791 736 825 689" fill="none" stroke="#b4c0ed" stroke-opacity="0.25" stroke-width="7" stroke-linecap="round"/>
+
+  <g filter="url(#glow)">
+    <path d="M656 325C661 361 672 382 704 394C674 403 661 423 655 458C650 423 636 403 606 393C636 382 650 361 656 325Z" fill="url(#shine)"/>
+  </g>
+</svg>
