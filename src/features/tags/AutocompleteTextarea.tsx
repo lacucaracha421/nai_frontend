@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagIndex";
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
+import { usePromptHistoryStore, type PromptSnapshot } from "../../stores/promptHistoryStore";
+import { useTranslationStore } from "../../stores/translationStore";
 import "./promptBlocks.css";
 
 type Props = {
@@ -14,6 +16,7 @@ type Props = {
   rows?: number;
   onSelectTag?: (tag: LocalTag) => void;
   tagPrefix?: string;
+  historyKey?: string;
 };
 
 type PopupPosition = {
@@ -22,6 +25,8 @@ type PopupPosition = {
   width: number;
   maxHeight: number;
 };
+
+type SelectionRange = { start: number; end: number };
 
 function splitPrompt(value: string) {
   return value
@@ -101,21 +106,55 @@ export function AutocompleteTextarea({
   rows = 12,
   onSelectTag,
   tagPrefix,
+  historyKey,
 }: Props) {
   const initial = splitPrompt(value);
   const inputRef = useRef<HTMLInputElement>(null);
   const removeArmTimerRef = useRef<number | null>(null);
+  const lastTextEditAtRef = useRef(0);
+  const selectionRef = useRef<SelectionRange>({ start: 0, end: 0 });
+  const activeIndexRef = useRef(initial.length);
+  const itemsRef = useRef<string[]>([...initial, ""]);
   const [items, setItems] = useState<string[]>(() => [...initial, ""]);
-  const [activeIndex, setActiveIndex] = useState(initial.length);
+  const [activeIndex, setActiveIndexState] = useState(initial.length);
   const [armedIndex, setArmedIndex] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [popup, setPopup] = useState<PopupPosition | null>(null);
   const [focused, setFocused] = useState(false);
+  const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 });
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const favorites = useTagStore((state) => state.favorites);
   const toggle = useTagStore((state) => state.toggleFavorite);
   const characterEntries = useCharacterLibraryStore((state) => state.entries);
   const toggleCharacter = useCharacterLibraryStore((state) => state.toggleTag);
+  const checkpoint = usePromptHistoryStore((state) => state.checkpoint);
+  const clearHistoryFuture = usePromptHistoryStore((state) => state.clearFuture);
+  const undoHistory = usePromptHistoryStore((state) => state.undo);
+  const redoHistory = usePromptHistoryStore((state) => state.redo);
+  const canUndo = usePromptHistoryStore((state) => !!historyKey && (state.histories[historyKey]?.past.length ?? 0) > 0);
+  const canRedo = usePromptHistoryStore((state) => !!historyKey && (state.histories[historyKey]?.future.length ?? 0) > 0);
+  const translateSelected = useTranslationStore((state) => state.translate);
+  const translating = useTranslationStore((state) => state.translating);
   const activeText = items[activeIndex] ?? "";
+
+  const setActiveIndex = (index: number) => {
+    activeIndexRef.current = index;
+    setActiveIndexState(index);
+  };
+
+  const setItemsSynced = (next: string[]) => {
+    itemsRef.current = next;
+    setItems(next);
+  };
+
+  const syncSelection = (input: HTMLInputElement) => {
+    const next = {
+      start: input.selectionStart ?? 0,
+      end: input.selectionEnd ?? input.selectionStart ?? 0,
+    };
+    selectionRef.current = next;
+    setSelection(next);
+  };
 
   const clearRemovalArm = () => {
     if (removeArmTimerRef.current !== null) {
@@ -136,27 +175,130 @@ export function AutocompleteTextarea({
   };
 
   const emitItems = (next: string[]) => {
-    setItems(next);
+    setItemsSynced(next);
     onChange(serializeItems(next));
   };
 
-  const focusActive = (selectAll = false) => {
+  const currentSnapshot = (): PromptSnapshot => {
+    const input = inputRef.current;
+    return {
+      value: serializeItems(itemsRef.current),
+      selectionStart: input?.selectionStart ?? selectionRef.current.start,
+      selectionEnd: input?.selectionEnd ?? selectionRef.current.end,
+      activeIndex: activeIndexRef.current,
+    };
+  };
+
+  const checkpointAtomic = () => {
+    if (!historyKey) return;
+    checkpoint(historyKey, currentSnapshot());
+    lastTextEditAtRef.current = 0;
+  };
+
+  const focusActive = (selectAll = false, range?: SelectionRange) => {
     requestAnimationFrame(() => {
       const input = inputRef.current;
       if (!input) return;
       input.focus();
       const end = input.value.length;
-      input.setSelectionRange(selectAll ? 0 : end, end);
+      const start = range ? Math.min(range.start, end) : selectAll ? 0 : end;
+      const finish = range ? Math.min(range.end, end) : end;
+      input.setSelectionRange(start, finish);
+      syncSelection(input);
     });
   };
 
+  const restoreSnapshot = (snapshot: PromptSnapshot) => {
+    lastTextEditAtRef.current = 0;
+    const next = splitPrompt(snapshot.value);
+    next.push("");
+    const index = Math.max(0, Math.min(snapshot.activeIndex ?? next.length - 1, next.length - 1));
+    setItemsSynced(next);
+    setActiveIndex(index);
+    onChange(snapshot.value);
+    setFocused(true);
+    setSuggestions([]);
+    setPopup(null);
+    clearRemovalArm();
+    setTranslationError(null);
+    focusActive(false, {
+      start: snapshot.selectionStart,
+      end: snapshot.selectionEnd,
+    });
+  };
+
+  const runUndo = () => {
+    if (!historyKey) return;
+    const target = undoHistory(historyKey, currentSnapshot());
+    if (target) restoreSnapshot(target);
+  };
+
+  const runRedo = () => {
+    if (!historyKey) return;
+    const target = redoHistory(historyKey, currentSnapshot());
+    if (target) restoreSnapshot(target);
+  };
+
+  const runTranslate = async () => {
+    if (!historyKey || translating) return;
+    const input = inputRef.current;
+    if (!input) return;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? start;
+    if (end <= start) return;
+
+    const sourceIndex = activeIndexRef.current;
+    const sourceText = input.value;
+    const sourceValue = serializeItems(itemsRef.current);
+    const selectedText = sourceText.slice(start, end);
+    const leading = selectedText.match(/^\s*/)?.[0] ?? "";
+    const trailing = selectedText.match(/\s*$/)?.[0] ?? "";
+    const innerEnd = selectedText.length - trailing.length;
+    const inner = selectedText.slice(leading.length, innerEnd);
+    if (!inner.trim()) {
+      setTranslationError("번역할 텍스트를 선택하시와요.");
+      return;
+    }
+
+    setTranslationError(null);
+    try {
+      const translated = await translateSelected(inner);
+      if (activeIndexRef.current !== sourceIndex || inputRef.current?.value !== sourceText) {
+        setTranslationError("번역 중 프롬프트가 변경되어 결과를 적용하지 않았사와요.");
+        return;
+      }
+
+      checkpoint(historyKey, {
+        value: sourceValue,
+        selectionStart: start,
+        selectionEnd: end,
+        activeIndex: sourceIndex,
+      });
+      lastTextEditAtRef.current = 0;
+
+      const replacement = `${leading}${translated}${trailing}`;
+      const nextText = `${sourceText.slice(0, start)}${replacement}${sourceText.slice(end)}`;
+      const next = [...itemsRef.current];
+      while (next.length <= sourceIndex) next.push("");
+      next[sourceIndex] = nextText;
+      emitItems(next);
+      setActiveIndex(sourceIndex);
+      setSuggestions([]);
+      setPopup(null);
+      clearRemovalArm();
+      focusActive(false, { start, end: start + replacement.length });
+    } catch (error) {
+      setTranslationError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const ensureEndSlot = () => {
-    let next = [...items];
+    let next = [...itemsRef.current];
     let index = next.length - 1;
     if (index < 0 || next[index].trim()) {
       next.push("");
       index = next.length - 1;
-      setItems(next);
+      setItemsSynced(next);
     }
     setActiveIndex(index);
     setFocused(true);
@@ -166,34 +308,36 @@ export function AutocompleteTextarea({
   };
 
   const activateChip = (index: number) => {
-    if (!items[index]?.trim()) return;
+    if (!itemsRef.current[index]?.trim()) return;
     setActiveIndex(index);
     setFocused(true);
     clearRemovalArm();
     setSuggestions([]);
+    setTranslationError(null);
     focusActive();
   };
 
   const previousNonEmpty = (before: number) => {
-    for (let index = Math.min(before - 1, items.length - 1); index >= 0; index -= 1) {
-      if (items[index]?.trim()) return index;
+    for (let index = Math.min(before - 1, itemsRef.current.length - 1); index >= 0; index -= 1) {
+      if (itemsRef.current[index]?.trim()) return index;
     }
     return -1;
   };
 
   const nextNonEmpty = (after: number) => {
-    for (let index = Math.max(0, after + 1); index < items.length; index += 1) {
-      if (items[index]?.trim()) return index;
+    for (let index = Math.max(0, after + 1); index < itemsRef.current.length; index += 1) {
+      if (itemsRef.current[index]?.trim()) return index;
     }
     return -1;
   };
 
   const deleteItem = (index: number) => {
-    if (index < 0 || index >= items.length) return;
-    const next = [...items];
+    if (index < 0 || index >= itemsRef.current.length) return;
+    checkpointAtomic();
+    const next = [...itemsRef.current];
     next.splice(index, 1);
-    let nextActive = activeIndex;
-    if (index < activeIndex) nextActive -= 1;
+    let nextActive = activeIndexRef.current;
+    if (index < nextActive) nextActive -= 1;
     if (next.length === 0) {
       next.push("");
       nextActive = 0;
@@ -209,14 +353,14 @@ export function AutocompleteTextarea({
   };
 
   const commitAndAdvance = () => {
-    const next = [...items];
-    const current = (next[activeIndex] ?? "").trim();
+    const next = [...itemsRef.current];
+    const current = (next[activeIndexRef.current] ?? "").trim();
     if (!current) {
       clearRemovalArm();
       return;
     }
-    next[activeIndex] = current;
-    const nextIndex = activeIndex + 1;
+    next[activeIndexRef.current] = current;
+    const nextIndex = activeIndexRef.current + 1;
     if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
     emitItems(next);
     setActiveIndex(nextIndex);
@@ -225,23 +369,44 @@ export function AutocompleteTextarea({
     focusActive();
   };
 
-  const updateActiveText = (nextText: string) => {
+  const updateActiveText = (
+    nextText: string,
+    nextSelection: SelectionRange,
+    inputType: string,
+  ) => {
     clearRemovalArm();
+    if (historyKey) {
+      const mergeable = [
+        "insertText",
+        "insertCompositionText",
+        "deleteContentBackward",
+        "deleteContentForward",
+      ].includes(inputType);
+      const now = Date.now();
+      if (!mergeable || now - lastTextEditAtRef.current > 700) {
+        checkpoint(historyKey, currentSnapshot());
+      } else {
+        clearHistoryFuture(historyKey);
+      }
+      lastTextEditAtRef.current = mergeable ? now : 0;
+    }
 
     if (!/[,\n]/.test(nextText)) {
-      const next = [...items];
-      while (next.length <= activeIndex) next.push("");
-      next[activeIndex] = nextText;
+      const next = [...itemsRef.current];
+      while (next.length <= activeIndexRef.current) next.push("");
+      next[activeIndexRef.current] = nextText;
       emitItems(next);
+      selectionRef.current = nextSelection;
+      setSelection(nextSelection);
       return;
     }
 
     const pieces = nextText.split(/[,\n]/);
     const tail = pieces.pop() ?? "";
     const committed = pieces.map((piece) => piece.trim()).filter(Boolean);
-    const next = [...items];
-    next.splice(activeIndex, 1, ...committed, tail);
-    const nextIndex = activeIndex + committed.length;
+    const next = [...itemsRef.current];
+    next.splice(activeIndexRef.current, 1, ...committed, tail);
+    const nextIndex = activeIndexRef.current + committed.length;
     emitItems(next);
     setActiveIndex(nextIndex);
     setSuggestions([]);
@@ -250,15 +415,22 @@ export function AutocompleteTextarea({
 
   useEffect(() => {
     const external = splitPrompt(value).join(", ");
-    const local = serializeItems(items);
+    const local = serializeItems(itemsRef.current);
     if (external === local) return;
     const next = splitPrompt(value);
     next.push("");
-    setItems(next);
-    setActiveIndex((current) => Math.min(current, next.length - 1));
+    setItemsSynced(next);
+    setActiveIndex(Math.min(activeIndexRef.current, next.length - 1));
     setSuggestions([]);
     setArmedIndex(null);
   }, [value]);
+
+  useEffect(() => {
+    lastTextEditAtRef.current = 0;
+    selectionRef.current = { start: 0, end: 0 };
+    setSelection({ start: 0, end: 0 });
+    setTranslationError(null);
+  }, [historyKey]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -324,11 +496,12 @@ export function AutocompleteTextarea({
   }, [suggestions.length, focused, activeIndex]);
 
   const choose = (tag: LocalTag) => {
+    checkpointAtomic();
     const inserted = `${tagPrefix ?? ""}${tag.display}`;
-    const next = [...items];
-    while (next.length <= activeIndex) next.push("");
-    next[activeIndex] = inserted;
-    const nextIndex = activeIndex + 1;
+    const next = [...itemsRef.current];
+    while (next.length <= activeIndexRef.current) next.push("");
+    next[activeIndexRef.current] = inserted;
+    const nextIndex = activeIndexRef.current + 1;
     if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
     emitItems(next);
     setActiveIndex(nextIndex);
@@ -374,9 +547,39 @@ export function AutocompleteTextarea({
   ) : null;
 
   const minHeight = Math.max(118, rows * 23 + 22);
+  const hasSelection = selection.end > selection.start;
 
   return (
     <div className="autocomplete-wrap prompt-block-editor">
+      {historyKey && (
+        <div className="prompt-history-controls" aria-label="Prompt history and translation">
+          <button
+            type="button"
+            disabled={!canUndo}
+            title="되돌리기 (Ctrl+Z)"
+            aria-label="되돌리기"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={runUndo}
+          >↶</button>
+          <button
+            type="button"
+            disabled={!canRedo}
+            title="다시 실행 (Ctrl+Shift+Z / Ctrl+Y)"
+            aria-label="다시 실행"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={runRedo}
+          >↷</button>
+          <button
+            type="button"
+            className="prompt-translate-button"
+            disabled={translating || !hasSelection}
+            title={!hasSelection ? "활성 태그에서 번역할 텍스트를 선택하시와요." : "선택 영역을 한국어에서 영어로 번역"}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => void runTranslate()}
+          >{translating ? "번역 중…" : "번역"}</button>
+        </div>
+      )}
+      {translationError && <div className="prompt-translation-error">{translationError}</div>}
       <div
         className={`prompt-token-editor ${focused ? "focused" : ""}`}
         style={{ minHeight }}
@@ -404,15 +607,41 @@ export function AutocompleteTextarea({
                 spellCheck={false}
                 data-prompt-token-order={tokenOrder}
                 style={{ width: `${Math.max(7, Math.min(34, item.length + 2))}ch` }}
-                onFocus={() => setFocused(true)}
+                onFocus={(event) => {
+                  setFocused(true);
+                  syncSelection(event.currentTarget);
+                }}
                 onBlur={() => {
                   setFocused(false);
                   setSuggestions([]);
                   setPopup(null);
                   clearRemovalArm();
                 }}
-                onChange={(event) => updateActiveText(event.target.value)}
+                onSelect={(event) => syncSelection(event.currentTarget)}
+                onClick={(event) => syncSelection(event.currentTarget)}
+                onKeyUp={(event) => syncSelection(event.currentTarget)}
+                onChange={(event) => {
+                  const nextSelection = {
+                    start: event.currentTarget.selectionStart ?? 0,
+                    end: event.currentTarget.selectionEnd ?? event.currentTarget.selectionStart ?? 0,
+                  };
+                  const inputType = (event.nativeEvent as InputEvent).inputType ?? "";
+                  updateActiveText(event.target.value, nextSelection, inputType);
+                }}
                 onKeyDown={(event) => {
+                  const modifier = event.ctrlKey || event.metaKey;
+                  const key = event.key.toLowerCase();
+                  if (historyKey && modifier && key === "z") {
+                    event.preventDefault();
+                    if (event.shiftKey) runRedo();
+                    else runUndo();
+                    return;
+                  }
+                  if (historyKey && modifier && key === "y") {
+                    event.preventDefault();
+                    runRedo();
+                    return;
+                  }
                   if (event.key === "," || event.key === "Enter") {
                     event.preventDefault();
                     commitAndAdvance();
@@ -430,7 +659,7 @@ export function AutocompleteTextarea({
                       clearRemovalArm();
                       return;
                     }
-                    const previous = previousNonEmpty(activeIndex);
+                    const previous = previousNonEmpty(activeIndexRef.current);
                     if (previous < 0) return;
                     event.preventDefault();
                     if (armedIndex === previous) deleteItem(previous);
@@ -444,7 +673,7 @@ export function AutocompleteTextarea({
                       clearRemovalArm();
                       return;
                     }
-                    const next = nextNonEmpty(activeIndex);
+                    const next = nextNonEmpty(activeIndexRef.current);
                     if (next < 0) return;
                     event.preventDefault();
                     if (armedIndex === next) deleteItem(next);
