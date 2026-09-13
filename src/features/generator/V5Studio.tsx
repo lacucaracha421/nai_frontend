@@ -7,6 +7,7 @@ import { PromptSheet } from "../prompt/PromptSheet";
 import { CharacterSheet } from "../prompt/CharacterSheet";
 import { CharacterStageOverlay } from "../prompt/CharacterStageOverlay";
 import { QuickCopySheet } from "../tags/QuickCopySheet";
+import { PrombotSheet } from "../tags/PrombotSheet";
 import { SettingsSheet } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
 import { saveNovelAiImage } from "../../adapters/novelai/client";
@@ -85,6 +86,7 @@ export function V5Studio() {
   const [sheet, setSheet] = useState<PromptSectionKey | null>(null);
   const [characters, setCharacters] = useState(false);
   const [quickCopy, setQuickCopy] = useState<PromptSectionKey | null>(null);
+  const [prombot, setPrombot] = useState<PromptSectionKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewer, setViewer] = useState(false);
   const [placementId, setPlacementId] = useState<string | null>(null);
@@ -328,7 +330,7 @@ export function V5Studio() {
       {notice && <div className="success-toast"><span>{notice}</span></div>}
       <div className="generate-dock"><button disabled={busy} onClick={() => void generate()}>{status === "generating" ? "GENERATING…" : status === "upscaling" ? "UPSCALING…" : "GENERATE"}</button></div>
 
-      {sheet && <PromptSheet section={sheet} onClose={() => setSheet(null)} onDictionary={(destination) => setQuickCopy(destination)} />}
+      {sheet && <PromptSheet section={sheet} onClose={() => setSheet(null)} onDictionary={(destination) => setQuickCopy(destination)} onPrombot={(destination) => setPrombot(destination)} />}
       {characters && (
         <CharacterSheet
           onClose={() => setCharacters(false)}
@@ -339,6 +341,7 @@ export function V5Studio() {
         />
       )}
       {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
+      {prombot && <PrombotSheet destination={prombot} onClose={() => setPrombot(null)} onInsert={(value) => appendPrompt(prombot, value)} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       {viewer && <ImageViewer images={images} index={active} onIndex={setActive} onClose={() => setViewer(false)} />}
     </main>

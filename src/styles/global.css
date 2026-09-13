@@ -274,3 +274,39 @@
     padding-right:9px!important;
   }
 }
+
+/* v0.4.8 prompt editor extensions */
+.prompt-sheet .editor-toolbar-top{
+  grid-template-columns:78px 78px minmax(0,1fr) minmax(0,1fr) 1.2fr;
+}
+.prombot-host-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  flex:0 0 auto;
+  overflow:visible!important;
+}
+.prombot-host-actions>button:not(.icon-button){
+  height:36px;
+  padding:0 12px;
+  border:1px solid #393f4b;
+  border-radius:10px;
+  background:#1a1d24;
+  color:#e4e7ed;
+}
+.prombot-message{
+  flex:0 0 auto;
+  padding:7px 14px;
+  border-bottom:1px solid #282d36;
+  color:#aeb5c2;
+  font-size:11px;
+}
+@media(max-width:600px){
+  .prompt-sheet .editor-toolbar-top{
+    grid-template-columns:72px 72px minmax(0,1fr) minmax(0,1fr);
+  }
+  .prompt-sheet .editor-toolbar-top .toolbar-generate{
+    grid-column:1/-1;
+    height:48px;
+  }
+}

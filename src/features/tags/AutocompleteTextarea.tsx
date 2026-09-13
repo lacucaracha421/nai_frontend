@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "./localTagIndex";
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { usePromptHistoryStore, type PromptSnapshot } from "../../stores/promptHistoryStore";
 import { useTranslationStore } from "../../stores/translationStore";
+import {
+  createPromptToken,
+  insertionForSuggestion,
+  movePromptToken,
+  reconcilePromptTokens,
+  selectionOrWhole,
+  serializePromptTokens,
+  tokensFromPrompt,
+  type PromptToken,
+} from "./promptEditorModel";
 import "./promptBlocks.css";
 
 type Props = {
@@ -27,20 +37,6 @@ type PopupPosition = {
 };
 
 type SelectionRange = { start: number; end: number };
-
-function splitPrompt(value: string) {
-  return value
-    .split(/[,\n]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-function serializeItems(items: string[]) {
-  return items
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .join(", ");
-}
 
 function stripArtistPrefix(query: string) {
   const trimmed = query.trim();
@@ -108,21 +104,38 @@ export function AutocompleteTextarea({
   tagPrefix,
   historyKey,
 }: Props) {
-  const initial = splitPrompt(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
   const removeArmTimerRef = useRef<number | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
   const lastTextEditAtRef = useRef(0);
   const selectionRef = useRef<SelectionRange>({ start: 0, end: 0 });
-  const activeIndexRef = useRef(initial.length);
-  const itemsRef = useRef<string[]>([...initial, ""]);
-  const [items, setItems] = useState<string[]>(() => [...initial, ""]);
-  const [activeIndex, setActiveIndexState] = useState(initial.length);
+  const [items, setItems] = useState<PromptToken[]>(() => [
+    ...tokensFromPrompt(value),
+    createPromptToken(),
+  ]);
+  const itemsRef = useRef<PromptToken[]>(items);
+  const activeIndexRef = useRef(items.length - 1);
+  const [activeIndex, setActiveIndexState] = useState(items.length - 1);
   const [armedIndex, setArmedIndex] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [popup, setPopup] = useState<PopupPosition | null>(null);
   const [focused, setFocused] = useState(false);
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 });
   const [translationError, setTranslationError] = useState<string | null>(null);
+  const [inputWidth, setInputWidth] = useState(78);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const pressRef = useRef<{
+    id: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    target: HTMLButtonElement;
+  } | null>(null);
+  const draggingIdRef = useRef<string | null>(null);
+  const dragOverIdRef = useRef<string | null>(null);
+  const suppressChipClickRef = useRef(false);
   const favorites = useTagStore((state) => state.favorites);
   const toggle = useTagStore((state) => state.toggleFavorite);
   const characterEntries = useCharacterLibraryStore((state) => state.entries);
@@ -135,14 +148,14 @@ export function AutocompleteTextarea({
   const canRedo = usePromptHistoryStore((state) => !!historyKey && (state.histories[historyKey]?.future.length ?? 0) > 0);
   const translateSelected = useTranslationStore((state) => state.translate);
   const translating = useTranslationStore((state) => state.translating);
-  const activeText = items[activeIndex] ?? "";
+  const activeText = items[activeIndex]?.text ?? "";
 
   const setActiveIndex = (index: number) => {
     activeIndexRef.current = index;
     setActiveIndexState(index);
   };
 
-  const setItemsSynced = (next: string[]) => {
+  const setItemsSynced = (next: PromptToken[]) => {
     itemsRef.current = next;
     setItems(next);
   };
@@ -165,7 +178,7 @@ export function AutocompleteTextarea({
   };
 
   const armRemoval = (index: number) => {
-    if (index < 0 || !items[index]?.trim()) return;
+    if (index < 0 || !items[index]?.text.trim()) return;
     if (removeArmTimerRef.current !== null) window.clearTimeout(removeArmTimerRef.current);
     setArmedIndex(index);
     removeArmTimerRef.current = window.setTimeout(() => {
@@ -174,15 +187,15 @@ export function AutocompleteTextarea({
     }, 1400);
   };
 
-  const emitItems = (next: string[]) => {
+  const emitItems = (next: PromptToken[]) => {
     setItemsSynced(next);
-    onChange(serializeItems(next));
+    onChange(serializePromptTokens(next));
   };
 
   const currentSnapshot = (): PromptSnapshot => {
     const input = inputRef.current;
     return {
-      value: serializeItems(itemsRef.current),
+      value: serializePromptTokens(itemsRef.current),
       selectionStart: input?.selectionStart ?? selectionRef.current.start,
       selectionEnd: input?.selectionEnd ?? selectionRef.current.end,
       activeIndex: activeIndexRef.current,
@@ -210,8 +223,7 @@ export function AutocompleteTextarea({
 
   const restoreSnapshot = (snapshot: PromptSnapshot) => {
     lastTextEditAtRef.current = 0;
-    const next = splitPrompt(snapshot.value);
-    next.push("");
+    const next = [...tokensFromPrompt(snapshot.value), createPromptToken()];
     const index = Math.max(0, Math.min(snapshot.activeIndex ?? next.length - 1, next.length - 1));
     setItemsSynced(next);
     setActiveIndex(index);
@@ -243,13 +255,16 @@ export function AutocompleteTextarea({
     if (!historyKey || translating) return;
     const input = inputRef.current;
     if (!input) return;
-    const start = input.selectionStart ?? 0;
-    const end = input.selectionEnd ?? start;
-    if (end <= start) return;
-
+    const rawStart = input.selectionStart ?? 0;
+    const rawEnd = input.selectionEnd ?? rawStart;
     const sourceIndex = activeIndexRef.current;
     const sourceText = input.value;
-    const sourceValue = serializeItems(itemsRef.current);
+    const { start, end } = selectionOrWhole(rawStart, rawEnd, sourceText.length);
+    if (end <= start) {
+      setTranslationError("번역할 블록을 선택하시와요.");
+      return;
+    }
+    const sourceValue = serializePromptTokens(itemsRef.current);
     const selectedText = sourceText.slice(start, end);
     const leading = selectedText.match(/^\s*/)?.[0] ?? "";
     const trailing = selectedText.match(/\s*$/)?.[0] ?? "";
@@ -279,8 +294,8 @@ export function AutocompleteTextarea({
       const replacement = `${leading}${translated}${trailing}`;
       const nextText = `${sourceText.slice(0, start)}${replacement}${sourceText.slice(end)}`;
       const next = [...itemsRef.current];
-      while (next.length <= sourceIndex) next.push("");
-      next[sourceIndex] = nextText;
+      while (next.length <= sourceIndex) next.push(createPromptToken());
+      next[sourceIndex] = { ...next[sourceIndex], text: nextText };
       emitItems(next);
       setActiveIndex(sourceIndex);
       setSuggestions([]);
@@ -295,8 +310,8 @@ export function AutocompleteTextarea({
   const ensureEndSlot = () => {
     let next = [...itemsRef.current];
     let index = next.length - 1;
-    if (index < 0 || next[index].trim()) {
-      next.push("");
+    if (index < 0 || next[index].text.trim()) {
+      next.push(createPromptToken());
       index = next.length - 1;
       setItemsSynced(next);
     }
@@ -308,7 +323,7 @@ export function AutocompleteTextarea({
   };
 
   const activateChip = (index: number) => {
-    if (!itemsRef.current[index]?.trim()) return;
+    if (!itemsRef.current[index]?.text.trim()) return;
     setActiveIndex(index);
     setFocused(true);
     clearRemovalArm();
@@ -319,14 +334,14 @@ export function AutocompleteTextarea({
 
   const previousNonEmpty = (before: number) => {
     for (let index = Math.min(before - 1, itemsRef.current.length - 1); index >= 0; index -= 1) {
-      if (itemsRef.current[index]?.trim()) return index;
+      if (itemsRef.current[index]?.text.trim()) return index;
     }
     return -1;
   };
 
   const nextNonEmpty = (after: number) => {
     for (let index = Math.max(0, after + 1); index < itemsRef.current.length; index += 1) {
-      if (itemsRef.current[index]?.trim()) return index;
+      if (itemsRef.current[index]?.text.trim()) return index;
     }
     return -1;
   };
@@ -339,10 +354,10 @@ export function AutocompleteTextarea({
     let nextActive = activeIndexRef.current;
     if (index < nextActive) nextActive -= 1;
     if (next.length === 0) {
-      next.push("");
+      next.push(createPromptToken());
       nextActive = 0;
     } else if (nextActive >= next.length) {
-      next.push("");
+      next.push(createPromptToken());
       nextActive = next.length - 1;
     }
     emitItems(next);
@@ -354,14 +369,17 @@ export function AutocompleteTextarea({
 
   const commitAndAdvance = () => {
     const next = [...itemsRef.current];
-    const current = (next[activeIndexRef.current] ?? "").trim();
-    if (!current) {
+    const currentToken = next[activeIndexRef.current];
+    const current = currentToken?.text.trim() ?? "";
+    if (!current || !currentToken) {
       clearRemovalArm();
       return;
     }
-    next[activeIndexRef.current] = current;
+    next[activeIndexRef.current] = { ...currentToken, text: current };
     const nextIndex = activeIndexRef.current + 1;
-    if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
+    if (nextIndex >= next.length || next[nextIndex].text.trim()) {
+      next.splice(nextIndex, 0, createPromptToken());
+    }
     emitItems(next);
     setActiveIndex(nextIndex);
     clearRemovalArm();
@@ -393,8 +411,8 @@ export function AutocompleteTextarea({
 
     if (!/[,\n]/.test(nextText)) {
       const next = [...itemsRef.current];
-      while (next.length <= activeIndexRef.current) next.push("");
-      next[activeIndexRef.current] = nextText;
+      while (next.length <= activeIndexRef.current) next.push(createPromptToken());
+      next[activeIndexRef.current] = { ...next[activeIndexRef.current], text: nextText };
       emitItems(next);
       selectionRef.current = nextSelection;
       setSelection(nextSelection);
@@ -405,7 +423,11 @@ export function AutocompleteTextarea({
     const tail = pieces.pop() ?? "";
     const committed = pieces.map((piece) => piece.trim()).filter(Boolean);
     const next = [...itemsRef.current];
-    next.splice(activeIndexRef.current, 1, ...committed, tail);
+    const replacement = [
+      ...committed.map((text) => createPromptToken(text)),
+      createPromptToken(tail),
+    ];
+    next.splice(activeIndexRef.current, 1, ...replacement);
     const nextIndex = activeIndexRef.current + committed.length;
     emitItems(next);
     setActiveIndex(nextIndex);
@@ -414,11 +436,12 @@ export function AutocompleteTextarea({
   };
 
   useEffect(() => {
-    const external = splitPrompt(value).join(", ");
-    const local = serializeItems(itemsRef.current);
+    const external = serializePromptTokens(tokensFromPrompt(value));
+    const local = serializePromptTokens(itemsRef.current);
     if (external === local) return;
-    const next = splitPrompt(value);
-    next.push("");
+    const stable = reconcilePromptTokens(itemsRef.current, value);
+    const currentBlank = itemsRef.current.find((token) => !token.text.trim());
+    const next = [...stable, currentBlank ?? createPromptToken()];
     setItemsSynced(next);
     setActiveIndex(Math.min(activeIndexRef.current, next.length - 1));
     setSuggestions([]);
@@ -438,9 +461,17 @@ export function AutocompleteTextarea({
     focusActive();
   }, [autoFocus]);
 
+  useLayoutEffect(() => {
+    const measure = measureRef.current;
+    if (!measure) return;
+    const measured = Math.ceil(measure.getBoundingClientRect().width) + 30;
+    setInputWidth(Math.max(78, measured));
+  }, [activeText, placeholder, focused]);
+
   useEffect(() => {
     return () => {
       if (removeArmTimerRef.current !== null) window.clearTimeout(removeArmTimerRef.current);
+      if (longPressTimerRef.current !== null) window.clearTimeout(longPressTimerRef.current);
     };
   }, []);
 
@@ -495,14 +526,116 @@ export function AutocompleteTextarea({
     };
   }, [suggestions.length, focused, activeIndex]);
 
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const resetDrag = () => {
+    draggingIdRef.current = null;
+    dragOverIdRef.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+
+  const beginChipPress = (event: React.PointerEvent<HTMLButtonElement>, id: string) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    clearLongPress();
+    pressRef.current = {
+      id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      target: event.currentTarget,
+    };
+    longPressTimerRef.current = window.setTimeout(() => {
+      const press = pressRef.current;
+      if (!press || press.id !== id) return;
+      draggingIdRef.current = id;
+      dragOverIdRef.current = id;
+      setDraggingId(id);
+      setDragOverId(id);
+      suppressChipClickRef.current = true;
+      try {
+        press.target.setPointerCapture(press.pointerId);
+      } catch {
+        // Pointer capture is best-effort on Android WebView.
+      }
+    }, 360);
+  };
+
+  const moveChipPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const press = pressRef.current;
+    if (!press) return;
+    if (!draggingIdRef.current) {
+      if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) > 10) {
+        clearLongPress();
+        pressRef.current = null;
+      }
+      return;
+    }
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    const host = target?.closest<HTMLElement>("[data-prompt-token-id]");
+    const id = host?.dataset.promptTokenId;
+    if (!id || !itemsRef.current.some((token) => token.id === id)) return;
+    dragOverIdRef.current = id;
+    setDragOverId(id);
+  };
+
+  const finishChipPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const press = pressRef.current;
+    clearLongPress();
+    const fromId = draggingIdRef.current;
+    const toId = dragOverIdRef.current;
+    if (fromId) {
+      event.preventDefault();
+      const activeId = itemsRef.current[activeIndexRef.current]?.id;
+      if (toId && fromId !== toId) {
+        checkpointAtomic();
+        const ordered = movePromptToken(itemsRef.current, fromId, toId);
+        const blank = ordered.find((token) => !token.text.trim()) ?? createPromptToken();
+        const next = [...ordered.filter((token) => token.text.trim()), blank];
+        emitItems(next);
+        if (activeId) {
+          const nextActive = next.findIndex((token) => token.id === activeId);
+          if (nextActive >= 0) setActiveIndex(nextActive);
+        }
+      }
+      if (focused) focusActive();
+      try {
+        if (press?.target.hasPointerCapture(event.pointerId)) {
+          press.target.releasePointerCapture(event.pointerId);
+        }
+      } catch {
+        // Ignore capture cleanup failures.
+      }
+    }
+    pressRef.current = null;
+    resetDrag();
+    window.setTimeout(() => { suppressChipClickRef.current = false; }, 0);
+  };
+
+  const cancelChipPress = () => {
+    clearLongPress();
+    pressRef.current = null;
+    suppressChipClickRef.current = false;
+    resetDrag();
+  };
+
   const choose = (tag: LocalTag) => {
     checkpointAtomic();
-    const inserted = `${tagPrefix ?? ""}${tag.display}`;
+    const inserted = insertionForSuggestion(tag.display, tag.category, tagPrefix);
     const next = [...itemsRef.current];
-    while (next.length <= activeIndexRef.current) next.push("");
-    next[activeIndexRef.current] = inserted;
+    while (next.length <= activeIndexRef.current) next.push(createPromptToken());
+    next[activeIndexRef.current] = { ...next[activeIndexRef.current], text: inserted };
     const nextIndex = activeIndexRef.current + 1;
-    if (nextIndex >= next.length || next[nextIndex].trim()) next.splice(nextIndex, 0, "");
+    if (nextIndex >= next.length || next[nextIndex].text.trim()) {
+      next.splice(nextIndex, 0, createPromptToken());
+    }
     emitItems(next);
     setActiveIndex(nextIndex);
     setSuggestions([]);
@@ -548,9 +681,13 @@ export function AutocompleteTextarea({
 
   const minHeight = Math.max(118, rows * 23 + 22);
   const hasSelection = selection.end > selection.start;
+  const hasActiveText = focused && Boolean(activeText.trim());
 
   return (
     <div className="autocomplete-wrap prompt-block-editor">
+      <span ref={measureRef} className="prompt-token-measure" aria-hidden="true">
+        {activeText || (items.every((token) => !token.text.trim()) ? placeholder : "") || " "}
+      </span>
       {historyKey && (
         <div className="prompt-history-controls" aria-label="Prompt history and translation">
           <button
@@ -572,8 +709,8 @@ export function AutocompleteTextarea({
           <button
             type="button"
             className="prompt-translate-button"
-            disabled={translating || !hasSelection}
-            title={!hasSelection ? "활성 태그에서 번역할 텍스트를 선택하시와요." : "선택 영역을 한국어에서 영어로 번역"}
+            disabled={translating || (!hasSelection && !hasActiveText)}
+            title={hasSelection ? "선택 영역을 한국어에서 영어로 번역" : "활성 블록 전체를 한국어에서 영어로 번역"}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => void runTranslate()}
           >{translating ? "번역 중…" : "번역"}</button>
@@ -592,21 +729,22 @@ export function AutocompleteTextarea({
         }}
       >
         {items.map((item, index) => {
-          const text = item.trim();
+          const text = item.text.trim();
           const isActive = focused && index === activeIndex;
           if (isActive) {
-            const tokenOrder = items.slice(0, index).filter((candidate) => candidate.trim()).length;
+            const tokenOrder = items.slice(0, index).filter((candidate) => candidate.text.trim()).length;
             return (
               <input
-                key={`active-${index}`}
+                key={item.id}
                 ref={inputRef}
                 className="prompt-token-input"
-                value={item}
-                placeholder={items.every((candidate) => !candidate.trim()) ? placeholder : undefined}
+                value={item.text}
+                placeholder={items.every((candidate) => !candidate.text.trim()) ? placeholder : undefined}
                 autoComplete="off"
                 spellCheck={false}
                 data-prompt-token-order={tokenOrder}
-                style={{ width: `${Math.max(7, Math.min(34, item.length + 2))}ch` }}
+                data-prompt-token-id={item.id}
+                style={{ width: inputWidth }}
                 onFocus={(event) => {
                   setFocused(true);
                   syncSelection(event.currentTarget);
@@ -689,13 +827,26 @@ export function AutocompleteTextarea({
           if (!text) return null;
           const armed = armedIndex === index;
           return (
-            <span className={`prompt-token-chip ${armed ? "armed" : ""}`} key={`${index}-${text}`}>
+            <span
+              className={`prompt-token-chip ${armed ? "armed" : ""} ${draggingId === item.id ? "dragging" : ""} ${dragOverId === item.id && draggingId !== item.id ? "drag-over" : ""}`}
+              key={item.id}
+              data-prompt-token-id={item.id}
+            >
               <button
                 type="button"
                 className="prompt-token-chip-main"
-                title="눌러서 이 태그 편집"
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => activateChip(index)}
+                title="짧게 눌러 편집 · 길게 눌러 이동"
+                onPointerDown={(event) => beginChipPress(event, item.id)}
+                onPointerMove={moveChipPress}
+                onPointerUp={finishChipPress}
+                onPointerCancel={cancelChipPress}
+                onClick={() => {
+                  if (suppressChipClickRef.current) {
+                    suppressChipClickRef.current = false;
+                    return;
+                  }
+                  activateChip(index);
+                }}
               >
                 {text}
               </button>
@@ -715,7 +866,7 @@ export function AutocompleteTextarea({
             </span>
           );
         })}
-        {!focused && !items.some((item) => item.trim()) && (
+        {!focused && !items.some((item) => item.text.trim()) && (
           <span className="prompt-token-placeholder">{placeholder}</span>
         )}
       </div>

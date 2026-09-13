@@ -51,6 +51,20 @@
   text-align:left;
   white-space:normal;
   overflow-wrap:anywhere;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.prompt-token-chip.dragging{
+  opacity:.48;
+  transform:scale(.97);
+  border-color:#8578e8;
+}
+
+.prompt-token-chip.drag-over{
+  border-color:#9d91ff;
+  box-shadow:0 0 0 2px rgba(133,120,232,.34);
 }
 
 .prompt-token-chip-remove{
@@ -87,6 +101,19 @@
 
 .prompt-token-input::placeholder{
   color:#747c8a;
+}
+
+.prompt-token-measure{
+  position:fixed;
+  left:-10000px;
+  top:-10000px;
+  visibility:hidden;
+  white-space:pre;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:400;
+  line-height:1.4;
+  pointer-events:none;
 }
 
 .prompt-token-placeholder{

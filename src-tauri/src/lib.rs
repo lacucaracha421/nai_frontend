@@ -11,6 +11,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(NovelAiState::default())
         .setup(|app| {
             let tag_db = tagdb::prepare(app).map_err(std::io::Error::other)?;

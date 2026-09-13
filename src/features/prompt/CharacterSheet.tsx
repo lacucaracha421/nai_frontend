@@ -5,6 +5,7 @@ import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { favoriteLocalTags } from "../tags/localTagIndex";
+import { PrombotSheet } from "../tags/PrombotSheet";
 import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
@@ -63,6 +64,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
   const finishLegacyMigration = useCharacterLibraryStore((s) => s.finishLegacyMigration);
   const [selected, setSelected] = useState<string | null>(characters[0]?.id ?? null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [prombotOpen, setPrombotOpen] = useState(false);
   const active = characters.find((character) => character.id === selected) ?? characters[0];
 
   useEffect(() => {
@@ -76,6 +78,22 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
     });
     return () => { cancelled = true; };
   }, [favorites, legacyMigrated, addManyToLibrary, removeFavorites, finishLegacyMigration]);
+
+  const insertFromPrombot = (text: string) => {
+    if (!active) return;
+    const clean = text.trim();
+    if (!clean) return;
+    usePromptHistoryStore.getState().checkpoint(`character:${active.id}:prompt`, {
+      value: active.prompt,
+      selectionStart: active.prompt.length,
+      selectionEnd: active.prompt.length,
+      activeIndex: active.prompt.split(/[,\n]/).filter((value) => value.trim()).length,
+    });
+    const prompt = active.prompt.trim()
+      ? `${active.prompt.trim().replace(/,\s*$/, "")}, ${clean}`
+      : clean;
+    update(active.id, { prompt });
+  };
 
   const selectFromLibrary = (entry: CharacterLibraryEntry) => {
     if (!active) return;
@@ -142,6 +160,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
                 <label><input type="checkbox" checked={active.enabled} onChange={(event) => update(active.id, { enabled: event.target.checked })} /> 사용</label>
                 <div>
                   <button type="button" className="character-library-launch" onClick={() => setLibraryOpen(true)}>▰ 캐릭터 도감</button>
+                  <button type="button" className="character-library-launch" onClick={() => setPrombotOpen(true)}>Prombot</button>
                   {characters.length > 1 && <button className="danger-ghost" onClick={() => {
                     remove(active.id);
                     setSelected(characters.find((character) => character.id !== active.id)?.id ?? null);
@@ -188,6 +207,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
         </div>
       </div>
       {libraryOpen && <CharacterLibrarySheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} />}
+      {prombotOpen && <PrombotSheet destination="character" onInsert={insertFromPrombot} onClose={() => setPrombotOpen(false)} />}
     </>
   );
 }

@@ -15,15 +15,17 @@
     "android:build": "tauri android build",
     "tags:import": "node scripts/import-danbooru.mjs",
     "tags:sync": "python scripts/import-nextaltair.py && python scripts/build-tag-sqlite.py",
-    "tags:sqlite": "python scripts/build-tag-sqlite.py"
+    "tags:sqlite": "python scripts/build-tag-sqlite.py",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-fs": "^2.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "zustand": "^5.0.8",
-    "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-fs": "^2.4.0"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.4",
@@ -31,7 +33,8 @@
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^4.7.0",
     "typescript": "~5.8.3",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "vitest": "^5.0.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true

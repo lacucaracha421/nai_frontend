@@ -5,6 +5,7 @@ import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { adjustEmphasis } from "./weight";
 import type { TagCategory } from "../tags/localTagIndex";
+import { selectionOrWhole } from "../tags/promptEditorModel";
 
 const labels: Record<PromptSectionKey, string> = {
   artist: "Artist",
@@ -14,7 +15,7 @@ const labels: Record<PromptSectionKey, string> = {
 };
 
 const filters: Record<PromptSectionKey, TagCategory[] | undefined> = {
-  artist: ["artist"],
+  artist: ["artist", "general", "meta"],
   other: ["general", "copyright", "meta"],
   quality: ["general", "meta"],
   negative: ["general", "meta"],
@@ -44,10 +45,12 @@ export function PromptSheet({
   section,
   onClose,
   onDictionary,
+  onPrombot,
 }: {
   section: PromptSectionKey;
   onClose: () => void;
   onDictionary: (section: PromptSectionKey) => void;
+  onPrombot: (section: PromptSectionKey) => void;
 }) {
   const touchY = useRef<number | null>(null);
   const value = useGenerationStore((state) => (state as any)[`${section}Prompt`] as string);
@@ -84,16 +87,16 @@ export function PromptSheet({
     const range = tokenRanges(value)[order];
     if (!range) return;
 
-    const localStart = element.selectionStart ?? 0;
-    const localEnd = element.selectionEnd ?? localStart;
-    if (localStart === localEnd) return;
+    const rawStart = element.selectionStart ?? 0;
+    const rawEnd = element.selectionEnd ?? rawStart;
+    const local = selectionOrWhole(rawStart, rawEnd, element.value.length);
     checkpoint(historyKey, {
       value,
-      selectionStart: localStart,
-      selectionEnd: localEnd,
+      selectionStart: local.start,
+      selectionEnd: local.end,
       activeIndex: order,
     });
-    const out = adjustEmphasis(value, range.start + localStart, range.start + localEnd, delta);
+    const out = adjustEmphasis(value, range.start + local.start, range.start + local.end, delta);
     setPrompt(section, out.text);
 
     requestAnimationFrame(() => {
@@ -126,6 +129,7 @@ export function PromptSheet({
         <button onPointerDown={(event) => { event.preventDefault(); weight(-0.1); }}>−0.1</button>
         <button onPointerDown={(event) => { event.preventDefault(); weight(0.1); }}>+0.1</button>
         <button onClick={() => onDictionary(section)}>태그사전</button>
+        <button onClick={() => onPrombot(section)}>Prombot</button>
         <button className="toolbar-generate" disabled={busy} onClick={() => void generate()}>
           {status === "generating" ? "Generating…" : status === "upscaling" ? "Upscaling…" : "Generate"}
         </button>
