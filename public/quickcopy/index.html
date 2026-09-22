@@ -783,6 +783,7 @@ body.nai-embedded .app {
   body.nai-embedded .app { width: calc(100% - 18px); margin-top: 12px; }
 }
 </style>
+<link rel="stylesheet" href="/quickcopy-m3.css" />
 </head>
 <body>
 <div class="app">
@@ -800,7 +801,7 @@ body.nai-embedded .app {
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="artists">작가 <span id="artistCountTab"></span></button>
+    <button class="tab active" data-tab="artists">작가·프리셋 <span id="artistCountTab"></span></button>
     <button class="tab" data-tab="actions">행동·행위 <span id="actionCountTab"></span></button>
     <button class="tab" data-tab="tags">태그사전 <span id="tagCountTab"></span></button>
   </div>
@@ -1416,7 +1417,7 @@ function renderComboBar() {
 async function copyTag(i,card) {
   const item = data.tags[i];
   if (!item) return;
-  const ok = await copyText(item.prompt);
+  const ok = await copyText(item.prompt,"tag");
   card.classList.remove("flash");
   void card.offsetWidth;
   card.classList.add("flash");
@@ -1476,9 +1477,9 @@ function bindPressable(element,type,index,onClick) {
   element.addEventListener("pointercancel", cancelTimer, {passive:true});
 }
 
-async function copyText(text) {
+async function copyText(text,kind) {
   if (NAI_EMBEDDED) {
-    window.parent.postMessage({ source: NAI_BRIDGE_SOURCE, type: "insert", text: String(text ?? ""), tab: activeTab }, "*");
+    window.parent.postMessage({ source: NAI_BRIDGE_SOURCE, type: "insert", text: String(text ?? ""), kind, tab: activeTab }, "*");
     return true;
   }
 
@@ -1503,8 +1504,9 @@ async function copyText(text) {
 }
 
 async function copyArtist(i,row) {
-  const text = "artist:" + data.artists[i].name;
-  const ok = await copyText(text);
+  const name = data.artists[i].name.trim();
+  const text = NAI_EMBEDDED || /^artist\\?:/i.test(name) ? name : "artist:" + name;
+  const ok = await copyText(text,"artist");
   row.classList.remove("flash");
   void row.offsetWidth;
   row.classList.add("flash");
@@ -1513,7 +1515,7 @@ async function copyArtist(i,row) {
 
 async function copyAction(i,card) {
   const text = data.actions[i].prompt;
-  const ok = await copyText(text);
+  const ok = await copyText(text,"action");
   card.classList.remove("flash");
   void card.offsetWidth;
   card.classList.add("flash");
@@ -1686,7 +1688,7 @@ comboCopyBtn.addEventListener("click", async () => {
     .map(i => data.tags[i].prompt)
     .join(", ");
   if (!text) return;
-  const ok = await copyText(text);
+  const ok = await copyText(text,"tag");
   showToast(ok ? `${comboSelection.size}개 태그 조합 복사됨` : "복사에 실패했답니다.");
 });
 

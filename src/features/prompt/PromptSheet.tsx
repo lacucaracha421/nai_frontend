@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { PromptSectionKey } from "../../types/generation";
 import { useGenerationStore } from "../../stores/generationStore";
 import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
@@ -6,6 +7,7 @@ import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { adjustEmphasis } from "./weight";
 import type { TagCategory } from "../tags/localTagIndex";
 import { selectionOrWhole } from "../tags/promptEditorModel";
+import { copyWholePrompt } from "./promptClipboard";
 
 const labels: Record<PromptSectionKey, string> = {
   artist: "Artist",
@@ -53,6 +55,13 @@ export function PromptSheet({
   onPrombot: (section: PromptSectionKey) => void;
 }) {
   const touchY = useRef<number | null>(null);
+  const [artistCopyState, setArtistCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copyAttempt = useRef(0);
+  useEffect(() => () => {
+    copyAttempt.current += 1;
+    clearTimeout(copyTimer.current);
+  }, [section]);
   const value = useGenerationStore((state) => (state as any)[`${section}Prompt`] as string);
   const setPrompt = useGenerationStore((state) => state.setPrompt);
   const generate = useGenerationStore((state) => state.generate);
@@ -60,6 +69,22 @@ export function PromptSheet({
   const checkpoint = usePromptHistoryStore((state) => state.checkpoint);
   const busy = status === "generating" || status === "upscaling";
   const historyKey = `prompt:${section}`;
+
+  const copyArtistPrompt = async () => {
+    if (section !== "artist" || !value) return;
+    const attempt = ++copyAttempt.current;
+    clearTimeout(copyTimer.current);
+    setArtistCopyState("idle");
+    try {
+      await copyWholePrompt(value, writeText);
+      if (attempt !== copyAttempt.current) return;
+      setArtistCopyState("copied");
+    } catch {
+      if (attempt !== copyAttempt.current) return;
+      setArtistCopyState("error");
+    }
+    copyTimer.current = setTimeout(() => setArtistCopyState("idle"), 1800);
+  };
 
   const weight = (delta: number) => {
     const element = document.activeElement;
@@ -121,8 +146,8 @@ export function PromptSheet({
         }}
       >
         <div className="drag-handle" />
-        <div><small>Prompt editor</small><h2>{labels[section]}</h2></div>
-        <button className="icon-button" onClick={onClose}>↓</button>
+        <div><h2>{labels[section]}</h2></div>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="프롬프트 편집기 닫기">↓</button>
       </div>
 
       <div className="editor-toolbar editor-toolbar-top">
@@ -130,6 +155,18 @@ export function PromptSheet({
         <button onPointerDown={(event) => { event.preventDefault(); weight(0.1); }}>+0.1</button>
         <button onClick={() => onDictionary(section)}>태그사전</button>
         <button onClick={() => onPrombot(section)}>Prombot</button>
+        {section === "artist" && (
+          <button
+            type="button"
+            className="artist-copy-all"
+            aria-live="polite"
+            disabled={!value}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => void copyArtistPrompt()}
+          >
+            {artistCopyState === "copied" ? "복사됨" : artistCopyState === "error" ? "복사 실패" : "전체 복사"}
+          </button>
+        )}
         <button className="toolbar-generate" disabled={busy} onClick={() => void generate()}>
           {status === "generating" ? "Generating…" : status === "upscaling" ? "Upscaling…" : "Generate"}
         </button>

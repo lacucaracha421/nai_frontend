@@ -13,6 +13,22 @@ import {
 
 type Status = "idle" | "saving" | "testing" | "ready" | "error";
 
+export const DEFAULT_OPENROUTER_TRANSLATION_MODEL = "google/gemini-3.5-flash-lite";
+const LEGACY_OPENROUTER_TRANSLATION_MODEL = "google/gemini-2.5-flash-lite";
+
+export function migrateTranslationSettings(persistedState: unknown, version: number) {
+  const state = persistedState && typeof persistedState === "object"
+    ? { ...persistedState as Record<string, unknown> }
+    : {};
+  const model = typeof state.openRouterModel === "string" ? state.openRouterModel.trim() : "";
+
+  if (version < 1 && (!model || model === LEGACY_OPENROUTER_TRANSLATION_MODEL)) {
+    state.openRouterModel = DEFAULT_OPENROUTER_TRANSLATION_MODEL;
+  }
+
+  return state;
+}
+
 type State = {
   provider: TranslationProvider;
   ollamaBaseUrl: string;
@@ -60,7 +76,7 @@ export const useTranslationStore = create<State>()(
       provider: "ollama",
       ollamaBaseUrl: "http://localhost:11434",
       ollamaModel: "",
-      openRouterModel: "",
+      openRouterModel: DEFAULT_OPENROUTER_TRANSLATION_MODEL,
       ollamaKeyInput: "",
       openRouterKeyInput: "",
       keyStatus: { ollama: false, openrouter: false },
@@ -136,6 +152,8 @@ export const useTranslationStore = create<State>()(
     }),
     {
       name: "nai-v5-translation-settings-v0.1",
+      version: 1,
+      migrate: migrateTranslationSettings,
       partialize: (state) => ({
         provider: state.provider,
         ollamaBaseUrl: state.ollamaBaseUrl,

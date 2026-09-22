@@ -62,6 +62,9 @@ function CharacterCard({
           pressStart.current = null;
           longPressed.current = false;
         }}
+        onClick={(event) => {
+          if (event.detail === 0) onSelect(entry);
+        }}
         title="길게 눌러 시리즈 폴더 이동"
       >
         <strong>{entry.display}</strong>
@@ -159,7 +162,7 @@ export function CharacterLibrarySheet({
             <span>{q ? "전체 검색" : series ? `도감 / ${series}` : `${grouped.length}개 시리즈 · ${entries.length}명`}</span>
           </div>
         </div>
-        <button className="icon-button" onClick={onClose}>↓</button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 도감 닫기">↓</button>
       </div>
 
       <div className="character-library-body">

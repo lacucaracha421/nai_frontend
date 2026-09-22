@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGenerationStore } from "../../stores/generationStore";
+import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { PromptSectionKey } from "../../types/generation";
@@ -64,6 +65,12 @@ export function V5Studio() {
   const quality = useGenerationStore((s) => s.qualityPrompt);
   const negative = useGenerationStore((s) => s.negativePrompt);
   const chars = useGenerationStore((s) => s.characters);
+  const randomCharacterEnabled = useGenerationStore((s) => s.randomCharacterEnabled);
+  const setRandomCharacterEnabled = useGenerationStore((s) => s.setRandomCharacterEnabled);
+  const lastRandomCharacter = useGenerationStore((s) => s.lastRandomCharacter);
+  const randomCharacterCount = useCharacterLibraryStore((s) =>
+    s.entries.reduce((count, entry) => count + (entry.prombotFavorite ? 1 : 0), 0),
+  );
   const settings = useGenerationStore((s) => s.settings);
   const images = useGenerationStore((s) => s.images);
   const active = useGenerationStore((s) => s.activeImage);
@@ -146,6 +153,23 @@ export function V5Studio() {
 
   const selected = images[active];
   const busy = status === "generating" || status === "upscaling";
+  const characterCardValue = randomCharacterEnabled
+    ? `🎲 랜덤 · ${randomCharacterCount}명${lastRandomCharacter ? ` · 최근 ${lastRandomCharacter}` : ""}`
+    : characterPromptPreview(chars);
+
+  const toggleRandomCharacter = () => {
+    if (!randomCharacterEnabled && !randomCharacterCount) {
+      setNotice("Prombot 북마크를 먼저 가져오시와요.");
+      setCharacters(true);
+      window.setTimeout(() => setNotice(null), 2200);
+      return;
+    }
+    const next = !randomCharacterEnabled;
+    setRandomCharacterEnabled(next);
+    setNotice(next ? `랜덤 캐릭터 ON · ${randomCharacterCount}명` : "랜덤 캐릭터 OFF");
+    window.setTimeout(() => setNotice(null), 1600);
+  };
+
   // Existing generated images keep their own aspect ratio. Resolution settings only affect the next generation.
   const stageWidth = selected ? selected.width : settings.width;
   const stageHeight = selected ? selected.height : settings.height;
@@ -308,7 +332,19 @@ export function V5Studio() {
       <section className="prompt-dashboard">
         <div className="two-up">
           <PromptCard title="ARTIST" value={artist} onOpen={() => setSheet("artist")} className="artist-card" />
-          <PromptCard title="CHARACTER PROMPTS" value={characterPromptPreview(chars)} onOpen={() => setCharacters(true)} className="character-card" />
+          <div className="character-card-wrap">
+            <PromptCard title="CHARACTER PROMPTS" value={characterCardValue} onOpen={() => setCharacters(true)} className="character-card" />
+            <button
+              type="button"
+              className={`random-character-toggle ${randomCharacterEnabled ? "active" : ""}`}
+              aria-pressed={randomCharacterEnabled}
+              aria-label="랜덤 캐릭터 토글"
+              title={randomCharacterCount ? `Prombot 북마크 ${randomCharacterCount}명에서 랜덤 선택` : "Prombot 북마크를 먼저 가져오세요"}
+              onClick={toggleRandomCharacter}
+            >
+              🎲
+            </button>
+          </div>
         </div>
         <PromptCard title="OTHER" value={other} onOpen={() => setSheet("other")} className="other-card" />
         <button className="fixed-prompts-toggle" onClick={() => setShowFixed(!showFixed)}><span>Quality / Negative</span><b>{showFixed ? "−" : "＋"}</b></button>

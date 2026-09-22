@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { PromptSectionKey } from "../../types/generation";
 import { SexTagDictionary } from "./SexTagDictionary";
+import { searchLocalTags } from "./localTagIndex";
+import {
+  exactArtistTag,
+  quickCopyArtistQuery,
+  quickCopyInsertion,
+  type QuickCopyKind,
+} from "./quickCopyBridge";
 
 const BRIDGE_SOURCE = "artist-tag-quick-copy-v7";
 const DESTINATION_LABEL: Record<PromptSectionKey, string> = {
@@ -27,11 +34,17 @@ export function QuickCopySheet({
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frameRef.current?.contentWindow) return;
-      const data = event.data as { source?: string; type?: string; text?: unknown; tab?: string } | null;
+      const data = event.data as { source?: string; type?: string; text?: unknown; kind?: QuickCopyKind; tab?: string } | null;
       if (!data || data.source !== BRIDGE_SOURCE || data.type !== "insert") return;
-      let text = String(data.text ?? "").trim();
-      if (data.tab === "artists" && text && !/^artist\\?:/i.test(text)) text = `artist:${text}`;
-      if (text) onInsert(text);
+      void (async () => {
+        const rawText = String(data.text ?? "").trim();
+        const query = data.kind === "artist" ? quickCopyArtistQuery(rawText) : null;
+        const rows = query && !/^artist\\?:/i.test(rawText)
+          ? await searchLocalTags(query, undefined, 24)
+          : [];
+        const text = quickCopyInsertion(data, /^artist\\?:/i.test(rawText) || exactArtistTag(rawText, rows));
+        if (text) onInsert(text);
+      })();
     };
 
     window.addEventListener("message", onMessage);

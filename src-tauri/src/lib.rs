@@ -1,5 +1,6 @@
 mod commands;
 mod novelai;
+mod prombot;
 mod tagdb;
 mod translation;
 
@@ -13,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(NovelAiState::default())
+        .manage(prombot::PrombotState::default())
         .setup(|app| {
             let tag_db = tagdb::prepare(app).map_err(std::io::Error::other)?;
             let image_cache = novelai::prepare_image_cache(app).map_err(std::io::Error::other)?;
@@ -35,7 +37,10 @@ pub fn run() {
             commands::test_translation_provider,
             commands::translate_selection,
             commands::search_local_tags,
-            commands::favorite_local_tags
+            commands::favorite_local_tags,
+            commands::open_prombot_webview,
+            commands::prombot_favorites,
+            commands::prombot_favorite_series
         ])
         .run(tauri::generate_context!())
         .expect("error while running NAI V5 Studio");

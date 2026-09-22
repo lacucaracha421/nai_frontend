@@ -1,10 +1,11 @@
 use crate::{
     novelai::{self, GeneratedImage, ImageCacheState, NovelAiQuota, NovelAiState},
+    prombot::{self, PrombotState},
     tagdb::{self, LocalTagResult, TagDbState},
     translation::{self, TranslationConfig, TranslationKeyStatus, TranslationProvider},
 };
 use serde_json::Value;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn set_novelai_token(state: State<'_, NovelAiState>, token: String) -> Result<(), String> {
@@ -112,4 +113,21 @@ pub fn favorite_local_tags(
     categories: Option<Vec<String>>,
 ) -> Result<Vec<LocalTagResult>, String> {
     tagdb::favorites(&state, &keys, categories.as_deref())
+}
+
+#[tauri::command]
+pub async fn open_prombot_webview(app: AppHandle) -> Result<(), String> {
+    prombot::open(app)
+}
+
+#[tauri::command]
+pub fn prombot_favorites(state: State<'_, PrombotState>) -> Result<Vec<String>, String> {
+    prombot::favorites(state)
+}
+
+#[tauri::command]
+pub async fn prombot_favorite_series(
+    keys: Vec<String>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    prombot::favorite_series(keys).await
 }

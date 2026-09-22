@@ -32,7 +32,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
       <div className="sheet-head">
         <div className="drag-handle" />
         <div><h2>Settings</h2></div>
-        <button className="icon-button" onClick={onClose}>↓</button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="설정 닫기">↓</button>
       </div>
 
       <div className="settings-body">

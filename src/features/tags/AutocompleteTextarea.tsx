@@ -9,6 +9,7 @@ import {
   createPromptToken,
   insertionForSuggestion,
   movePromptToken,
+  promptTokenDomKey,
   reconcilePromptTokens,
   selectionOrWhole,
   serializePromptTokens,
@@ -735,7 +736,7 @@ export function AutocompleteTextarea({
             const tokenOrder = items.slice(0, index).filter((candidate) => candidate.text.trim()).length;
             return (
               <input
-                key={item.id}
+                key={promptTokenDomKey(item.id, true)}
                 ref={inputRef}
                 className="prompt-token-input"
                 value={item.text}
@@ -829,7 +830,7 @@ export function AutocompleteTextarea({
           return (
             <span
               className={`prompt-token-chip ${armed ? "armed" : ""} ${draggingId === item.id ? "dragging" : ""} ${dragOverId === item.id && draggingId !== item.id ? "drag-over" : ""}`}
-              key={item.id}
+              key={promptTokenDomKey(item.id, false)}
               data-prompt-token-id={item.id}
             >
               <button

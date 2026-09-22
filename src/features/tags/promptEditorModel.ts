@@ -13,6 +13,10 @@ export function createPromptToken(text = ""): PromptToken {
   return { id, text };
 }
 
+export function promptTokenDomKey(tokenId: string, active: boolean) {
+  return active ? "active-prompt-token-input" : tokenId;
+}
+
 export function tokensFromPrompt(value: string): PromptToken[] {
   return value
     .split(/[,\n]/)

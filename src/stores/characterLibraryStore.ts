@@ -7,6 +7,8 @@ export type CharacterLibraryEntry = {
   display: string;
   series: string;
   addedAt: number;
+  prombotFavorite?: boolean;
+  prombotManaged?: boolean;
 };
 
 type State = {

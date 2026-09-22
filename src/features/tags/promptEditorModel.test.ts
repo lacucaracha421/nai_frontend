@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   insertionForSuggestion,
   movePromptToken,
+  promptTokenDomKey,
   reconcilePromptTokens,
   selectionOrWhole,
   serializePromptTokens,
@@ -9,6 +10,11 @@ import {
 } from "./promptEditorModel";
 
 describe("prompt editor model", () => {
+  it("keeps the active input DOM identity while advancing between blocks", () => {
+    expect(promptTokenDomKey("first", true)).toBe(promptTokenDomKey("second", true));
+    expect(promptTokenDomKey("first", false)).not.toBe(promptTokenDomKey("second", false));
+  });
+
   it("adds artist prefix only to artist suggestions", () => {
     expect(insertionForSuggestion("toma", "artist", "artist:")).toBe("artist:toma");
     expect(insertionForSuggestion("toon (style)", "general", "artist:")).toBe("toon (style)");

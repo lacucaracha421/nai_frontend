@@ -116,7 +116,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
         <div className="sheet-head">
           <div className="drag-handle" />
           <div><h2>Character Prompts</h2></div>
-          <button className="icon-button" onClick={onClose}>↓</button>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 설정 닫기">↓</button>
         </div>
 
         <div className="character-sheet-body">

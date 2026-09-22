@@ -310,3 +310,31 @@
     height:48px;
   }
 }
+
+/* v0.4.8 Prombot WebView + random character */
+.character-card-wrap{position:relative;min-width:0}
+.character-card-wrap .prompt-card{width:100%;height:100%;padding-right:54px}
+.character-card-wrap .prompt-card>b{display:none}
+.random-character-toggle{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  width:34px;height:34px;border:1px solid #3d5660;border-radius:11px;
+  background:#182126;color:#a9bbc1;font-size:17px;line-height:1;
+}
+.random-character-toggle.active{
+  border-color:#6b77d5;background:#29264a;color:#f0edff;
+  box-shadow:0 0 0 2px rgba(107,119,213,.13);
+}
+.prombot-control-body{
+  flex:1;display:flex;flex-direction:column;justify-content:center;
+  gap:10px;padding:18px;background:#0f1115;
+}
+.prombot-control-card{
+  border:1px solid #303641;border-radius:18px;background:#15181e;padding:18px;
+}
+.prombot-control-card>strong{display:block;font-size:15px}
+.prombot-control-card>p{margin:8px 0 16px;color:#959dac;font-size:12px;line-height:1.55}
+.prombot-control-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.prombot-control-actions button{
+  min-height:44px;border:1px solid #3a414d;border-radius:12px;background:#1b1f27;color:#e7e9ef;
+}
+.prombot-control-actions button:last-child{border-color:#5a5597;background:#28243f;color:#f0edff}

@@ -3,6 +3,8 @@ import { persist } from "zustand/middleware";
 import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/buildRequest";
 import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
 import { usePromptHistoryStore } from "./promptHistoryStore";
+import { useCharacterLibraryStore } from "./characterLibraryStore";
+import { applyRandomCharacter, pickRandomCharacter } from "../features/prompt/randomCharacter";
 import type {
   CharacterPrompt,
   GenerationImage,
@@ -44,6 +46,8 @@ type State = {
   negativePrompt: string;
   characters: CharacterPrompt[];
   useCharacterCoords: boolean;
+  randomCharacterEnabled: boolean;
+  lastRandomCharacter: string | null;
   settings: GenerationSettings;
   status: GenerationStatus;
   images: GenerationImage[];
@@ -56,6 +60,7 @@ type State = {
   removeCharacter: (id: string) => void;
   updateCharacter: (id: string, patch: Partial<CharacterPrompt>) => void;
   setUseCharacterCoords: (value: boolean) => void;
+  setRandomCharacterEnabled: (value: boolean) => void;
   setActiveImage: (index: number) => void;
   clearSessionImages: () => void;
   clearError: () => void;
@@ -98,6 +103,8 @@ export const useGenerationStore = create<State>()(
       negativePrompt: "",
       characters: [newCharacter(0)],
       useCharacterCoords: false,
+      randomCharacterEnabled: false,
+      lastRandomCharacter: null,
       settings: { ...DEFAULT_SETTINGS },
       status: "idle",
       images: [],
@@ -125,6 +132,13 @@ export const useGenerationStore = create<State>()(
       updateCharacter: (id, patch) =>
         set((state) => ({ characters: state.characters.map((character) => character.id === id ? { ...character, ...patch } : character) })),
       setUseCharacterCoords: (useCharacterCoords) => set({ useCharacterCoords }),
+      setRandomCharacterEnabled: (randomCharacterEnabled) => {
+        if (randomCharacterEnabled && !useCharacterLibraryStore.getState().entries.some((entry) => entry.prombotFavorite)) {
+          set({ errorMessage: "Prombot 북마크를 먼저 가져오시와요." });
+          return;
+        }
+        set({ randomCharacterEnabled });
+      },
       setActiveImage: (activeImage) => set({ activeImage }),
       clearSessionImages: () => set({ images: [], activeImage: 0 }),
       clearError: () => set({ errorMessage: null, status: "idle" }),
@@ -134,11 +148,27 @@ export const useGenerationStore = create<State>()(
       generate: async () => {
         const snapshot = get();
         if (isBusy(snapshot.status)) return;
+
+        let effective = snapshot;
+        let randomCharacter: string | null = null;
+        if (snapshot.randomCharacterEnabled) {
+          const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries);
+          if (!picked) {
+            set({
+              status: "error",
+              errorMessage: "Prombot 북마크를 먼저 가져온 뒤 랜덤 캐릭터를 켜주시와요.",
+            });
+            return;
+          }
+          effective = applyRandomCharacter(snapshot, picked) as State;
+          randomCharacter = picked.display;
+        }
+
         set({ status: "generating", errorMessage: null });
         try {
-          const request = buildNovelAiRequest(snapshot);
+          const request = buildNovelAiRequest(effective);
           const result = await generateNovelAiImage(request);
-          const positivePrompt = joinPositivePrompt(snapshot);
+          const positivePrompt = joinPositivePrompt(effective);
           const createdAt = Date.now();
           const incoming = result.map((image) => ({
             src: cachedImageSrc(image.path),
@@ -157,6 +187,7 @@ export const useGenerationStore = create<State>()(
             images: [...state.images, ...incoming],
             activeImage: state.images.length,
             errorMessage: null,
+            lastRandomCharacter: randomCharacter,
           }));
         } catch (error) {
           set({ status: "error", errorMessage: error instanceof Error ? error.message : String(error) });
@@ -225,6 +256,7 @@ export const useGenerationStore = create<State>()(
         negativePrompt: state.negativePrompt,
         characters: state.characters,
         useCharacterCoords: state.useCharacterCoords,
+        randomCharacterEnabled: state.randomCharacterEnabled,
         settings: state.settings,
       }),
     },
