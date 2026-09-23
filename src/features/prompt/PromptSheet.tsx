@@ -23,6 +23,22 @@ const filters: Record<PromptSectionKey, TagCategory[] | undefined> = {
   negative: ["general", "meta"],
 };
 
+// Sections whose whole prompt is usually reused or replaced get one-tap copy and clear.
+const copyAllSections = new Set<PromptSectionKey>(["artist", "other"]);
+
+/** Clear a whole section, recording the previous text so the editor's undo restores it. */
+export function clearWholePrompt(
+  section: PromptSectionKey,
+  value: string,
+  checkpoint: (key: string, snapshot: { value: string; selectionStart: number; selectionEnd: number }) => void,
+  setPrompt: (section: PromptSectionKey, value: string) => void,
+) {
+  if (!copyAllSections.has(section) || !value) return false;
+  checkpoint(`prompt:${section}`, { value, selectionStart: 0, selectionEnd: value.length });
+  setPrompt(section, "");
+  return true;
+}
+
 type TokenRange = { start: number; end: number };
 
 function tokenRanges(value: string): TokenRange[] {
@@ -55,12 +71,13 @@ export function PromptSheet({
   onPrombot: (section: PromptSectionKey) => void;
 }) {
   const touchY = useRef<number | null>(null);
-  const [artistCopyState, setArtistCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const copyAttempt = useRef(0);
   useEffect(() => () => {
     copyAttempt.current += 1;
     clearTimeout(copyTimer.current);
+    setCopyState("idle");
   }, [section]);
   const value = useGenerationStore((state) => (state as any)[`${section}Prompt`] as string);
   const setPrompt = useGenerationStore((state) => state.setPrompt);
@@ -70,20 +87,20 @@ export function PromptSheet({
   const busy = status === "generating" || status === "upscaling";
   const historyKey = `prompt:${section}`;
 
-  const copyArtistPrompt = async () => {
-    if (section !== "artist" || !value) return;
+  const copyPrompt = async () => {
+    if (!copyAllSections.has(section) || !value) return;
     const attempt = ++copyAttempt.current;
     clearTimeout(copyTimer.current);
-    setArtistCopyState("idle");
+    setCopyState("idle");
     try {
       await copyWholePrompt(value, writeText);
       if (attempt !== copyAttempt.current) return;
-      setArtistCopyState("copied");
+      setCopyState("copied");
     } catch {
       if (attempt !== copyAttempt.current) return;
-      setArtistCopyState("error");
+      setCopyState("error");
     }
-    copyTimer.current = setTimeout(() => setArtistCopyState("idle"), 1800);
+    copyTimer.current = setTimeout(() => setCopyState("idle"), 1800);
   };
 
   const weight = (delta: number) => {
@@ -155,16 +172,27 @@ export function PromptSheet({
         <button onPointerDown={(event) => { event.preventDefault(); weight(0.1); }}>+0.1</button>
         <button onClick={() => onDictionary(section)}>태그사전</button>
         <button onClick={() => onPrombot(section)}>Prombot</button>
-        {section === "artist" && (
+        {copyAllSections.has(section) && (
           <button
             type="button"
-            className="artist-copy-all"
+            className="prompt-copy-all"
             aria-live="polite"
             disabled={!value}
             onPointerDown={(event) => event.preventDefault()}
-            onClick={() => void copyArtistPrompt()}
+            onClick={() => void copyPrompt()}
           >
-            {artistCopyState === "copied" ? "복사됨" : artistCopyState === "error" ? "복사 실패" : "전체 복사"}
+            {copyState === "copied" ? "복사됨" : copyState === "error" ? "복사 실패" : "전체 복사"}
+          </button>
+        )}
+        {copyAllSections.has(section) && (
+          <button
+            type="button"
+            className="prompt-clear-all"
+            disabled={!value}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => { clearWholePrompt(section, value, checkpoint, setPrompt); }}
+          >
+            전체 지우기
           </button>
         )}
         <button className="toolbar-generate" disabled={busy} onClick={() => void generate()}>
