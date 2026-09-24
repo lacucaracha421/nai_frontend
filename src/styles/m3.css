@@ -588,13 +588,11 @@ button:disabled {
   opacity: 0.7;
 }
 
-/* NAI-001 finish filter ("마무리"): stage chip, compare button, bottom sheet */
+/* Finish controls outside the image, compare overlay and bottom sheet. */
 .finish-controls {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 3;
   display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   line-height: normal;
 }
@@ -862,4 +860,19 @@ button:disabled {
 /* NAI-005 multi-line import summary */
 .prombot-message {
   white-space: pre-line;
+}
+
+/* Constrain the grid track before fitting intrinsic (including upscaled) images. */
+.image-viewer {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+.image-viewer img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
 }

@@ -24,6 +24,7 @@ import { finishPreviewSource, finishRunner, imageObjectUrl } from "./finish/fini
 import { formatFileSize, prepareSave } from "./save/prepareSave";
 import { browserSaveDeps } from "./save/saveDeps";
 import { FinishSheet } from "./finish/FinishSheet";
+import { useQuotaClock } from "./useQuotaClock";
 import { ImageLoadButton } from "./load/ImageLoadButton";
 import { detectCharacterTagFromPrompt, normalizedCharacterTag } from "../prompt/characterTag";
 
@@ -110,6 +111,7 @@ export function V5Studio() {
   const setShowFixed = useUiStore((s) => s.setShowFixedPrompts);
   const connectionStatus = useConnectionStore((s) => s.status);
   const quota = useConnectionStore((s) => s.quota);
+  const quotaReceivedAt = useConnectionStore((s) => s.quotaReceivedAt);
   const quotaStatus = useConnectionStore((s) => s.quotaStatus);
   const refreshQuota = useConnectionStore((s) => s.refreshQuota);
 
@@ -128,8 +130,6 @@ export function V5Studio() {
   const [finishError, setFinishError] = useState<string | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const finishLongPressTimer = useRef<number | null>(null);
-  const finishLongPressed = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [imagesHidden, setImagesHidden] = useState(false);
 
@@ -170,12 +170,7 @@ export function V5Studio() {
 
 
 
-  useEffect(() => {
-    if (connectionStatus !== "connected") return;
-    void refreshQuota();
-    const timer = window.setInterval(() => void refreshQuota(), 60_000);
-    return () => window.clearInterval(timer);
-  }, [connectionStatus, refreshQuota]);
+  const quotaNow = useQuotaClock(connectionStatus === "connected", refreshQuota);
 
   useEffect(() => {
     if (connectionStatus === "connected" && status === "success") {
@@ -189,7 +184,7 @@ export function V5Studio() {
   const finishPreviewUrl = finishEnabled && selected && finishPreview?.key === selected.filePath ? finishPreview.url : null;
   const finishPending = finishEnabled && !!selected && (finishBusy || !finishPreviewUrl) && !finishError;
   const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
-  const usageHint = formatUsageHint(quota?.usage);
+  const usageHint = formatUsageHint(quota?.usage, quotaReceivedAt, quotaNow);
   const generationCost = connectionStatus === "connected" && quota
     ? formatAnlasCost(estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota))
     : null;
@@ -231,13 +226,7 @@ export function V5Studio() {
 
   useEffect(() => () => {
     if (finishPreviewUrlRef.current) URL.revokeObjectURL(finishPreviewUrlRef.current);
-    if (finishLongPressTimer.current !== null) window.clearTimeout(finishLongPressTimer.current);
   }, []);
-
-  const cancelFinishLongPress = () => {
-    if (finishLongPressTimer.current !== null) window.clearTimeout(finishLongPressTimer.current);
-    finishLongPressTimer.current = null;
-  };
 
   useEffect(() => () => {
     if (saveResetTimer.current !== null) window.clearTimeout(saveResetTimer.current);
@@ -408,52 +397,6 @@ export function V5Studio() {
               />
             )}
 
-            {selected && !imagesHidden && !placementId && (
-              <div className="finish-controls">
-                <button
-                  type="button"
-                  className={`finish-chip ${finishEnabled ? "active" : ""} ${finishPending ? "pending" : ""}`}
-                  aria-pressed={finishEnabled}
-                  title={finishError ?? (finishEnabled ? "마무리 필터 끄기 · 길게 눌러 조절" : "마무리 필터 켜기 · 길게 눌러 조절")}
-                  onPointerDown={() => {
-                    finishLongPressed.current = false;
-                    cancelFinishLongPress();
-                    finishLongPressTimer.current = window.setTimeout(() => {
-                      finishLongPressed.current = true;
-                      setFinishOpen(true);
-                    }, 450);
-                  }}
-                  onPointerUp={cancelFinishLongPress}
-                  onPointerLeave={cancelFinishLongPress}
-                  onPointerCancel={cancelFinishLongPress}
-                  onContextMenu={(event) => event.preventDefault()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (finishLongPressed.current) {
-                      finishLongPressed.current = false;
-                      return;
-                    }
-                    setFinishEnabled(!finishEnabled);
-                  }}
-                >
-                  {finishPending && <span className="finish-busy" aria-hidden="true" />}
-                  마무리{finishEnabled ? (finishError ? " !" : " ON") : ""}
-                </button>
-                <button
-                  type="button"
-                  className="finish-chip finish-chip-adjust"
-                  aria-label="마무리 필터 조절"
-                  title="마무리 필터 조절"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setFinishOpen(true);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
-                </button>
-              </div>
-            )}
-
             {selected && !imagesHidden && !placementId && finishEnabled && finishPreviewUrl && (
               <button
                 type="button"
@@ -486,6 +429,22 @@ export function V5Studio() {
               <div className="stage-progress">{status === "upscaling" ? "Upscaling…" : "Generating…"}</div>
             )}
           </div>
+        </div>
+
+        <div className="finish-controls">
+          <button
+            type="button"
+            className={`finish-chip ${finishEnabled ? "active" : ""}`}
+            aria-pressed={finishEnabled}
+            title={finishError ?? "마무리 필터 켜기 / 끄기"}
+            onClick={() => setFinishEnabled(!finishEnabled)}
+          >
+            {finishPending && <span className="finish-busy" aria-hidden="true" />}
+            마무리{finishEnabled ? (finishError ? " !" : " ON") : " OFF"}
+          </button>
+          <button type="button" className="finish-chip" onClick={() => setFinishOpen(true)} aria-label="마무리 필터 조절">
+            조절
+          </button>
         </div>
 
         {selected && (

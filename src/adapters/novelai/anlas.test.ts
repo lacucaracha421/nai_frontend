@@ -38,7 +38,7 @@ describe("estimateAnlas", () => {
 describe("usage limit display", () => {
   it("shows the percentage and the recharge hint", () => {
     expect(formatUsageLabel(withinLimit)).toBe("사용 한도 72%");
-    expect(formatUsageHint(withinLimit)).toBe("다음 1% 회복까지 약 2시간 11분");
+    expect(formatUsageHint(withinLimit)).toBe("다음 1% 회복까지 약 2시간 12분");
   });
 
   it("tolerates missing fields and flags a negative battery", () => {

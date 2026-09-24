@@ -88,7 +88,11 @@ export async function saveImageBytes(bytes: Uint8Array, filename: string) {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     return filename;
   }
-  return invoke<string>("save_image", bytes, {
-    headers: { "x-filename": encodeURIComponent(filename) },
-  });
+  // Android IPC is JSON-only. Encode in bounded chunks to avoid spreading a
+  // full upscaled image onto the JS stack; Rust decodes before format detection.
+  const chunks: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 0x8000)));
+  }
+  return invoke<string>("save_image", { imageBase64: btoa(chunks.join("")), filename });
 }

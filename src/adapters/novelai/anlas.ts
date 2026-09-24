@@ -58,16 +58,26 @@ export function formatUsageLabel(usage: NovelAiUsage | null | undefined) {
 }
 
 /** Tooltip/hint for the usage pill. `timeUntilNextPercent` is assumed to be seconds. */
-export function formatUsageHint(usage: NovelAiUsage | null | undefined) {
+export function formatUsageHint(
+  usage: NovelAiUsage | null | undefined,
+  receivedAt: number | null = null,
+  now = Date.now(),
+) {
   if (!usage) return null;
   const parts: string[] = [];
   if (usage.isNegative === true) parts.push("V5 사용 한도를 넘어 생성마다 Anlas가 차감됩니다");
-  const seconds = usage.timeUntilNextPercent;
-  if (typeof seconds === "number" && seconds > 0) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.round((seconds % 3600) / 60);
-    const span = hours > 0 ? `${hours}시간${minutes ? ` ${minutes}분` : ""}` : `${Math.max(1, minutes)}분`;
-    parts.push(`다음 1% 회복까지 약 ${span}`);
+  const duration = usage.timeUntilNextPercent;
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    const seconds = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
+    if (seconds === 0) {
+      parts.push("회복 시간 도달 · 갱신 대기");
+    } else {
+      const totalMinutes = Math.ceil(seconds / 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const span = hours > 0 ? `${hours}시간${minutes ? ` ${minutes}분` : ""}` : `${minutes}분`;
+      parts.push(`다음 1% 회복까지 약 ${span}`);
+    }
   }
   return parts.length ? parts.join(" · ") : null;
 }

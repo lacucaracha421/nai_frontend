@@ -59,3 +59,18 @@ describe("UI settings migration", () => {
     expect(useUiStore.getState().saveFormat).toBe("png");
   });
 });
+
+it("softens untouched v1 presets, retaining custom tuning and the enabled state", () => {
+  const anime = { temp: 6, curve: 14, lift: 4, sat: 106, glow: 35, gthr: 72, grad: 16,
+    chroma: 0.75, vig: 10, pstr: 0, pscale: 100, strength: 3.5, sharp: 30 };
+  const watercolor = { temp: 3, curve: 0, lift: 6, sat: 94, glow: 0, gthr: 75, grad: 14,
+    chroma: 0, vig: 0, pstr: 55, pscale: 120, strength: 2, sharp: 0 };
+  for (const [finishPreset, finishParams] of [["anime", anime], ["watercolor", watercolor]] as const) {
+    expect(migrateUiState({ finishPreset, finishParams, finishEnabled: true }, 1)).toMatchObject({
+      finishParams: FINISH_PRESETS[finishPreset], finishEnabled: true,
+    });
+    const custom = { ...finishParams, strength: 4.1 };
+    expect(migrateUiState({ finishPreset, finishParams: custom }, 1).finishParams).toEqual(custom);
+    expect(migrateUiState({ finishPreset, finishParams }, 2).finishParams).toEqual(finishParams);
+  }
+});

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   FINISH_PRESETS,
+  finishParamsEqual,
   sanitizeFinishParams,
   type FinishParamKey,
   type FinishParams,
@@ -30,7 +31,15 @@ type State = PersistedUi & {
   setSaveFormat: (format: SaveFormat) => void;
 };
 
-export const UI_STORE_VERSION = 1;
+export const UI_STORE_VERSION = 2;
+
+// Upgrade only untouched v1 presets; a user's custom tuning stays intact.
+const LEGACY_FINISH_PRESETS: Record<FinishPresetKey, FinishParams> = {
+  anime: { temp: 6, curve: 14, lift: 4, sat: 106, glow: 35, gthr: 72, grad: 16,
+    chroma: 0.75, vig: 10, pstr: 0, pscale: 100, strength: 3.5, sharp: 30 },
+  watercolor: { temp: 3, curve: 0, lift: 6, sat: 94, glow: 0, gthr: 75, grad: 14,
+    chroma: 0, vig: 0, pstr: 55, pscale: 120, strength: 2, sharp: 0 },
+};
 
 const DEFAULT_UI: PersistedUi = {
   showFixedPrompts: false,
@@ -53,11 +62,15 @@ export function migrateUiState(persisted: unknown, version: number): PersistedUi
     return { ...DEFAULT_UI, showFixedPrompts, finishEnabled: old.grainEnabled === true, saveFormat };
   }
   const finishPreset = isPresetKey(old.finishPreset) ? old.finishPreset : DEFAULT_UI.finishPreset;
+  const storedParams = sanitizeFinishParams(old.finishParams, FINISH_PRESETS[finishPreset]);
+  const finishParams = version < 2 && finishParamsEqual(storedParams, LEGACY_FINISH_PRESETS[finishPreset])
+    ? { ...FINISH_PRESETS[finishPreset] }
+    : storedParams;
   return {
     showFixedPrompts,
     finishEnabled: old.finishEnabled === true,
     finishPreset,
-    finishParams: sanitizeFinishParams(old.finishParams, FINISH_PRESETS[finishPreset]),
+    finishParams,
     saveFormat,
   };
 }

@@ -14,8 +14,8 @@ import { finishPreviewSource, finishRunner, imageObjectUrl } from "./finishImage
 
 const PRESET_KEYS: FinishPresetKey[] = ["anime", "watercolor"];
 const PRESET_HINTS: Record<FinishPresetKey, string> = {
-  anime: "빛 번짐 · 선명도 · 옅은 그레인",
-  watercolor: "종이 결 · 부드러운 색",
+  anime: "은은한 빛 · 옅은 그레인",
+  watercolor: "옅은 종이 결 · 부드러운 색",
 };
 
 const signed = (value: number) => (value > 0 ? "+" : "") + value;

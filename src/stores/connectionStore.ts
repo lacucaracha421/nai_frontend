@@ -18,6 +18,7 @@ type State = {
   message: string;
   quota: NovelAiQuota | null;
   quotaStatus: QuotaStatus;
+  quotaReceivedAt: number | null;
   setTokenInput: (value: string) => void;
   restore: () => Promise<void>;
   connect: () => Promise<void>;
@@ -33,14 +34,15 @@ export const useConnectionStore = create<State>((set, get) => ({
   message: "",
   quota: null,
   quotaStatus: "idle",
+  quotaReceivedAt: null,
   setTokenInput: (tokenInput) => set({ tokenInput }),
 
   refreshQuota: async () => {
-    if (!isTauriRuntime() || get().status !== "connected") return;
+    if (!isTauriRuntime() || get().status !== "connected" || get().quotaStatus === "loading") return;
     set({ quotaStatus: "loading" });
     try {
       const quota = await getNovelAiQuota();
-      set({ quota, quotaStatus: "ready" });
+      if (get().status === "connected") set({ quota, quotaStatus: "ready", quotaReceivedAt: Date.now() });
     } catch {
       // Quota display is convenience UI. A temporary status API failure must
       // never break image generation or turn the connection red.
@@ -69,7 +71,7 @@ export const useConnectionStore = create<State>((set, get) => ({
       return;
     }
 
-    set({ status: "testing", message: "", quota: null, quotaStatus: "idle" });
+    set({ status: "testing", message: "", quota: null, quotaReceivedAt: null, quotaStatus: "idle" });
     try {
       await setNovelAiToken(token);
       await testNovelAiConnection();
@@ -81,6 +83,7 @@ export const useConnectionStore = create<State>((set, get) => ({
         status: "error",
         message: error instanceof Error ? error.message : String(error),
         quota: null,
+        quotaReceivedAt: null,
         quotaStatus: "idle",
       });
     }
@@ -94,6 +97,7 @@ export const useConnectionStore = create<State>((set, get) => ({
         message: "",
         tokenInput: "",
         quota: null,
+        quotaReceivedAt: null,
         quotaStatus: "idle",
       });
     } catch (error) {

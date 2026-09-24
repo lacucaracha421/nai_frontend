@@ -6,6 +6,7 @@ import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { favoriteLocalTags } from "../tags/localTagIndex";
 import { PrombotSheet } from "../tags/PrombotSheet";
+import { chooseCharacterTag } from "./characterTag";
 import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
@@ -13,42 +14,6 @@ type Props = {
   onClose: () => void;
   onPlaceOnImage: (characterId: string) => void;
 };
-
-function normalized(value: string) {
-  return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-const CHARACTER_SUBJECT_TAGS = new Set([
-  "girl",
-  "boy",
-  "female",
-  "male",
-  "other",
-  "1girl",
-  "1boy",
-  "1other",
-]);
-
-function chooseCharacterTag(prompt: string, previousName: string, tag: string) {
-  const tagKey = normalized(tag);
-  const previousKey = normalized(previousName);
-  const blocks = prompt
-    .split(/[,\n]/)
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .filter((value) => {
-      const key = normalized(value);
-      if (key === tagKey) return false;
-      return !previousKey || key !== previousKey;
-    });
-
-  let insertAt = 0;
-  while (insertAt < blocks.length && CHARACTER_SUBJECT_TAGS.has(normalized(blocks[insertAt]))) {
-    insertAt += 1;
-  }
-  blocks.splice(insertAt, 0, tag);
-  return blocks.join(", ");
-}
 
 export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
   const characters = useGenerationStore((s) => s.characters);
@@ -159,7 +124,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
               <div className="character-editor-head">
                 <label><input type="checkbox" checked={active.enabled} onChange={(event) => update(active.id, { enabled: event.target.checked })} /> 사용</label>
                 <div>
-                  <button type="button" className="character-library-launch" onClick={() => setLibraryOpen(true)}>▰ 캐릭터 도감</button>
+                  <button type="button" className="character-library-launch" onClick={() => setLibraryOpen(true)}>태그사전 · 캐릭터 도감</button>
                   <button type="button" className="character-library-launch" onClick={() => setPrombotOpen(true)}>Prombot</button>
                   {characters.length > 1 && <button className="danger-ghost" onClick={() => {
                     remove(active.id);

@@ -195,23 +195,16 @@ export const useGenerationStore = create<State>()(
         const snapshot = get();
         if (isBusy(snapshot.status)) return;
 
-        let effective = snapshot;
-        let randomCharacter: string | null = null;
-        if (snapshot.randomCharacterEnabled) {
-          const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries);
-          if (!picked) {
-            set({
-              status: "error",
-              errorMessage: "Prombot 북마크를 먼저 가져온 뒤 랜덤 캐릭터를 켜주시와요.",
-            });
-            return;
-          }
-          effective = applyRandomCharacter(snapshot, picked) as State;
-          randomCharacter = picked.display;
-        }
-
         set({ status: "generating", errorMessage: null });
         try {
+          let effective = snapshot;
+          let randomCharacter: string | null = null;
+          if (snapshot.randomCharacterEnabled) {
+            const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries);
+            if (!picked) throw new Error("Prombot 북마크를 먼저 가져온 뒤 랜덤 캐릭터를 켜주시와요.");
+            effective = await applyRandomCharacter(snapshot, picked) as State;
+            randomCharacter = picked.display;
+          }
           const request = buildNovelAiRequest(effective);
           const result = await generateNovelAiImage(request);
           const positivePrompt = joinPositivePrompt(effective);

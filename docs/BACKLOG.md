@@ -118,3 +118,19 @@ Status: `IMPLEMENTED` (2026-09-24) — pending a device check on the S11.
   - Skipped and listed: vibe transfer, character reference, img2img source, inpaint mask, ControlNet, SMEA, Variety+, Decrisp, an unsupported sampler, a non-V5 model.
 - **Known limits:** subject tags (`1girl`, `solo`, …) that are not at the start of the prompt move to the front on the next generation (the app's own prompt join). Underscores are normalized as usual.
 - **To check on the S11:** the picker opens (Samsung Gallery / Files) and returns the original file; loading a NovelAI PNG, an app-saved WebP, and a WebP without chunks (stealth only); undo within 6 s; the Settings sheet shows the loaded seed.
+
+## NAI-008 — User feedback on 0.5.0 (2026-09-24)
+
+Status: `IMPLEMENTED` (0.5.1, 2026-09-24) — finish button outside the image, gentler defaults (glow 35→12, grain 3.5→1.2, paper 55→20; user-adjusted values kept), upscaled image fits the viewer. Character-library count: investigated only — the NAI-005 filter runs only on a bookmark re-import; re-import after the list download succeeds. Pending an S11 check.
+- Move the 마무리 (finish) button outside (make it directly reachable instead of nested).
+- The finish filter is too strong; adjust defaults and consider presets with gentler strengths.
+- Viewing an upscaled image overflows the screen; fit it to the viewport.
+- Character tag library (도감) shows 378 people — the same inflated count as the Prombot bookmark issue; check the library count after the NAI-005 fix (re-import, series-star exclusion) and whether the library keeps previously imported entries.
+
+## NAI-009 — User requests (2026-09-24 evening)
+
+Status: `IMPLEMENTED` (0.5.1, 2026-09-24) — all four items; pending an S11 check (save as PNG/WebP, reset time after returning to the app, dictionary start tab, random keeps other tags).
+- The usage-limit reset time does not update.
+- Tag dictionary: open on the dictionary matching the section it was entered from — Artist → artist tags, Character → character dictionary, Others → action tags first.
+- Saving fails with an error like "save expect raw image bytes".
+- Random: today it discards everything in the character prompt and applies only a random character tag. Replace just the character tag and keep the other tags (actions etc.) in that character prompt.

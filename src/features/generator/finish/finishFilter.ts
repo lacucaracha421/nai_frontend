@@ -70,15 +70,15 @@ export const FINISH_NEUTRAL: Readonly<FinishParams> = Object.freeze({
 export const FINISH_PRESETS: Readonly<Record<FinishPresetKey | "off", Readonly<FinishParams>>> = Object.freeze({
   anime: Object.freeze({
     ...FINISH_NEUTRAL,
-    temp: 6, curve: 14, lift: 4, sat: 106,
-    glow: 35, gthr: 72, grad: 16,
-    chroma: 0.75, vig: 10, pstr: 0, strength: 3.5, sharp: 30,
+    temp: 2, curve: 5, lift: 2, sat: 102,
+    glow: 12, gthr: 78, grad: 16,
+    chroma: 0.2, vig: 3, pstr: 0, strength: 1.2, sharp: 10,
   }),
   watercolor: Object.freeze({
     ...FINISH_NEUTRAL,
-    temp: 3, curve: 0, lift: 6, sat: 94,
+    temp: 1, curve: 0, lift: 2, sat: 98,
     glow: 0, chroma: 0, vig: 0,
-    pstr: 55, pscale: 120, strength: 2, sharp: 0,
+    pstr: 20, pscale: 120, strength: 0.7, sharp: 0,
   }),
   off: FINISH_NEUTRAL,
 });

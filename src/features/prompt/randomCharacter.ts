@@ -1,3 +1,4 @@
+import { chooseCharacterTag, detectCharacterTagFromPrompt } from "./characterTag";
 import type { GenerationDraft } from "../../adapters/novelai/types";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
@@ -11,21 +12,26 @@ export function pickRandomCharacter(
   return pool[index];
 }
 
-export function applyRandomCharacter(
+export async function applyRandomCharacter(
   draft: GenerationDraft,
   entry: CharacterLibraryEntry,
-): GenerationDraft {
+): Promise<GenerationDraft> {
   const template = draft.characters.find((character) => character.enabled) ?? draft.characters[0];
   const position = template?.position ?? { x: 0.5, y: 0.5 };
+  // Resolve from the actual prompt, not the UI's debounced name label.
+  const detected = template?.prompt ? await detectCharacterTagFromPrompt(template.prompt) : null;
+  const replacement = {
+    id: template?.id ?? "random-character",
+    name: entry.display,
+    prompt: chooseCharacterTag(template?.prompt ?? "", detected?.display ?? template?.name ?? "", entry.display),
+    negative: template?.negative ?? "",
+    enabled: true,
+    position: { ...position },
+  };
   return {
     ...draft,
-    characters: [{
-      id: template?.id ?? "random-character",
-      name: entry.display,
-      prompt: entry.display,
-      negative: template?.negative ?? "",
-      enabled: true,
-      position: { ...position },
-    }],
+    characters: template
+      ? draft.characters.map((character) => character === template ? replacement : character)
+      : [replacement],
   };
 }

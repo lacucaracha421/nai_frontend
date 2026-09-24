@@ -10,6 +10,8 @@ vi.mock("../adapters/novelai/client", () => ({
   upscaleNovelAiImage: vi.fn(),
 }));
 
+vi.mock("../features/tags/localTagIndex", () => ({ searchLocalTags: vi.fn(async () => []) }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   useGenerationStore.setState(useGenerationStore.getInitialState(), true);
@@ -41,7 +43,7 @@ describe("random character requests", () => {
     expect(requests).toHaveLength(2);
     for (const [index, name] of ["A", "B"].entries()) {
       const expected = structuredClone(baseline);
-      expected.parameters.v4_prompt.caption.char_captions[0].char_caption = name;
+      expected.parameters.v4_prompt.caption.char_captions[0].char_caption = `${name}, red dress`;
       expect(requests[index]).toEqual(expected);
     }
     expect(random).toHaveBeenCalledTimes(2);

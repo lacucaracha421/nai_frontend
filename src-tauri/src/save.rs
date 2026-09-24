@@ -96,23 +96,9 @@ fn android_public_pictures_dir() -> Result<PathBuf, String> {
     Ok(PathBuf::from(path))
 }
 
-pub fn decode_uri_component(value: &str) -> String {
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hex = |b: u8| (b as char).to_digit(16);
-            if let (Some(high), Some(low)) = (hex(bytes[index + 1]), hex(bytes[index + 2])) {
-                decoded.push((high * 16 + low) as u8);
-                index += 3;
-                continue;
-            }
-        }
-        decoded.push(bytes[index]);
-        index += 1;
-    }
-    String::from_utf8_lossy(&decoded).into_owned()
+pub fn decode_image_base64(value: &str) -> Result<Vec<u8>, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    STANDARD.decode(value).map_err(|_| "저장할 이미지 전송 데이터가 올바르지 않습니다.".to_string())
 }
 
 /// Keeps only a safe base name and forces the extension of `format`.
@@ -290,12 +276,18 @@ mod tests {
     }
 
     #[test]
-    fn decodes_uri_encoded_names() {
-        assert_eq!(
-            decode_uri_component("NovelAI%20%ED%95%9C.png"),
-            "NovelAI 한.png"
-        );
-        assert_eq!(decode_uri_component("100%"), "100%");
-        assert_eq!(decode_uri_component("%zz"), "%zz");
+    fn saves_android_json_payloads_without_changing_image_bytes() {
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+        let directory = std::env::temp_dir().join(format!("nai-save-ipc-{}", uuid::Uuid::new_v4()));
+        for bytes in [png(b"\0\xffmetadata"), webp(b"\0\xffXMP ")] {
+            let payload = serde_json::json!({ "imageBase64": STANDARD.encode(&bytes), "filename": "한글_finish.png" });
+            let decoded = decode_image_base64(payload["imageBase64"].as_str().unwrap()).unwrap();
+            let path = write_image(&directory, payload["filename"].as_str().unwrap(), &decoded).unwrap();
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+            assert_eq!(path.extension().unwrap(), ImageFormat::detect(&bytes).unwrap().extension());
+        }
+        assert!(decode_image_base64("data:image/png;base64,AAAA").is_err());
+        assert!(decode_image_base64("not base64!").is_err());
+        fs::remove_dir_all(directory).unwrap();
     }
 }

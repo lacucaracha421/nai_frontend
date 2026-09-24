@@ -19,6 +19,12 @@ const DESTINATION_LABEL: Record<PromptSectionKey, string> = {
 
 type DictionaryView = "classic" | "sex";
 
+/** The bundled same-origin dictionary exposes tab buttons, not a URL/message API. */
+export function openDestinationTab(frame: HTMLIFrameElement, destination: PromptSectionKey) {
+  const tab = destination === "artist" ? "artists" : destination === "other" ? "actions" : "tags";
+  frame.contentDocument?.querySelector<HTMLButtonElement>(`button[data-tab="${tab}"]`)?.click();
+}
+
 export function QuickCopySheet({
   destination,
   onInsert,
@@ -69,6 +75,7 @@ export function QuickCopySheet({
           ref={frameRef}
           className="quickcopy-frame"
           src="/quickcopy/index.html"
+          onLoad={(event) => openDestinationTab(event.currentTarget, destination)}
           title="Artist / Tag Quick Copy v7"
         />
       ) : (

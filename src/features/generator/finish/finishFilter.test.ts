@@ -42,9 +42,16 @@ const reference = testImage(832, 1216);
 
 describe("finish filter", () => {
   it("is deterministic and matches the prototype output at the reference size", () => {
+    // Keep the original strong prototype parameters as an engine regression fixture.
     // Checksums were produced by the tuned grain-lab.html prototype's own render() on this image.
-    expect(fnv1a(applyFinish(reference, FINISH_PRESETS.anime).data)).toBe("799cc814");
-    expect(fnv1a(applyFinish(reference, FINISH_PRESETS.watercolor).data)).toBe("b36f9502");
+    expect(fnv1a(applyFinish(reference, {
+      temp: 6, curve: 14, lift: 4, sat: 106, glow: 35, gthr: 72, grad: 16,
+      chroma: 0.75, vig: 10, pstr: 0, pscale: 100, strength: 3.5, sharp: 30,
+    }).data)).toBe("799cc814");
+    expect(fnv1a(applyFinish(reference, {
+      temp: 3, curve: 0, lift: 6, sat: 94, glow: 0, gthr: 75, grad: 14,
+      chroma: 0, vig: 0, pstr: 55, pscale: 120, strength: 2, sharp: 0,
+    }).data)).toBe("b36f9502");
     const small = testImage(60, 90);
     expect(applyFinish(small, FINISH_PRESETS.anime, 11).data).toEqual(applyFinish(small, FINISH_PRESETS.anime, 11).data);
     expect(applyFinish(small, FINISH_PRESETS.anime, 11).data).not.toEqual(applyFinish(small, FINISH_PRESETS.anime, 12).data);
@@ -103,12 +110,12 @@ describe("finish filter", () => {
 describe("finish presets and settings", () => {
   it("defines the exact preset values", () => {
     expect(FINISH_PRESETS.anime).toEqual({
-      temp: 6, curve: 14, lift: 4, sat: 106, glow: 35, gthr: 72, grad: 16,
-      chroma: 0.75, vig: 10, pstr: 0, pscale: 100, strength: 3.5, sharp: 30,
+      temp: 2, curve: 5, lift: 2, sat: 102, glow: 12, gthr: 78, grad: 16,
+      chroma: 0.2, vig: 3, pstr: 0, pscale: 100, strength: 1.2, sharp: 10,
     });
     expect(FINISH_PRESETS.watercolor).toEqual({
-      temp: 3, curve: 0, lift: 6, sat: 94, glow: 0, gthr: 75, grad: 14,
-      chroma: 0, vig: 0, pstr: 55, pscale: 120, strength: 2, sharp: 0,
+      temp: 1, curve: 0, lift: 2, sat: 98, glow: 0, gthr: 75, grad: 14,
+      chroma: 0, vig: 0, pstr: 20, pscale: 120, strength: 0.7, sharp: 0,
     });
     expect(FINISH_PRESETS.off).toEqual({
       temp: 0, curve: 0, lift: 0, sat: 100, glow: 0, gthr: 75, grad: 14,
@@ -119,8 +126,8 @@ describe("finish presets and settings", () => {
 
   it("scales pixel-sized settings with the image's long side (reference 1216 px)", () => {
     const anime = FINISH_PRESETS.anime;
-    expect(scaledPixelParams(anime, 832, 1216)).toEqual({ glowRadius: 16, chromaShift: 0.75, paperScale: 100, grainSize: 1.5, sharpenRadius: 1 });
-    expect(scaledPixelParams(anime, 1664, 2432)).toEqual({ glowRadius: 32, chromaShift: 1.5, paperScale: 200, grainSize: 3, sharpenRadius: 2 });
+    expect(scaledPixelParams(anime, 832, 1216)).toEqual({ glowRadius: 16, chromaShift: 0.2, paperScale: 100, grainSize: 1.5, sharpenRadius: 1 });
+    expect(scaledPixelParams(anime, 1664, 2432)).toEqual({ glowRadius: 32, chromaShift: 0.4, paperScale: 200, grainSize: 3, sharpenRadius: 2 });
     // Landscape uses the long side too.
     expect(scaledPixelParams(anime, 2432, 1664)).toEqual(scaledPixelParams(anime, 1664, 2432));
     const preview = scaledPixelParams(anime, 821, 1200);
