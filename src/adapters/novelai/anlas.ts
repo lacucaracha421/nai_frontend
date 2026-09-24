@@ -66,8 +66,11 @@ export function formatUsageHint(
   if (!usage) return null;
   const parts: string[] = [];
   if (usage.isNegative === true) parts.push("V5 사용 한도를 넘어 생성마다 Anlas가 차감됩니다");
+  // A full battery has nothing to recover; NovelAI still reports a fixed per-percent
+  // interval there, which would otherwise sit on screen unchanged.
+  const full = usage.isNegative !== true && typeof usage.percent === "number" && usage.percent >= 100;
   const duration = usage.timeUntilNextPercent;
-  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+  if (!full && typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
     const seconds = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
     if (seconds === 0) {
       parts.push("회복 시간 도달 · 갱신 대기");

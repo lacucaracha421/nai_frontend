@@ -133,6 +133,8 @@ pub fn prepare_image_cache(app: &tauri::App) -> Result<ImageCacheState, String> 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("nai-v5-s11-frontend/0.4.2")
+        // Without a deadline a request stalled across Android suspend never settles.
+        .connect_timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))
 }
@@ -527,6 +529,8 @@ pub async fn quota(token: &str) -> Result<NovelAiQuota, String> {
     let subscription_response = client()?
         .get(format!("{IMAGE_API_BASE}/user/subscription"))
         .header(AUTHORIZATION, format!("Bearer {token}"))
+        // The UI refreshes quota once at a time; a stalled read must settle.
+        .timeout(std::time::Duration::from_secs(20))
         .send()
         .await
         .map_err(|error| format!("Could not read NovelAI subscription status: {error}"))?;

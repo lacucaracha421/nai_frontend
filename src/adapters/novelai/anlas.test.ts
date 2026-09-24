@@ -41,6 +41,12 @@ describe("usage limit display", () => {
     expect(formatUsageHint(withinLimit)).toBe("다음 1% 회복까지 약 2시간 12분");
   });
 
+  it("shows no recovery countdown when the battery is full", () => {
+    const full = { percent: 100, isNegative: false, timeUntilNextPercent: 7920 };
+    expect(formatUsageLabel(full)).toBe("사용 한도 100%");
+    expect(formatUsageHint(full)).toBeNull();
+  });
+
   it("tolerates missing fields and flags a negative battery", () => {
     expect(formatUsageLabel(null)).toBeNull();
     expect(formatUsageLabel({ percent: null, isNegative: null, timeUntilNextPercent: null })).toBeNull();
