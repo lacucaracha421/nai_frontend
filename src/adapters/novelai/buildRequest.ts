@@ -1,6 +1,6 @@
 import type { GenerationDraft, NovelAiImageRequest } from "./types";
 
-function cleanPart(value: string) {
+export function cleanPart(value: string) {
   return value
     .trim()
     .replace(/_+/g, " ")
@@ -8,7 +8,7 @@ function cleanPart(value: string) {
     .replace(/,\s*,+/g, ",");
 }
 
-const BASE_SUBJECT_TAG = /^(?:1girl|1boy|1other|[2-9]\d*\+?(?:girls|boys|others)|multiple (?:girls|boys|others)|solo|no humans)$/i;
+export const BASE_SUBJECT_TAG = /^(?:1girl|1boy|1other|[2-9]\d*\+?(?:girls|boys|others)|multiple (?:girls|boys|others)|solo|no humans)$/i;
 
 function splitBaseSubjectTags(value: string) {
   const subject: string[] = [];

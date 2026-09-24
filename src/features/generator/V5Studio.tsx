@@ -11,7 +11,20 @@ import { QuickCopySheet } from "../tags/QuickCopySheet";
 import { PrombotSheet } from "../tags/PrombotSheet";
 import { SettingsSheet } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
-import { saveNovelAiImage } from "../../adapters/novelai/client";
+import { readImageBytes, saveImageBytes } from "../../adapters/novelai/client";
+import {
+  UPSCALE_ANLAS,
+  estimateAnlas,
+  formatAnlasCost,
+  formatUsageHint,
+  formatUsageLabel,
+} from "../../adapters/novelai/anlas";
+import { FinishSupersededError } from "./finish/finishProtocol";
+import { finishPreviewSource, finishRunner, imageObjectUrl } from "./finish/finishImage";
+import { formatFileSize, prepareSave } from "./save/prepareSave";
+import { browserSaveDeps } from "./save/saveDeps";
+import { FinishSheet } from "./finish/FinishSheet";
+import { ImageLoadButton } from "./load/ImageLoadButton";
 import { detectCharacterTagFromPrompt, normalizedCharacterTag } from "../prompt/characterTag";
 
 function preview(text: string) {
@@ -26,6 +39,12 @@ function imageFilename(createdAt: number, seed: number | null, kind: "generation
   return `NovelAI_${stamp}${seed !== null ? `_seed${seed}` : ""}${kind === "upscale" ? "_upscale" : ""}.png`;
 }
 
+
+function savedName(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+type SaveState = "idle" | "saving" | "success" | "error";
 
 function characterPromptPreview(characters: ReturnType<typeof useGenerationStore.getState>["characters"]) {
   const registered = characters.filter((character) => character.enabled && character.prompt.trim());
@@ -84,6 +103,10 @@ export function V5Studio() {
   const upscale = useGenerationStore((s) => s.upscaleActive);
   const appendPrompt = useGenerationStore((s) => s.appendPrompt);
   const showFixed = useUiStore((s) => s.showFixedPrompts);
+  const finishEnabled = useUiStore((s) => s.finishEnabled);
+  const finishParams = useUiStore((s) => s.finishParams);
+  const saveFormat = useUiStore((s) => s.saveFormat);
+  const setFinishEnabled = useUiStore((s) => s.setFinishEnabled);
   const setShowFixed = useUiStore((s) => s.setShowFixedPrompts);
   const connectionStatus = useConnectionStore((s) => s.status);
   const quota = useConnectionStore((s) => s.quota);
@@ -97,7 +120,16 @@ export function V5Studio() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewer, setViewer] = useState(false);
   const [placementId, setPlacementId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const saveResetTimer = useRef<number | null>(null);
+  const [finishPreview, setFinishPreview] = useState<{ key: string; url: string } | null>(null);
+  const finishPreviewUrlRef = useRef<string | null>(null);
+  const [finishBusy, setFinishBusy] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const finishLongPressTimer = useRef<number | null>(null);
+  const finishLongPressed = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [imagesHidden, setImagesHidden] = useState(false);
 
@@ -153,6 +185,63 @@ export function V5Studio() {
 
   const selected = images[active];
   const busy = status === "generating" || status === "upscaling";
+  const saving = saveState === "saving";
+  const finishPreviewUrl = finishEnabled && selected && finishPreview?.key === selected.filePath ? finishPreview.url : null;
+  const finishPending = finishEnabled && !!selected && (finishBusy || !finishPreviewUrl) && !finishError;
+  const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
+  const usageHint = formatUsageHint(quota?.usage);
+  const generationCost = connectionStatus === "connected" && quota
+    ? formatAnlasCost(estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota))
+    : null;
+
+  // Live stage preview: a downscaled copy filtered in the worker; stale slider jobs are dropped.
+  useEffect(() => {
+    setFinishError(null);
+    if (!finishEnabled || !selected || imagesHidden) {
+      setFinishBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setFinishBusy(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const { preview: source } = await finishPreviewSource(selected);
+        const filtered = await finishRunner.run(source, finishParams, { lane: "stage" });
+        if (cancelled) return;
+        const url = await imageObjectUrl(filtered);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (finishPreviewUrlRef.current) URL.revokeObjectURL(finishPreviewUrlRef.current);
+        finishPreviewUrlRef.current = url;
+        setFinishPreview({ key: selected.filePath, url });
+        setFinishBusy(false);
+      } catch (failure) {
+        if (cancelled || failure instanceof FinishSupersededError) return;
+        setFinishError(failure instanceof Error ? failure.message : String(failure));
+        setFinishBusy(false);
+      }
+    }, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [finishEnabled, finishParams, selected, imagesHidden]);
+
+  useEffect(() => () => {
+    if (finishPreviewUrlRef.current) URL.revokeObjectURL(finishPreviewUrlRef.current);
+    if (finishLongPressTimer.current !== null) window.clearTimeout(finishLongPressTimer.current);
+  }, []);
+
+  const cancelFinishLongPress = () => {
+    if (finishLongPressTimer.current !== null) window.clearTimeout(finishLongPressTimer.current);
+    finishLongPressTimer.current = null;
+  };
+
+  useEffect(() => () => {
+    if (saveResetTimer.current !== null) window.clearTimeout(saveResetTimer.current);
+  }, []);
   const characterCardValue = randomCharacterEnabled
     ? `🎲 랜덤 · ${randomCharacterCount}명${lastRandomCharacter ? ` · 최근 ${lastRandomCharacter}` : ""}`
     : characterPromptPreview(chars);
@@ -179,24 +268,44 @@ export function V5Studio() {
   };
 
 
+  const settleSaveState = (next: SaveState, delay: number) => {
+    setSaveState(next);
+    if (saveResetTimer.current !== null) window.clearTimeout(saveResetTimer.current);
+    saveResetTimer.current = window.setTimeout(() => setSaveState("idle"), delay);
+  };
+
   const saveSelected = async () => {
     if (!selected || saving) return;
-    setSaving(true);
+    if (saveResetTimer.current !== null) window.clearTimeout(saveResetTimer.current);
+    setSaveState("saving");
     setNotice(null);
     try {
-      const filename = imageFilename(selected.createdAt, selected.seed, selected.kind);
-      const target = await saveNovelAiImage(selected.src, filename);
-      if (target) {
-        setNotice("이미지를 저장했습니다.");
-        window.setTimeout(() => setNotice(null), 1800);
-      }
+      const original = await readImageBytes(selected.src);
+      // The cached original is only read; WebP and filtered copies are new files with the NovelAI metadata.
+      const prepared = await prepareSave(
+        {
+          original,
+          baseName: imageFilename(selected.createdAt, selected.seed, selected.kind),
+          format: saveFormat,
+          finish: finishEnabled ? finishParams : null,
+        },
+        browserSaveDeps,
+      );
+      const target = await saveImageBytes(prepared.bytes, prepared.filename);
+      settleSaveState("success", 1600);
+      const size = formatFileSize(prepared.bytes.length);
+      setNotice(
+        prepared.fallback
+          ? `WebP 변환에 실패해 PNG로 저장했습니다 · ${size}`
+          : `저장됨 · ${savedName(target)} · ${size}`,
+      );
+      window.setTimeout(() => setNotice(null), prepared.fallback ? 3600 : 2400);
     } catch (saveError) {
+      settleSaveState("error", 2600);
       useGenerationStore.setState({
         status: "error",
-        errorMessage: saveError instanceof Error ? saveError.message : String(saveError),
+        errorMessage: `저장 실패: ${saveError instanceof Error ? saveError.message : String(saveError)}`,
       });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -220,6 +329,16 @@ export function V5Studio() {
                     : "Anlas —"}
             </strong>
           </button>
+          {usageLabel && (
+            <button
+              className={`quota-pill usage-pill ${quota?.usage?.isNegative ? "negative" : ""}`}
+              onClick={() => void refreshQuota()}
+              title={usageHint ?? "NovelAI V5 사용 한도"}
+            >
+              <strong>{usageLabel}</strong>
+              {usageHint && <span>{usageHint}</span>}
+            </button>
+          )}
           <button
             className={`icon-button privacy-toggle ${imagesHidden ? "active" : ""}`}
             aria-label={imagesHidden ? "이미지 표시" : "이미지 숨기기"}
@@ -262,7 +381,7 @@ export function V5Studio() {
                   </div>
                 </>
               ) : (
-                <img src={selected.src} alt="NovelAI generation" />
+                <img src={(!showOriginal && finishPreviewUrl) || selected.src} alt="NovelAI generation" />
               )
             ) : (
               <>
@@ -289,6 +408,80 @@ export function V5Studio() {
               />
             )}
 
+            {selected && !imagesHidden && !placementId && (
+              <div className="finish-controls">
+                <button
+                  type="button"
+                  className={`finish-chip ${finishEnabled ? "active" : ""} ${finishPending ? "pending" : ""}`}
+                  aria-pressed={finishEnabled}
+                  title={finishError ?? (finishEnabled ? "마무리 필터 끄기 · 길게 눌러 조절" : "마무리 필터 켜기 · 길게 눌러 조절")}
+                  onPointerDown={() => {
+                    finishLongPressed.current = false;
+                    cancelFinishLongPress();
+                    finishLongPressTimer.current = window.setTimeout(() => {
+                      finishLongPressed.current = true;
+                      setFinishOpen(true);
+                    }, 450);
+                  }}
+                  onPointerUp={cancelFinishLongPress}
+                  onPointerLeave={cancelFinishLongPress}
+                  onPointerCancel={cancelFinishLongPress}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (finishLongPressed.current) {
+                      finishLongPressed.current = false;
+                      return;
+                    }
+                    setFinishEnabled(!finishEnabled);
+                  }}
+                >
+                  {finishPending && <span className="finish-busy" aria-hidden="true" />}
+                  마무리{finishEnabled ? (finishError ? " !" : " ON") : ""}
+                </button>
+                <button
+                  type="button"
+                  className="finish-chip finish-chip-adjust"
+                  aria-label="마무리 필터 조절"
+                  title="마무리 필터 조절"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setFinishOpen(true);
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+                </button>
+              </div>
+            )}
+
+            {selected && !imagesHidden && !placementId && finishEnabled && finishPreviewUrl && (
+              <button
+                type="button"
+                className={`finish-compare ${showOriginal ? "active" : ""}`}
+                aria-pressed={showOriginal}
+                title="누르고 있는 동안 원본 보기"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  setShowOriginal(true);
+                }}
+                onPointerUp={() => setShowOriginal(false)}
+                onPointerLeave={() => setShowOriginal(false)}
+                onPointerCancel={() => setShowOriginal(false)}
+                onKeyDown={(event) => {
+                  if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    setShowOriginal(true);
+                  }
+                }}
+                onKeyUp={() => setShowOriginal(false)}
+                onBlur={() => setShowOriginal(false)}
+                onContextMenu={(event) => event.preventDefault()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                원본
+              </button>
+            )}
+
             {(status === "generating" || status === "upscaling") && (
               <div className="stage-progress">{status === "upscaling" ? "Upscaling…" : "Generating…"}</div>
             )}
@@ -299,8 +492,25 @@ export function V5Studio() {
           <div className="image-actions">
             <button onClick={() => useSeed(selected.seed)}>Seed</button>
             <button onClick={() => void copyPrompt()}>Prompt</button>
-            <button disabled={selected.width * selected.height > 1024 * 1024 || busy} onClick={() => void upscale()}>Upscale</button>
-            <button disabled={saving} onClick={() => void saveSelected()}>{saving ? "저장 중…" : "저장"}</button>
+            <button disabled={selected.width * selected.height > 1024 * 1024 || busy} onClick={() => void upscale()}>
+              Upscale <small>{formatAnlasCost(UPSCALE_ANLAS)}</small>
+            </button>
+            <button
+              className={`save-button ${saveState}`}
+              disabled={saving}
+              aria-live="polite"
+              onClick={() => void saveSelected()}
+            >
+              {saveState === "saving" ? (
+                <><span className="save-spinner" aria-hidden="true" />저장 중</>
+              ) : saveState === "success" ? (
+                <><svg className="save-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>저장됨</>
+              ) : saveState === "error" ? (
+                <>! 저장 실패</>
+              ) : (
+                <>{finishEnabled ? "저장 · 마무리" : "저장"}</>
+              )}
+            </button>
           </div>
         )}
 
@@ -359,12 +569,18 @@ export function V5Studio() {
           <button onClick={() => setSettingsOpen(true)}>{settings.width}×{settings.height}</button>
           <button onClick={() => setSettingsOpen(true)}>{settings.steps} steps</button>
           <button onClick={() => setSettingsOpen(true)}>CFG {settings.guidance}</button>
+          <ImageLoadButton />
         </div>
       </section>
 
       {error && <div className="error-toast"><span>{error}</span><button onClick={clearError}>×</button></div>}
       {notice && <div className="success-toast"><span>{notice}</span></div>}
-      <div className="generate-dock"><button disabled={busy} onClick={() => void generate()}>{status === "generating" ? "GENERATING…" : status === "upscaling" ? "UPSCALING…" : "GENERATE"}</button></div>
+      <div className="generate-dock">
+        <button disabled={busy} onClick={() => void generate()}>
+          {status === "generating" ? "GENERATING…" : status === "upscaling" ? "UPSCALING…" : "GENERATE"}
+          {generationCost && !busy && <small className="generate-cost">{generationCost}</small>}
+        </button>
+      </div>
 
       {sheet && <PromptSheet section={sheet} onClose={() => setSheet(null)} onDictionary={(destination) => setQuickCopy(destination)} onPrombot={(destination) => setPrombot(destination)} />}
       {characters && (
@@ -379,6 +595,7 @@ export function V5Studio() {
       {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
       {prombot && <PrombotSheet destination={prombot} onClose={() => setPrombot(null)} onInsert={(value) => appendPrompt(prombot, value)} />}
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      {finishOpen && <FinishSheet image={selected} busy={finishPending} onClose={() => setFinishOpen(false)} />}
       {viewer && <ImageViewer images={images} index={active} onIndex={setActive} onClose={() => setViewer(false)} />}
     </main>
   );

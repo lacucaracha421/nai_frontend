@@ -5,6 +5,7 @@ import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../ad
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import { useCharacterLibraryStore } from "./characterLibraryStore";
 import { applyRandomCharacter, pickRandomCharacter } from "../features/prompt/randomCharacter";
+import type { LoadedGeneration } from "../features/generator/load/mapNovelAiMetadata";
 import type {
   CharacterPrompt,
   GenerationImage,
@@ -37,6 +38,19 @@ const newCharacter = (index: number): CharacterPrompt => ({
   },
 });
 
+/** Everything "불러오기" may change; kept so the toast can undo it. */
+export type LoadSnapshot = Pick<
+  State,
+  | "artistPrompt"
+  | "otherPrompt"
+  | "qualityPrompt"
+  | "negativePrompt"
+  | "characters"
+  | "useCharacterCoords"
+  | "randomCharacterEnabled"
+  | "settings"
+>;
+
 const isBusy = (status: GenerationStatus) => status === "generating" || status === "upscaling";
 
 type State = {
@@ -65,6 +79,9 @@ type State = {
   clearSessionImages: () => void;
   clearError: () => void;
   useSeed: (seed: number | null) => void;
+  /** Applies metadata read from an image and returns the previous state for undo. */
+  applyLoadedGeneration: (loaded: LoadedGeneration) => LoadSnapshot;
+  restoreLoadSnapshot: (snapshot: LoadSnapshot) => void;
   positivePrompt: () => string;
   generate: () => Promise<void>;
   upscaleActive: () => Promise<void>;
@@ -143,6 +160,35 @@ export const useGenerationStore = create<State>()(
       clearSessionImages: () => set({ images: [], activeImage: 0 }),
       clearError: () => set({ errorMessage: null, status: "idle" }),
       useSeed: (seed) => set((state) => ({ settings: { ...state.settings, seed } })),
+      applyLoadedGeneration: (loaded) => {
+        const state = get();
+        const snapshot: LoadSnapshot = {
+          artistPrompt: state.artistPrompt,
+          otherPrompt: state.otherPrompt,
+          qualityPrompt: state.qualityPrompt,
+          negativePrompt: state.negativePrompt,
+          characters: state.characters,
+          useCharacterCoords: state.useCharacterCoords,
+          randomCharacterEnabled: state.randomCharacterEnabled,
+          settings: state.settings,
+        };
+        const characters = loaded.characters.length
+          ? loaded.characters.map((character, index) => ({ ...newCharacter(index), ...character }))
+          : [newCharacter(0)];
+        set({
+          artistPrompt: loaded.artistPrompt,
+          otherPrompt: loaded.otherPrompt,
+          qualityPrompt: loaded.qualityPrompt,
+          negativePrompt: loaded.negativePrompt,
+          characters,
+          useCharacterCoords: loaded.useCharacterCoords,
+          // A random character would replace the loaded ones on the next Generate.
+          randomCharacterEnabled: false,
+          settings: { ...state.settings, ...loaded.settings },
+        });
+        return snapshot;
+      },
+      restoreLoadSnapshot: (snapshot) => set({ ...snapshot }),
       positivePrompt: () => joinPositivePrompt(get()),
 
       generate: async () => {

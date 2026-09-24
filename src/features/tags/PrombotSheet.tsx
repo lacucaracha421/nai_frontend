@@ -4,7 +4,12 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import type { PromptSectionKey } from "../../types/generation";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { favoriteLocalTags } from "./localTagIndex";
-import { mergePrombotFavorites, resolvePrombotTags } from "../prompt/prombotFavorites";
+import {
+  mergePrombotFavorites,
+  prombotImportMessage,
+  resolvePrombotTags,
+  type PrombotFavoriteCatalog,
+} from "../prompt/prombotFavorites";
 
 const DESTINATION_LABEL: Record<PromptSectionKey | "character", string> = {
   artist: "Artist",
@@ -71,20 +76,21 @@ export function PrombotSheet({
     setImporting(true);
     setMessage(null);
     try {
-      const keys = await invoke<string[]>("prombot_favorites");
-      const [resolved, seriesByRaw] = keys.length ? await Promise.all([
-        favoriteLocalTags(keys, ["character"]),
-        invoke<Record<string, string>>("prombot_favorite_series", { keys }).catch((): Record<string, string> => ({})),
-      ]) : [[], {} as Record<string, string>];
+      const rawKeys = await invoke<string[]>("prombot_favorites");
+      // Prombot stores a series ☆ as every member of the series; keep only the
+      // characters the user bookmarked one by one (see NAI-005).
+      const catalog = await invoke<PrombotFavoriteCatalog>("prombot_favorite_catalog", { keys: rawKeys });
+      const keys = catalog.characters;
+      const resolved = keys.length ? await favoriteLocalTags(keys, ["character"]) : [];
       const incoming = resolvePrombotTags(keys, resolved).map((tag) => ({
         ...tag,
-        series: seriesByRaw[tag.raw],
+        series: catalog.series[tag.raw],
       }));
       const current = useCharacterLibraryStore.getState().entries;
       const result = mergePrombotFavorites(current, incoming);
       useCharacterLibraryStore.setState({ entries: result.entries });
-      setMessage(keys.length
-        ? `북마크 ${result.stats.total}명 · 신규 ${result.stats.added}명 · 기존 ${result.stats.existing}명 · 제거 ${result.stats.removed}명`
+      setMessage(rawKeys.length
+        ? prombotImportMessage(catalog, result.stats)
         : `현재 북마크 0명 · Prombot에서 가져온 캐릭터 ${result.stats.removed}명을 도감에서 제거했습니다.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergePrombotFavorites, resolvePrombotTags } from "./prombotFavorites";
+import { mergePrombotFavorites, prombotImportMessage, resolvePrombotTags, type PrombotFavoriteCatalog } from "./prombotFavorites";
 import { UNCATEGORIZED_SERIES, type CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
 const entry = (patch: Partial<CharacterLibraryEntry>): CharacterLibraryEntry => ({
@@ -75,5 +75,41 @@ describe("Prombot favorites import", () => {
       { raw: "known_(series)", display: "known (series)" },
       { raw: "missing_character_(other_series)", display: "missing character (other series)" },
     ]);
+  });
+
+  it("imports only individual bookmarks and replaces an earlier inflated import (NAI-005)", () => {
+    // An earlier import stored every member of a series ☆ (379 characters).
+    const inflated = mergePrombotFavorites([], Array.from({ length: 379 }, (_, index) => ({
+      raw: index < 333 ? `touhou_${index}` : `pick_${index}`,
+      display: `c${index}`,
+    }))).entries;
+    expect(inflated.filter((item) => item.prombotFavorite).length).toBe(379);
+
+    const catalog: PrombotFavoriteCatalog = {
+      available: true,
+      characters: Array.from({ length: 43 }, (_, index) => `pick_${index + 333}`),
+      series: {},
+      unknown: ["renamed_character", "removed_character"],
+      seriesFavorites: [{ series: "touhou", members: 333, favorited: 333 }],
+    };
+    const result = mergePrombotFavorites(
+      inflated,
+      catalog.characters.map((raw) => ({ raw, display: raw })),
+    );
+    expect(result.entries.filter((item) => item.prombotFavorite).length).toBe(43);
+    expect(result.stats).toEqual({ added: 0, existing: 43, removed: 336, total: 43 });
+    expect(prombotImportMessage(catalog, result.stats)).toBe([
+      "북마크 43명 · 시리즈 즐겨찾기 1개 제외 · 알 수 없는 이름 2개 제외 · 신규 0 · 기존 43 · 제거 336",
+      "제외한 시리즈: touhou 333/333명",
+      "알 수 없는 이름: renamed character, removed character",
+    ].join("\n"));
+  });
+
+  it("says so when Prombot's character list could not be loaded", () => {
+    const message = prombotImportMessage(
+      { available: false, characters: ["a"], series: {}, unknown: [], seriesFavorites: [] },
+      { added: 1, existing: 0, removed: 0, total: 1 },
+    );
+    expect(message).toBe("북마크 1명 · Prombot 캐릭터 목록을 받지 못해 필터 없이 가져옴 · 신규 1 · 기존 0 · 제거 0");
   });
 });

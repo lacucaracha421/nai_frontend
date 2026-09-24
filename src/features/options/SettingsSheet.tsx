@@ -1,5 +1,6 @@
 import { useGenerationStore } from "../../stores/generationStore";
 import { useConnectionStore } from "../../stores/connectionStore";
+import { useUiStore } from "../../stores/uiStore";
 import { SAMPLERS, V5_MODELS } from "../../adapters/novelai/models";
 import { BackupSection } from "./BackupSection";
 import { TranslationSettings } from "./TranslationSettings";
@@ -26,6 +27,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const disconnect = useConnectionStore((state) => state.disconnect);
   const status = useConnectionStore((state) => state.status);
   const message = useConnectionStore((state) => state.message);
+  const saveFormat = useUiStore((state) => state.saveFormat);
+  const setSaveFormat = useUiStore((state) => state.setSaveFormat);
 
   return (
     <div className="sheet settings-sheet">
@@ -134,6 +137,18 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           <select value={settings.sampler} onChange={(event) => setSetting("sampler", event.target.value)}>
             {SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
           </select>
+        </section>
+
+        <section>
+          <h3>저장 형식</h3>
+          <div className="segmented">
+            <button className={saveFormat === "webp" ? "active" : ""} aria-pressed={saveFormat === "webp"} onClick={() => setSaveFormat("webp")}>
+              WebP (용량 작게)
+            </button>
+            <button className={saveFormat === "png" ? "active" : ""} aria-pressed={saveFormat === "png"} onClick={() => setSaveFormat("png")}>
+              PNG (원본 그대로)
+            </button>
+          </div>
         </section>
 
         <TranslationSettings />

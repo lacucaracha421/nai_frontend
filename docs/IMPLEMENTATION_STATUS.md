@@ -41,3 +41,19 @@
 - Added `scripts/import-nextaltair.py` and `requirements-tags.txt`.
 - Category JSON is now build input only; Tauri searches a bundled SQLite/FTS5 index and returns only top matches to the WebView.
 - `npm run tags:sync` downloads/normalizes the newest dataset and rebuilds `src-tauri/resources/danbooru.sqlite.gz`.
+
+## 2026-09-24 backlog pass (NAI-001 … NAI-005)
+- One-tap Save to `Pictures/NAI V5 Studio` (desktop) and shared `Pictures/NAI V5 Studio` (Android), numeric suffix on name clashes, animated save button.
+- Site-compatible NovelAI upscale request (V5 Curated, fixed 2×, 1 Anlas) with a mocked-HTTP Rust test; NovelAI error text is surfaced.
+- V5 usage-limit pill and a conservative `estimateAnlas` (known Opus free case only, otherwise "비용 미확인").
+- Prombot import excludes series-☆ expansions and unknown names, with a diagnostic summary line.
+- Finish filter "마무리" (replaces the plain grain filter): 애니 마무리 / 수채화 종이 presets with detail sliders, Web Worker preview and full-resolution save as `…_finish.png` (alpha and PNG text metadata preserved). See BACKLOG NAI-001.
+- Checked with `tsc -b`, `vitest run`, `cargo test --lib`, and `cargo check --target aarch64-linux-android`. Not yet checked: live upscale, live usage values, Android save on the S11, the finish filter in the running app.
+
+## 2026-09-24 NAI-006 — WebP save
+- Save defaults to verified lossy WebP q90 with NovelAI text fields as XMP (no EXIF); PNG remains a setting ("저장 형식"). Alpha/stealth metadata and XMP are verified after encoding, falling back to PNG with a toast. See BACKLOG NAI-006.
+- Checked with `tsc -b`, `vitest run`, `cargo test --lib`, `cargo check`, and `cargo check --lib --target aarch64-linux-android`. Not yet checked: the WebView WebP encoder on the S11 / WebView2, and NovelAI-site recognition of an app-saved file.
+
+## 2026-09-24 NAI-007 — Load settings from an image
+- "불러오기" in the quick-settings row reads NovelAI metadata from a picked PNG/WebP (PNG text chunks → WebP XMP → stealth alpha) and applies prompts, characters/positions, exact seed and generation settings immediately, with a 6 s undo toast. See BACKLOG NAI-007.
+- Checked with `tsc -b` and `vitest run` (including the user's real NovelAI PNG and WebP files F/D when present). Not yet checked: the Android picker and loading on the S11.

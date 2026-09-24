@@ -1,11 +1,15 @@
 use crate::{
     novelai::{self, GeneratedImage, ImageCacheState, NovelAiQuota, NovelAiState},
-    prombot::{self, PrombotState},
+    prombot::{self, FavoriteCatalog, PrombotState},
+    save,
     tagdb::{self, LocalTagResult, TagDbState},
     translation::{self, TranslationConfig, TranslationKeyStatus, TranslationProvider},
 };
 use serde_json::Value;
-use tauri::{AppHandle, State};
+use tauri::{
+    ipc::{InvokeBody, Request},
+    AppHandle, State,
+};
 
 #[tauri::command]
 pub fn set_novelai_token(state: State<'_, NovelAiState>, token: String) -> Result<(), String> {
@@ -126,8 +130,25 @@ pub fn prombot_favorites(state: State<'_, PrombotState>) -> Result<Vec<String>, 
 }
 
 #[tauri::command]
-pub async fn prombot_favorite_series(
-    keys: Vec<String>,
-) -> Result<std::collections::HashMap<String, String>, String> {
-    prombot::favorite_series(keys).await
+pub async fn prombot_favorite_catalog(keys: Vec<String>) -> Result<FavoriteCatalog, String> {
+    prombot::favorite_catalog(keys).await
+}
+
+/// Saves PNG or WebP bytes (raw IPC body) into the app's save folder. The file
+/// name is sent URI-encoded in the `x-filename` header; its extension follows
+/// the detected format.
+#[tauri::command]
+pub async fn save_image(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Save expects raw image bytes.".to_string());
+    };
+    let filename = request
+        .headers()
+        .get("x-filename")
+        .and_then(|value| value.to_str().ok())
+        .map(save::decode_uri_component)
+        .unwrap_or_default();
+    let directory = save::save_directory(&app)?;
+    let path = save::write_image(&directory, &filename, bytes)?;
+    Ok(path.to_string_lossy().into_owned())
 }

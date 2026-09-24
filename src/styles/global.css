@@ -338,3 +338,13 @@
   min-height:44px;border:1px solid #3a414d;border-radius:12px;background:#1b1f27;color:#e7e9ef;
 }
 .prombot-control-actions button:last-child{border-color:#5a5597;background:#28243f;color:#f0edff}
+
+/* "불러오기" (load settings from an image): touch-sized entry and a toast with an undo action. */
+.quick-settings{grid-template-columns:1.2fr 1fr .9fr .9fr 1fr}
+.quick-settings .image-load-button{min-height:44px;border-color:#5d53a8;color:#e4e0ff;font-weight:700}
+.quick-settings .image-load-button:disabled{opacity:.6}
+.image-load-toast{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 15px}
+.image-load-toast span{display:flex;flex-direction:column;gap:3px}
+.image-load-toast small{font-size:11px;line-height:1.4;opacity:.8}
+.image-load-toast button{flex:0 0 auto;min-width:88px;min-height:44px;border:0;border-radius:11px;background:transparent;color:#4f449e;font-size:13px;font-weight:800}
+@media(max-width:600px){.quick-settings{grid-template-columns:repeat(2,1fr)}}

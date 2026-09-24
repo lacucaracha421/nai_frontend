@@ -352,12 +352,80 @@ fn parse_upscale_archive(
     Ok(images)
 }
 
+/// The site's dedicated upscaler model. It is shared by every V5 generation
+/// regardless of whether the image came from V5 Full or V5 Curated.
+const UPSCALE_MODEL: &str = "nai-diffusion-5-curated";
+
+fn upscale_request_json() -> Value {
+    json!({
+        "image": "image",
+        "model": UPSCALE_MODEL,
+        "declared_blur_sigma": 0
+    })
+}
+
+/// Multipart body used by the NovelAI web client: an `image` PNG part and a
+/// `request` JSON part, both sent as browser Blobs (filename "blob").
+fn upscale_form(source: Vec<u8>) -> Result<Form, String> {
+    let image = Part::bytes(source)
+        .file_name("blob")
+        .mime_str("image/png")
+        .map_err(|error| format!("Could not prepare upscale image payload: {error}"))?;
+    let request = Part::bytes(upscale_request_json().to_string().into_bytes())
+        .file_name("blob")
+        .mime_str("application/json")
+        .map_err(|error| format!("Could not prepare upscale request payload: {error}"))?;
+    Ok(Form::new().part("image", image).part("request", request))
+}
+
+/// UTC timestamp in JavaScript `Date.prototype.toISOString()` form.
+fn iso_timestamp_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    iso_timestamp(since_epoch.as_secs() as i64, since_epoch.subsec_millis())
+}
+
+fn iso_timestamp(unix_seconds: i64, millis: u32) -> String {
+    let days = unix_seconds.div_euclid(86_400);
+    let seconds_of_day = unix_seconds.rem_euclid(86_400);
+    // Howard Hinnant's civil-from-days algorithm.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{millis:03}Z",
+        seconds_of_day / 3_600,
+        (seconds_of_day % 3_600) / 60,
+        seconds_of_day % 60
+    )
+}
+
+/// Random 6-character id, like the web client's `Math.random().toString(36)`.
+fn random_correlation_id() -> String {
+    uuid::Uuid::new_v4().simple().to_string()[..6].to_string()
+}
+
 pub async fn upscale(
     token: &str,
     image_path: String,
     cache: &ImageCacheState,
 ) -> Result<Vec<GeneratedImage>, String> {
-    let source = cached_image_bytes(cache, &image_path)?;
+    upscale_at(IMAGE_API_BASE, token, &image_path, cache).await
+}
+
+async fn upscale_at(
+    base_url: &str,
+    token: &str,
+    image_path: &str,
+    cache: &ImageCacheState,
+) -> Result<Vec<GeneratedImage>, String> {
+    let source = cached_image_bytes(cache, image_path)?;
     let (width, height) = png_dimensions(&source)
         .ok_or_else(|| "Could not determine upscale source dimensions.".to_string())?;
 
@@ -369,148 +437,67 @@ pub async fn upscale(
         ));
     }
 
-    // Dedicated NovelAI Upscale has been inconsistent across clients / docs.
-    // To improve compatibility, try a few server-compatible payload variants:
-    // 1) JSON without model
-    // 2) multipart/form-data without model
-    // 3) JSON with model=upscale / waifu2x
-    // 4) multipart/form-data with model=upscale / waifu2x
-    let correlation_id = correlation_id();
+    let correlation_id = random_correlation_id();
+    let response = client()?
+        .post(format!("{base_url}/ai/upscale"))
+        .header(AUTHORIZATION, format!("Bearer {}", token.trim()))
+        .header("x-correlation-id", correlation_id.as_str())
+        .header("x-initiated-at", iso_timestamp_now())
+        .multipart(upscale_form(source)?)
+        .send()
+        .await
+        .map_err(|e| format!("NovelAI upscale request failed [{correlation_id}]: {e}"))?;
 
-    enum UpscaleBody {
-        Json(Value),
-        Multipart(Form),
+    let status = response.status();
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("Could not read NovelAI upscale response [{correlation_id}]: {error}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "NovelAI upscale API error ({status}) [request {correlation_id}]: {}",
+            compact_error(&String::from_utf8_lossy(&bytes))
+        ));
     }
-
-    let base_json = json!({
-        "image": BASE64.encode(&source),
-        "width": width,
-        "height": height,
-        "scale": 2
-    });
-
-    let make_form = |model: Option<&str>| -> Result<Form, String> {
-        let image_part = Part::bytes(source.clone())
-            .file_name("source.png")
-            .mime_str("image/png")
-            .map_err(|error| format!("Could not prepare upscale image payload: {error}"))?;
-        let mut form = Form::new()
-            .part("image", image_part)
-            .text("width", width.to_string())
-            .text("height", height.to_string())
-            .text("scale", "2");
-        if let Some(model) = model {
-            form = form.text("model", model.to_string());
-        }
-        Ok(form)
-    };
-
-    let mut attempts: Vec<(&str, UpscaleBody)> = vec![
-        ("json-no-model", UpscaleBody::Json(base_json.clone())),
-        ("multipart-no-model", UpscaleBody::Multipart(make_form(None)?)),
-    ];
-
-    for candidate in ["upscale", "waifu2x", "image-upscale", "anime"] {
-        let mut json_payload = base_json.clone();
-        if let Some(obj) = json_payload.as_object_mut() {
-            obj.insert("model".to_string(), Value::String(candidate.to_string()));
-        }
-        attempts.push(("json-with-model", UpscaleBody::Json(json_payload)));
-        attempts.push(("multipart-with-model", UpscaleBody::Multipart(make_form(Some(candidate))?)));
-    }
-
-    let mut last_error = String::new();
-
-    for (attempt_kind, body) in attempts {
-        let builder = client()?
-            .post(format!("{IMAGE_API_BASE}/ai/upscale"))
-            .header(AUTHORIZATION, format!("Bearer {token}"))
-            .header(ACCEPT, "application/zip")
-            .header("x-correlation-id", correlation_id.as_str());
-
-        let response = match body {
-            UpscaleBody::Json(payload) => builder
-                .header(CONTENT_TYPE, "application/json")
-                .json(&payload)
-                .send()
-                .await
-                .map_err(|e| format!("NovelAI upscale failed [{correlation_id}] ({attempt_kind}): {e}"))?,
-            UpscaleBody::Multipart(form) => builder
-                .multipart(form)
-                .send()
-                .await
-                .map_err(|e| format!("NovelAI upscale failed [{correlation_id}] ({attempt_kind}): {e}"))?,
-        };
-
-        let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|error| format!("Could not read NovelAI upscale response [{correlation_id}] ({attempt_kind}): {error}"))?;
-
-        if status.is_success() {
-            return parse_upscale_archive(&bytes, &correlation_id, cache);
-        }
-
-        let body = String::from_utf8_lossy(&bytes);
-        last_error = format!(
-            "NovelAI upscale API error ({status}) [request {correlation_id}, {attempt_kind}]: {}",
-            compact_error(&body)
-        );
-
-        let lowered = body.to_ascii_lowercase();
-        let retryable_model_error = status.as_u16() == 400
-            && (lowered.contains("model doesn't exist")
-                || lowered.contains("model does not exist")
-                || lowered.contains("invalid model")
-                || lowered.contains("unknown model")
-                || lowered.contains("\"model\""));
-
-        if !retryable_model_error {
-            return Err(last_error);
-        }
-    }
-
-    Err(last_error)
+    parse_upscale_archive(&bytes, &correlation_id, cache)
 }
 
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NovelAiUsage {
+    pub percent: Option<f64>,
+    pub is_negative: Option<bool>,
+    pub time_until_next_percent: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NovelAiQuota {
     pub anlas: Option<i64>,
     pub subscription_anlas: Option<i64>,
     pub paid_anlas: Option<i64>,
     pub tier: Option<i64>,
+    /// V5 usage limit ("battery"). `None` when the account response has no
+    /// usable `usage` object.
+    pub usage: Option<NovelAiUsage>,
 }
 
 fn value_i64(value: Option<&Value>) -> Option<i64> {
     value.and_then(|value| value.as_i64().or_else(|| value.as_f64().map(|v| v.round() as i64)))
 }
 
-pub async fn quota(token: &str) -> Result<NovelAiQuota, String> {
-    let auth = format!("Bearer {token}");
+fn parse_usage(value: Option<&Value>) -> Option<NovelAiUsage> {
+    let usage = value?.as_object()?;
+    let parsed = NovelAiUsage {
+        percent: usage.get("percent").and_then(Value::as_f64),
+        is_negative: usage.get("isNegative").and_then(Value::as_bool),
+        time_until_next_percent: value_i64(usage.get("timeUntilNextPercent")),
+    };
+    (parsed.percent.is_some() || parsed.is_negative.is_some()).then_some(parsed)
+}
 
-    let subscription_response = client()?
-        .get(format!("{IMAGE_API_BASE}/user/subscription"))
-        .header(AUTHORIZATION, auth.clone())
-        .send()
-        .await
-        .map_err(|error| format!("Could not read NovelAI subscription status: {error}"))?;
-
-    let subscription_status = subscription_response.status();
-    let subscription: Value = subscription_response
-        .json()
-        .await
-        .map_err(|error| format!("NovelAI returned invalid subscription data: {error}"))?;
-
-    if !subscription_status.is_success() {
-        return Err(format!(
-            "NovelAI subscription API error ({subscription_status}): {}",
-            compact_error(&subscription.to_string())
-        ));
-    }
-
+fn parse_quota(subscription: &Value) -> NovelAiQuota {
     let fixed = value_i64(
         subscription
             .get("trainingStepsLeft")
@@ -527,14 +514,37 @@ pub async fn quota(token: &str) -> Result<NovelAiQuota, String> {
         (None, Some(b)) => Some(b),
         (None, None) => None,
     };
-
-
-    Ok(NovelAiQuota {
+    NovelAiQuota {
         anlas,
         subscription_anlas: fixed,
         paid_anlas: purchased,
         tier: value_i64(subscription.get("tier")),
-    })
+        usage: parse_usage(subscription.get("usage")),
+    }
+}
+
+pub async fn quota(token: &str) -> Result<NovelAiQuota, String> {
+    let subscription_response = client()?
+        .get(format!("{IMAGE_API_BASE}/user/subscription"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await
+        .map_err(|error| format!("Could not read NovelAI subscription status: {error}"))?;
+
+    let subscription_status = subscription_response.status();
+    let body = subscription_response
+        .text()
+        .await
+        .map_err(|error| format!("Could not read NovelAI subscription status: {error}"))?;
+    if !subscription_status.is_success() {
+        return Err(format!(
+            "NovelAI subscription API error ({subscription_status}): {}",
+            compact_error(&body)
+        ));
+    }
+    let subscription: Value = serde_json::from_str(&body)
+        .map_err(|error| format!("NovelAI returned invalid subscription data: {error}"))?;
+    Ok(parse_quota(&subscription))
 }
 
 fn compact_error(body: &str) -> String {
@@ -549,4 +559,245 @@ fn compact_error(body: &str) -> String {
         }
     }
     body.chars().take(700).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        io::Write,
+        net::TcpListener,
+        sync::mpsc,
+        thread,
+    };
+
+    fn png_header(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        bytes.extend(width.to_be_bytes());
+        bytes.extend(height.to_be_bytes());
+        bytes.extend([8, 6, 0, 0, 0, 0, 0, 0, 0]);
+        bytes
+    }
+
+    fn temp_cache(name: &str) -> ImageCacheState {
+        let dir = std::env::temp_dir().join(format!("nai-test-{name}-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        ImageCacheState { dir }
+    }
+
+    struct CapturedRequest {
+        head: String,
+        body: Vec<u8>,
+    }
+
+    fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        haystack.windows(needle.len()).position(|window| window == needle)
+    }
+
+    fn dechunk(mut raw: &[u8]) -> Vec<u8> {
+        let mut body = Vec::new();
+        loop {
+            let line_end = find(raw, b"\r\n").unwrap();
+            let size = usize::from_str_radix(std::str::from_utf8(&raw[..line_end]).unwrap().trim(), 16).unwrap();
+            raw = &raw[line_end + 2..];
+            if size == 0 {
+                return body;
+            }
+            body.extend_from_slice(&raw[..size]);
+            raw = &raw[size + 2..];
+        }
+    }
+
+    /// One-shot local HTTP server: captures the request, replies with `response_body`.
+    fn serve_once(status_line: &'static str, content_type: &'static str, response_body: Vec<u8>) -> (String, mpsc::Receiver<CapturedRequest>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut raw = Vec::new();
+            let mut buffer = [0_u8; 16 * 1024];
+            let (head, body) = loop {
+                let read = stream.read(&mut buffer).unwrap();
+                raw.extend_from_slice(&buffer[..read]);
+                if let Some(head_end) = find(&raw, b"\r\n\r\n") {
+                    let head = String::from_utf8_lossy(&raw[..head_end]).into_owned();
+                    let body = &raw[head_end + 4..];
+                    if let Some(length) = header(&head, "content-length") {
+                        let length = length.parse::<usize>().unwrap();
+                        if body.len() >= length {
+                            break (head, body[..length].to_vec());
+                        }
+                    } else if body.ends_with(b"0\r\n\r\n") {
+                        break (head, dechunk(body));
+                    }
+                }
+                assert!(read > 0, "client closed the connection early");
+            };
+            sender.send(CapturedRequest { head, body }).unwrap();
+            let reply = format!(
+                "{status_line}\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                response_body.len()
+            );
+            stream.write_all(reply.as_bytes()).unwrap();
+            stream.write_all(&response_body).unwrap();
+        });
+        (base, receiver)
+    }
+
+    fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
+        head.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            key.eq_ignore_ascii_case(name).then(|| value.trim())
+        })
+    }
+
+    fn zip_with(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in entries {
+            writer
+                .start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn upscale_sends_the_novelai_site_multipart_request_and_reads_the_zip() {
+        let cache = temp_cache("upscale");
+        let source = png_header(832, 1216);
+        let source_path = cache.dir.join("generation-abc-0.png");
+        fs::write(&source_path, &source).unwrap();
+        let upscaled = png_header(1664, 2432);
+        let (base, captured) = serve_once(
+            "HTTP/1.1 200 OK",
+            "application/zip",
+            zip_with(&[("image_0.png", &upscaled)]),
+        );
+
+        let images = tauri::async_runtime::block_on(upscale_at(
+            &base,
+            " secret-token ",
+            source_path.to_str().unwrap(),
+            &cache,
+        ))
+        .unwrap();
+
+        let request = captured.recv().unwrap();
+        let mut lines = request.head.lines();
+        assert_eq!(lines.next(), Some("POST /ai/upscale HTTP/1.1"));
+        assert_eq!(header(&request.head, "authorization"), Some("Bearer secret-token"));
+        let correlation = header(&request.head, "x-correlation-id").unwrap();
+        assert_eq!(correlation.len(), 6);
+        assert!(correlation.chars().all(|c| c.is_ascii_alphanumeric()));
+        let initiated = header(&request.head, "x-initiated-at").unwrap();
+        assert_eq!(initiated.len(), "2026-09-24T01:02:03.456Z".len());
+        assert!(initiated.ends_with('Z') && initiated.as_bytes()[10] == b'T');
+        let content_type = header(&request.head, "content-type").unwrap();
+        let boundary = content_type
+            .strip_prefix("multipart/form-data; boundary=")
+            .expect("multipart content type");
+
+        // Exact part layout: image (PNG blob) first, then request (JSON blob).
+        let body = request.body;
+        let delimiter = format!("--{boundary}\r\n");
+        let parts = {
+            let mut parts = Vec::new();
+            let mut rest = &body[..];
+            while let Some(start) = find(rest, delimiter.as_bytes()) {
+                rest = &rest[start + delimiter.len()..];
+                let end = find(rest, format!("\r\n--{boundary}").as_bytes()).unwrap();
+                parts.push(rest[..end].to_vec());
+                rest = &rest[end + 2..];
+            }
+            parts
+        };
+        assert_eq!(parts.len(), 2);
+        let split = |part: &[u8]| {
+            let at = find(part, b"\r\n\r\n").unwrap();
+            (String::from_utf8_lossy(&part[..at]).into_owned(), part[at + 4..].to_vec())
+        };
+        let (image_head, image_body) = split(&parts[0]);
+        assert_eq!(
+            image_head,
+            "Content-Disposition: form-data; name=\"image\"; filename=\"blob\"\r\nContent-Type: image/png"
+        );
+        assert_eq!(image_body, source);
+        let (request_head, request_body) = split(&parts[1]);
+        assert_eq!(
+            request_head,
+            "Content-Disposition: form-data; name=\"request\"; filename=\"blob\"\r\nContent-Type: application/json"
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(&request_body).unwrap(),
+            json!({"image": "image", "model": "nai-diffusion-5-curated", "declared_blur_sigma": 0})
+        );
+        assert!(body.ends_with(format!("\r\n--{boundary}--\r\n").as_bytes()));
+
+        assert_eq!(images.len(), 1);
+        assert_eq!((images[0].width, images[0].height), (1664, 2432));
+        assert_eq!(fs::read(&images[0].path).unwrap(), upscaled);
+        fs::remove_dir_all(&cache.dir).unwrap();
+    }
+
+    #[test]
+    fn upscale_reports_the_novelai_error_body() {
+        let cache = temp_cache("upscale-error");
+        let source_path = cache.dir.join("generation-abc-0.png");
+        fs::write(&source_path, png_header(832, 1216)).unwrap();
+        let (base, _captured) = serve_once(
+            "HTTP/1.1 400 Bad Request",
+            "application/json",
+            br#"{"statusCode":400,"message":"Validation error: model is required"}"#.to_vec(),
+        );
+        let error = tauri::async_runtime::block_on(upscale_at(
+            &base,
+            "token",
+            source_path.to_str().unwrap(),
+            &cache,
+        ))
+        .unwrap_err();
+        assert!(error.contains("400"), "{error}");
+        assert!(error.contains("Validation error: model is required"), "{error}");
+        fs::remove_dir_all(&cache.dir).unwrap();
+    }
+
+    #[test]
+    fn formats_initiated_at_like_javascript_iso_strings() {
+        assert_eq!(iso_timestamp(0, 0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(iso_timestamp(951_782_400, 7), "2000-02-29T00:00:00.007Z");
+        assert_eq!(iso_timestamp(1_790_217_723, 456), "2026-09-24T02:42:03.456Z");
+    }
+
+    #[test]
+    fn parses_v5_usage_and_tolerates_missing_fields() {
+        let full = parse_quota(&json!({
+            "tier": 3,
+            "trainingStepsLeft": {"fixedTrainingStepsLeft": 9898, "purchasedTrainingSteps": 100},
+            "usage": {"percent": 72, "isNegative": false, "timeUntilNextPercent": 7888}
+        }));
+        assert_eq!(full.anlas, Some(9998));
+        assert_eq!(full.tier, Some(3));
+        assert_eq!(
+            full.usage,
+            Some(NovelAiUsage {
+                percent: Some(72.0),
+                is_negative: Some(false),
+                time_until_next_percent: Some(7888)
+            })
+        );
+
+        let partial = parse_quota(&json!({"usage": {"isNegative": true}}));
+        assert_eq!(partial.anlas, None);
+        assert_eq!(
+            partial.usage,
+            Some(NovelAiUsage { percent: None, is_negative: Some(true), time_until_next_percent: None })
+        );
+
+        for usage in [json!(null), json!({}), json!("72%"), json!({"timeUntilNextPercent": 5})] {
+            assert_eq!(parse_quota(&json!({"usage": usage})).usage, None);
+        }
+        assert_eq!(parse_quota(&json!({})).usage, None);
+    }
 }

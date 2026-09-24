@@ -1,14 +1,21 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
 import type { NovelAiGeneratedImage, NovelAiImageRequest } from "./types";
 import type { NovelAiV5Model } from "../../types/generation";
+
+/** V5 usage limit ("battery") from `/user/subscription`; any field may be missing. */
+export type NovelAiUsage = {
+  percent: number | null;
+  isNegative: boolean | null;
+  /** Unit not documented by NovelAI; observed values look like seconds. */
+  timeUntilNextPercent: number | null;
+};
 
 export type NovelAiQuota = {
   anlas: number | null;
   subscriptionAnlas: number | null;
   paidAnlas: number | null;
   tier: number | null;
+  usage?: NovelAiUsage | null;
 };
 
 
@@ -56,9 +63,23 @@ export async function upscaleNovelAiImage(imagePath: string) {
 }
 
 
-export async function saveNovelAiImage(imageSrc: string, filename: string) {
+export async function readImageBytes(imageSrc: string) {
+  const response = await fetch(imageSrc);
+  if (!response.ok) {
+    throw new Error(`저장할 이미지를 읽지 못했습니다. (${response.status})`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * Saves PNG or WebP bytes straight into the app save folder (no file picker).
+ * Desktop: Pictures/NAI V5 Studio. Android: shared Pictures/NAI V5 Studio.
+ * Returns the saved path; an existing name gets a numeric suffix.
+ */
+export async function saveImageBytes(bytes: Uint8Array, filename: string) {
   if (!isTauriRuntime()) {
-    const blob = await fetch(imageSrc).then((response) => response.blob());
+    const type = /\.webp$/i.test(filename) ? "image/webp" : "image/png";
+    const blob = new Blob([bytes as BlobPart], { type });
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = objectUrl;
@@ -67,19 +88,7 @@ export async function saveNovelAiImage(imageSrc: string, filename: string) {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     return filename;
   }
-
-  const target = await save({
-    defaultPath: filename,
-    filters: [{ name: "PNG image", extensions: ["png"] }],
+  return invoke<string>("save_image", bytes, {
+    headers: { "x-filename": encodeURIComponent(filename) },
   });
-  if (!target) return null;
-
-  const response = await fetch(imageSrc);
-  if (!response.ok) {
-    throw new Error(`저장할 이미지를 읽지 못했습니다. (${response.status})`);
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  await writeFile(target, bytes);
-  return target;
 }

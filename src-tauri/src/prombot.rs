@@ -150,29 +150,139 @@ pub fn favorites(state: State<'_, PrombotState>) -> Result<Vec<String>, String> 
     state.snapshot()
 }
 
-fn series_for_favorites(csv: &str, wanted: &[String]) -> HashMap<String, String> {
-    let wanted = wanted.iter().map(String::as_str).collect::<HashSet<_>>();
-    let mut result = HashMap::new();
+/// Prombot's "Other series" bucket: characters with no series or with a
+/// series that has only one character (mirrors prombot.net grouping).
+const PROMBOT_MISC_GROUP: &str = "";
+/// A Prombot series ☆ writes every member of that series into
+/// `prombot:charFavorites`. Groups at least this large whose members are
+/// (almost) all bookmarked are treated as series-level favorites.
+const SERIES_FAVORITE_MIN_MEMBERS: usize = 5;
+const SERIES_FAVORITE_MIN_COVERAGE_PERCENT: usize = 80;
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesFavorite {
+    /// Raw Prombot series key; empty for the "Other series" bucket.
+    pub series: String,
+    pub members: usize,
+    pub favorited: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoriteCatalog {
+    /// False when Prombot's character list could not be loaded; nothing is
+    /// filtered in that case.
+    pub available: bool,
+    /// Individually bookmarked characters, in Prombot order.
+    pub characters: Vec<String>,
+    /// Series for each kept character.
+    pub series: HashMap<String, String>,
+    /// Bookmarks that are not in Prombot's character list.
+    pub unknown: Vec<String>,
+    /// Series-level ☆ expansions that were excluded.
+    pub series_favorites: Vec<SeriesFavorite>,
+}
+
+/// prombot.net splits `characters.csv` on commas without unquoting, so a
+/// quoted CSV name is stored in `charFavorites` with its CSV quoting.
+fn prombot_raw_name(name: &str) -> String {
+    if name.contains(['"', ',', '\n']) {
+        format!("\"{}\"", name.replace('"', "\"\""))
+    } else {
+        name.to_string()
+    }
+}
+
+fn classify_favorites(csv: &str, wanted: &[String]) -> FavoriteCatalog {
     #[derive(serde::Deserialize)]
     struct Row {
         character: String,
         series: String,
     }
+    let mut rows = Vec::new();
     let mut reader = csv::Reader::from_reader(csv.as_bytes());
     for row in reader.deserialize::<Row>().flatten() {
-        let character = row.character.trim();
-        let series = row.series.trim();
-        if wanted.contains(character) && !series.is_empty() {
-            result.insert(character.to_string(), series.to_string());
+        let character = row.character.trim().to_string();
+        if !character.is_empty() {
+            rows.push((character, row.series.trim().to_string()));
         }
     }
-    result
+
+    let mut series_sizes = HashMap::<&str, usize>::new();
+    for (_, series) in &rows {
+        if !series.is_empty() {
+            *series_sizes.entry(series.as_str()).or_default() += 1;
+        }
+    }
+    // name (and Prombot's quoted spelling) -> (series, group)
+    let mut by_name = HashMap::<String, (&str, &str)>::new();
+    let mut group_sizes = HashMap::<&str, usize>::new();
+    for (character, series) in &rows {
+        let group = if series_sizes.get(series.as_str()).copied().unwrap_or(0) >= 2 {
+            series.as_str()
+        } else {
+            PROMBOT_MISC_GROUP
+        };
+        *group_sizes.entry(group).or_default() += 1;
+        by_name.insert(character.clone(), (series.as_str(), group));
+        by_name.insert(prombot_raw_name(character), (series.as_str(), group));
+    }
+
+    let mut seen = HashSet::new();
+    let mut favorited = HashMap::<&str, usize>::new();
+    for name in wanted {
+        if !seen.insert(name.as_str()) {
+            continue;
+        }
+        if let Some((_, group)) = by_name.get(name) {
+            *favorited.entry(group).or_default() += 1;
+        }
+    }
+    let mut series_favorites = favorited
+        .iter()
+        .filter_map(|(group, count)| {
+            let members = group_sizes.get(group).copied().unwrap_or(0);
+            (members >= SERIES_FAVORITE_MIN_MEMBERS
+                && count * 100 >= members * SERIES_FAVORITE_MIN_COVERAGE_PERCENT)
+                .then(|| SeriesFavorite {
+                    series: (*group).to_string(),
+                    members,
+                    favorited: *count,
+                })
+        })
+        .collect::<Vec<_>>();
+    series_favorites.sort_by(|a, b| b.favorited.cmp(&a.favorited).then(a.series.cmp(&b.series)));
+    let excluded_groups = series_favorites
+        .iter()
+        .map(|favorite| favorite.series.as_str())
+        .collect::<HashSet<_>>();
+
+    let mut catalog = FavoriteCatalog {
+        available: true,
+        ..FavoriteCatalog::default()
+    };
+    let mut seen = HashSet::new();
+    for name in wanted {
+        if !seen.insert(name.as_str()) {
+            continue;
+        }
+        match by_name.get(name) {
+            None => catalog.unknown.push(name.clone()),
+            Some((_, group)) if excluded_groups.contains(group) => {}
+            Some((series, _)) => {
+                if !series.is_empty() {
+                    catalog.series.insert(name.clone(), (*series).to_string());
+                }
+                catalog.characters.push(name.clone());
+            }
+        }
+    }
+    catalog.series_favorites = series_favorites;
+    catalog
 }
 
-pub async fn favorite_series(wanted: Vec<String>) -> Result<HashMap<String, String>, String> {
-    if wanted.is_empty() {
-        return Ok(HashMap::new());
-    }
+async fn download_characters_csv() -> Result<String, String> {
     let response = reqwest::Client::new()
         .get(PROMBOT_CHARACTERS_URL)
         .timeout(std::time::Duration::from_secs(20))
@@ -191,12 +301,35 @@ pub async fn favorite_series(wanted: Vec<String>) -> Result<HashMap<String, Stri
     decoder
         .read_to_string(&mut csv)
         .map_err(|error| format!("Could not unpack Prombot character data: {error}"))?;
-    Ok(series_for_favorites(&csv, &wanted))
+    Ok(csv)
+}
+
+/// Splits raw Prombot bookmarks into individual character favorites,
+/// series-level ☆ expansions and names missing from Prombot's list.
+pub async fn favorite_catalog(wanted: Vec<String>) -> Result<FavoriteCatalog, String> {
+    if wanted.is_empty() {
+        return Ok(FavoriteCatalog {
+            available: true,
+            ..FavoriteCatalog::default()
+        });
+    }
+    match download_characters_csv().await {
+        Ok(csv) => Ok(classify_favorites(&csv, &wanted)),
+        // Offline: keep every bookmark rather than dropping the user's list.
+        Err(_) => Ok(FavoriteCatalog {
+            available: false,
+            characters: wanted,
+            ..FavoriteCatalog::default()
+        }),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{favorites_from_url, handle_navigation, series_for_favorites, PrombotState};
+    use super::{
+        classify_favorites, favorites_from_url, handle_navigation, prombot_raw_name, PrombotState,
+        SeriesFavorite,
+    };
 
     #[test]
     fn navigation_stays_on_prombot_and_invalid_signals_do_not_clear_favorites() {
@@ -270,7 +403,7 @@ mod tests {
             "hime_(himesama_goumon)".into(),
             "other".into(),
         ];
-        let result = series_for_favorites(csv, &wanted);
+        let result = classify_favorites(csv, &wanted).series;
         assert_eq!(result.len(), 2);
         assert_eq!(
             result.get(&wanted[0]).map(String::as_str),
@@ -286,11 +419,108 @@ mod tests {
     fn parses_series_only_for_requested_favorites() {
         let csv = "character,series,features,attire\nhatsune_miku,vocaloid,long_hair,\nhakurei_reimu,touhou,long_hair,bow\n";
         let wanted = vec!["hakurei_reimu".to_string()];
-        let result = series_for_favorites(csv, &wanted);
+        let result = classify_favorites(csv, &wanted).series;
         assert_eq!(result.len(), 1);
         assert_eq!(
             result.get("hakurei_reimu").map(String::as_str),
             Some("touhou")
         );
+    }
+
+    fn catalog_csv() -> String {
+        let mut csv = String::from("character,series,features,attire\n");
+        for index in 0..333 {
+            csv.push_str(&format!("touhou_{index},touhou,,\n"));
+        }
+        for index in 0..10 {
+            csv.push_str(&format!("fate_{index},fate_(series),,\n"));
+        }
+        for name in ["miku", "rin", "len"] {
+            csv.push_str(&format!("{name},vocaloid,,\n"));
+        }
+        for index in 0..40 {
+            // Singleton series and series-less rows form Prombot's "Other series".
+            csv.push_str(&format!("solo_{index},solo_series_{index},,\n"));
+        }
+        csv.push_str("nameless,,,\n");
+        csv.push_str("\"tharja_(\"\"normal_girl\"\")_(fire_emblem)\",fire_emblem,,\n");
+        csv.push_str("robin_(fire_emblem),fire_emblem,,\n");
+        csv
+    }
+
+    #[test]
+    fn a_series_star_does_not_inflate_the_character_bookmark_count() {
+        // Reproduces NAI-005: ~46 individual bookmarks plus one series ☆ that
+        // Prombot expanded to all 333 members showed up as 379 characters.
+        let mut wanted = Vec::new();
+        wanted.extend((0..7).map(|index| format!("fate_{index}")));
+        wanted.extend(["miku", "rin", "len"].map(String::from));
+        wanted.extend((0..333).map(|index| format!("touhou_{index}")));
+        wanted.extend((0..30).map(|index| format!("solo_{index}")));
+        wanted.push("nameless".into());
+        wanted.push("robin_(fire_emblem)".into());
+        wanted.push(prombot_raw_name("tharja_(\"normal_girl\")_(fire_emblem)"));
+        wanted.push("renamed_character".into());
+        wanted.push("removed_character".into());
+        wanted.push("miku".into());
+        assert_eq!(wanted.len(), 379);
+
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert!(catalog.available);
+        assert_eq!(catalog.characters.len(), 43);
+        assert_eq!(&catalog.characters[..3], ["fate_0", "fate_1", "fate_2"]);
+        assert!(!catalog.characters.iter().any(|name| name.starts_with("touhou_")));
+        assert_eq!(
+            catalog.series_favorites,
+            vec![SeriesFavorite {
+                series: "touhou".into(),
+                members: 333,
+                favorited: 333
+            }]
+        );
+        assert_eq!(catalog.unknown, vec!["renamed_character", "removed_character"]);
+        assert_eq!(catalog.series.get("miku").map(String::as_str), Some("vocaloid"));
+        assert_eq!(catalog.series.get("solo_3").map(String::as_str), Some("solo_series_3"));
+        assert!(!catalog.series.contains_key("nameless"));
+    }
+
+    #[test]
+    fn detects_a_series_star_even_after_a_few_members_were_unstarred() {
+        let mut wanted = (0..300).map(|index| format!("touhou_{index}")).collect::<Vec<_>>();
+        wanted.push("miku".into());
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert_eq!(catalog.characters, vec!["miku"]);
+        assert_eq!(catalog.series_favorites[0].favorited, 300);
+    }
+
+    #[test]
+    fn the_other_series_star_is_a_series_favorite_too() {
+        let mut wanted = (0..40).map(|index| format!("solo_{index}")).collect::<Vec<_>>();
+        wanted.push("nameless".into());
+        wanted.push("fate_1".into());
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert_eq!(catalog.characters, vec!["fate_1"]);
+        assert_eq!(catalog.series_favorites[0].series, "");
+        assert_eq!(catalog.series_favorites[0].members, 41);
+    }
+
+    #[test]
+    fn keeps_whole_small_series_and_partial_large_series_picked_by_hand() {
+        let wanted = ["miku", "rin", "len", "fate_0", "fate_5", "fate_9", "robin_(fire_emblem)"]
+            .map(String::from)
+            .to_vec();
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert_eq!(catalog.characters, wanted);
+        assert!(catalog.series_favorites.is_empty());
+        assert!(catalog.unknown.is_empty());
+    }
+
+    #[test]
+    fn matches_prombot_quoted_names() {
+        let quoted = prombot_raw_name("tharja_(\"normal_girl\")_(fire_emblem)");
+        assert_eq!(quoted, "\"tharja_(\"\"normal_girl\"\")_(fire_emblem)\"");
+        let catalog = classify_favorites(&catalog_csv(), &[quoted.clone()]);
+        assert_eq!(catalog.characters, vec![quoted.clone()]);
+        assert_eq!(catalog.series.get(&quoted).map(String::as_str), Some("fire_emblem"));
     }
 }

@@ -76,3 +76,46 @@ export function mergePrombotFavorites(
 
   return { entries: next, stats: { added, existing: already, removed, total: incoming.length } };
 }
+
+/** Result of `prombot_favorite_catalog` (Rust): raw Prombot bookmarks split up. */
+export type PrombotFavoriteCatalog = {
+  /** False when Prombot's character list could not be loaded (nothing filtered). */
+  available: boolean;
+  /** Individually bookmarked characters, in Prombot order. */
+  characters: string[];
+  series: Record<string, string>;
+  /** Bookmarks missing from Prombot's characters.csv (renamed/removed). */
+  unknown: string[];
+  /** Series-level ☆ that Prombot expanded to every member. */
+  seriesFavorites: Array<{ series: string; members: number; favorited: number }>;
+};
+
+function seriesLabel(series: string) {
+  return series ? displayRaw(series) : "Other series";
+}
+
+/** Import summary line, e.g. "북마크 45명 · 시리즈 즐겨찾기 1개 제외 · 알 수 없는 이름 2개 제외". */
+export function prombotImportMessage(
+  catalog: PrombotFavoriteCatalog,
+  stats: { added: number; existing: number; removed: number; total: number },
+) {
+  const parts = [`북마크 ${stats.total}명`];
+  if (catalog.available) {
+    parts.push(`시리즈 즐겨찾기 ${catalog.seriesFavorites.length}개 제외`);
+    parts.push(`알 수 없는 이름 ${catalog.unknown.length}개 제외`);
+  } else {
+    parts.push("Prombot 캐릭터 목록을 받지 못해 필터 없이 가져옴");
+  }
+  parts.push(`신규 ${stats.added} · 기존 ${stats.existing} · 제거 ${stats.removed}`);
+  const lines = [parts.join(" · ")];
+  if (catalog.seriesFavorites.length) {
+    lines.push(`제외한 시리즈: ${catalog.seriesFavorites
+      .map((item) => `${seriesLabel(item.series)} ${item.favorited}/${item.members}명`)
+      .join(", ")}`);
+  }
+  if (catalog.unknown.length) {
+    const sample = catalog.unknown.slice(0, 5).map(displayRaw).join(", ");
+    lines.push(`알 수 없는 이름: ${sample}${catalog.unknown.length > 5 ? ` 외 ${catalog.unknown.length - 5}개` : ""}`);
+  }
+  return lines.join("\n");
+}

@@ -1,6 +1,7 @@
 mod commands;
 mod novelai;
 mod prombot;
+mod save;
 mod tagdb;
 mod translation;
 
@@ -40,7 +41,8 @@ pub fn run() {
             commands::favorite_local_tags,
             commands::open_prombot_webview,
             commands::prombot_favorites,
-            commands::prombot_favorite_series
+            commands::prombot_favorite_catalog,
+            commands::save_image
         ])
         .run(tauri::generate_context!())
         .expect("error while running NAI V5 Studio");
