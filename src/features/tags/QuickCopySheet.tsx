@@ -11,10 +11,10 @@ import {
 
 const BRIDGE_SOURCE = "artist-tag-quick-copy-v7";
 const DESTINATION_LABEL: Record<PromptSectionKey, string> = {
-  artist: "Artist",
-  other: "Other",
-  quality: "Quality",
-  negative: "Negative",
+  artist: "작가",
+  other: "장면",
+  quality: "품질",
+  negative: "제외",
 };
 
 type DictionaryView = "classic" | "sex";
@@ -61,7 +61,7 @@ export function QuickCopySheet({
     <div className="sheet quickcopy-sheet">
       <div className="quickcopy-hostbar">
         <div>
-          <strong>Tag Dictionary</strong>
+          <strong>태그사전</strong>
           <span>삽입 대상 · {DESTINATION_LABEL[destination]}</span>
         </div>
         <div className="quickcopy-hostbar-tabs">

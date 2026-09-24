@@ -1,4 +1,4 @@
-/** "불러오기" button + hidden file input + result toast with a 6-second undo. Touch-only UI. */
+/** "불러오기": hidden file input + result toast with a 6-second undo. Touch-only UI. */
 import { useEffect, useRef, useState } from "react";
 import type { LoadSnapshot } from "../../../stores/generationStore";
 import { browserStealthReader } from "./loadDeps";
@@ -11,7 +11,12 @@ type Toast =
   | { kind: "applied"; snapshot: LoadSnapshot; skipped: string[] }
   | { kind: "message"; text: string };
 
-export function ImageLoadButton() {
+/**
+ * Picker, toast and undo for "불러오기", usable from any menu: `element` must stay
+ * mounted (it holds the hidden file input and the toast); `pick()` opens the picker
+ * and `loadBytes()` applies an image that is already in memory (a session image).
+ */
+export function useImageLoader() {
   const inputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,11 +32,10 @@ export function ImageLoadButton() {
     if (timer.current !== null) window.clearTimeout(timer.current);
   }, []);
 
-  const onFile = async (file: File | undefined) => {
-    if (!file) return;
+  const loadBytes = async (read: () => Promise<Uint8Array>) => {
     setLoading(true);
     try {
-      const outcome = await loadImageIntoStudio(new Uint8Array(await file.arrayBuffer()), browserStealthReader);
+      const outcome = await loadImageIntoStudio(await read(), browserStealthReader);
       if (outcome.kind === "none") show({ kind: "message", text: "이 이미지에는 NovelAI 정보가 없습니다" }, MESSAGE_MS);
       else show({ kind: "applied", snapshot: outcome.snapshot, skipped: outcome.skipped }, UNDO_MS);
     } catch (error) {
@@ -42,17 +46,19 @@ export function ImageLoadButton() {
     }
   };
 
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    await loadBytes(async () => new Uint8Array(await file.arrayBuffer()));
+  };
+
   const undo = () => {
     if (toast?.kind !== "applied") return;
     undoImageLoad(toast.snapshot);
     show({ kind: "message", text: "되돌렸습니다" }, 1600);
   };
 
-  return (
+  const element = (
     <>
-      <button type="button" className="image-load-button" disabled={loading} aria-busy={loading} onClick={() => inputRef.current?.click()}>
-        {loading ? "읽는 중…" : "불러오기"}
-      </button>
       <input
         ref={inputRef}
         type="file"
@@ -84,4 +90,6 @@ export function ImageLoadButton() {
       )}
     </>
   );
+
+  return { loading, pick: () => inputRef.current?.click(), loadBytes, element };
 }

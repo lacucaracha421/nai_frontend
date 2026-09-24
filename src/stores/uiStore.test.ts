@@ -23,6 +23,8 @@ describe("UI settings migration", () => {
       finishPreset: "anime",
       finishParams: FINISH_PRESETS.anime,
       saveFormat: "webp",
+      showTagDiff: false,
+      showHints: false,
     });
     expect(migrateUiState({ grainEnabled: false }, 0)).toMatchObject({ finishEnabled: false, finishPreset: "anime" });
     expect(migrateUiState(undefined, 0)).toMatchObject({ showFixedPrompts: false, finishEnabled: false });
@@ -39,8 +41,11 @@ describe("UI settings migration", () => {
       finishPreset: "watercolor",
       finishParams: { ...FINISH_PRESETS.watercolor, pstr: 70, sat: 130 },
       saveFormat: "webp",
+      showTagDiff: false,
+      showHints: false,
     });
     expect(migrateUiState({ finishPreset: "film" }, 1).finishPreset).toBe("anime");
+    expect(migrateUiState({ showTagDiff: true, showHints: "yes" }, 2)).toMatchObject({ showTagDiff: true, showHints: false });
   });
 
   it("defaults the save format to WebP and keeps a saved PNG choice", () => {

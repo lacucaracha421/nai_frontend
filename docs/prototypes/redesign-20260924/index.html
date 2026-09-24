@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAI Redesign Concepts</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  body { background: var(--bg); }
+  .page { max-width: 1680px; margin: 0 auto; padding: 36px 32px 60px; }
+  h1 { margin: 0 0 6px; font-size: 26px; line-height: 32px; font-weight: 600; }
+  .lead { margin: 0 0 24px; color: var(--muted); font-size: 15px; max-width: 980px; line-height: 23px; }
+  .now { display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: start; margin-bottom: 28px; padding: 18px; background: var(--surface); border-radius: 18px; }
+  .now img { width: 100%; border-radius: 10px; display: block; }
+  .now h2 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  .now ol { margin: 0; padding-left: 20px; font-size: 14.5px; line-height: 23px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+  .concept { background: var(--surface); border-radius: 18px; padding: 18px; min-width: 0; }
+  .concept h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 19px; font-weight: 600; }
+  .concept h2 .k { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 15px; }
+  .concept .one { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .shots a { display: block; color: inherit; text-decoration: none; }
+  .shots img { display: block; width: 100%; height: auto; border-radius: 8px; }
+  .shots span { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .concept ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; line-height: 21px; }
+  .concept li { margin-bottom: 4px; }
+  .concept h3 { margin: 16px 0 2px; font-size: 13px; color: var(--muted); font-weight: 500; }
+  .rec { margin-top: 26px; padding: 18px 20px; border-radius: 18px; background: var(--surface-2); font-size: 15px; line-height: 24px; }
+  .rec b { color: var(--accent-hi); }
+  code { font-size: 13px; color: var(--on-accent-soft); }
+  @media (max-width: 1200px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .page { padding: 20px 16px 40px; } .now { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>NAI V5 Studio 디자인 콘셉트 · 2026-09-24</h1>
+  <p class="lead">Galaxy Tab S11 세로 800×1280 기준 정적 목업. 이미지는 CSS 그라데이션, 프롬프트·개수는 가상의 값입니다. 노란 번호 메모는 설명용이며 UI가 아닙니다. 콘셉트 파일에 <code>#화면</code>을 붙이면 해당 화면을 볼 수 있습니다. 자세한 감사표와 근거는 <code>README.md</code>.</p>
+
+  <div class="now">
+    <a href="current-generate.png"><img src="current-generate.png" alt="현재 0.5.2 빈 화면"></a>
+    <div>
+      <h2>현재 0.5.2에서 본 것 (빌드된 dist, 이미지 없는 상태)</h2>
+      <ol>
+        <li>이미지 무대는 최대 <b>43dvh</b>. 832×1216 이미지가 약 376×550, 화면 면적의 약 20%.</li>
+        <li>화면 아래 절반이 같은 무게의 알약 버튼 3줄 (마무리, Seed·Prompt·Upscale·저장, 태그사전·해상도·steps·CFG·불러오기). 해상도·steps·CFG 세 버튼은 모두 같은 설정 시트를 연다.</li>
+        <li>Anlas와 사용 한도가 따로 있고, “이번 생성이 무료인가”는 생성 버튼 안 작은 글씨.</li>
+        <li>ARTIST / CHARACTER PROMPTS / OTHER / GENERATE / Settings 영문, 안내·토스트는 한국어.</li>
+        <li>🎲, Anlas 알약, 이미지 동작·빠른 설정 버튼은 40px로 44px 목표보다 작다.</li>
+      </ol>
+    </div>
+  </div>
+
+  <section class="concept" style="margin-bottom:22px">
+    <h2><span class="k">B2</span>태그 작업대 (B 다듬기, 사용자 피드백 반영)</h2>
+    <p class="one">이미지는 작은 썸네일 (누르면 전체 화면), 태그 편집이 화면 대부분. “달라진 점”은 조용한 한 줄, 2×2 동작 격자는 전체 화면 보기로 이동. 두 배치 비교.</p>
+    <div class="shots" style="grid-template-columns:repeat(5,1fr)">
+      <a href="b2-v1.png"><img src="b2-v1.png" alt="B2-1"><span>B2-1 위쪽 띠 · concept-b2.html#v1</span></a>
+      <a href="b2-v1-keyboard.png"><img src="b2-v1-keyboard.png" alt="B2-1 키보드"><span>B2-1 키보드 · #v1-keyboard</span></a>
+      <a href="b2-v2.png"><img src="b2-v2.png" alt="B2-2"><span>B2-2 왼쪽 열 · #v2</span></a>
+      <a href="b2-v2-keyboard.png"><img src="b2-v2-keyboard.png" alt="B2-2 키보드"><span>B2-2 키보드 · #v2-keyboard</span></a>
+      <a href="b2-viewer.png"><img src="b2-viewer.png" alt="B2 보기"><span>전체 화면 + 이미지 동작 · #viewer</span></a>
+    </div>
+    <h3>B2-1 위쪽 띠</h3>
+    <ul><li>편집기가 화면 전체 폭: 한 줄에 태그가 가장 많이 들어가 스크롤이 적다.</li><li>섹션 탭 4개 (품질·제외 합침).</li></ul>
+    <h3>B2-2 왼쪽 열</h3>
+    <ul><li>세로 탭 5개가 키보드가 떠도 그대로 보여 섹션 이동이 1탭.</li><li>편집기 폭이 좁아 (588px) 태그 줄바꿈이 더 많다.</li></ul>
+    <h3>추천</h3>
+    <ul><li><b>B2-1</b>. 태그 편집이 주인공이라면 전체 폭 편집기가 가장 큰 이득. 섹션 이동이 잦으면 B2-2.</li></ul>
+  </section>
+
+  <div class="grid">
+    <section class="concept">
+      <h2><span class="k">A</span>캔버스 우선</h2>
+      <p class="one">이미지가 화면을 채우고, 오른쪽 레일에 세션과 저장, 아래 독에 프롬프트 요약과 생성.</p>
+      <div class="shots">
+        <a href="a-generate.png"><img src="a-generate.png" alt="A 생성"><span>생성 · concept-a.html#generate</span></a>
+        <a href="a-prompt.png"><img src="a-prompt.png" alt="A 프롬프트"><span>프롬프트 시트 · #prompt</span></a>
+        <a href="a-viewer.png"><img src="a-viewer.png" alt="A 보기"><span>전체 보기 + 정보 · #viewer</span></a>
+        <a href="a-settings.png"><img src="a-settings.png" alt="A 생성 설정"><span>생성 설정 시트 · #settings</span></a>
+      </div>
+      <h3>장점</h3>
+      <ul><li>이미지 면적 약 3.2배. 결과를 보는 앱이라는 인상이 가장 강하다.</li><li>저장·생성이 엄지 자리. 메인 화면 버튼 수가 가장 적다.</li><li>현재 구조(카드 → 편집)를 시트로 옮기는 것이라 기능 손실이 없다.</li></ul>
+      <h3>비용</h3>
+      <ul><li>프롬프트 전문은 한 번 밀어 올려야 보인다.</li><li>키보드와 반 높이 시트의 조합은 기기에서 확인 필요.</li></ul>
+    </section>
+    <section class="concept">
+      <h2><span class="k">B</span>프롬프트 작업대</h2>
+      <p class="one">메인 화면에서 태그 칩을 바로 고치고, 사전은 키보드 자리의 도크. 직전 결과와 달라진 점 표시.</p>
+      <div class="shots">
+        <a href="b-generate.png"><img src="b-generate.png" alt="B 생성"><span>작업대 · concept-b.html#generate</span></a>
+        <a href="b-prompt.png"><img src="b-prompt.png" alt="B 편집"><span>키보드 편집 · #prompt</span></a>
+        <a href="b-dictionary.png"><img src="b-dictionary.png" alt="B 사전"><span>사전 도크 · #dictionary</span></a>
+        <a href="b-settings.png"><img src="b-settings.png" alt="B 앱 설정"><span>앱 설정 · #settings</span></a>
+      </div>
+      <h3>장점</h3>
+      <ul><li>화면 전환이 가장 적다. 태그를 넣고 빼며 반복 수정하는 흐름에 최적.</li><li>“달라진 점”으로 어떤 태그가 효과였는지 보인다.</li></ul>
+      <h3>비용</h3>
+      <ul><li>이미지는 지금과 비슷한 크기 (약 1.1배). 이미지 주인공 목표는 약하다.</li><li>사전 도크는 지금의 iframe 사전을 다시 배치해야 한다.</li></ul>
+    </section>
+    <section class="concept">
+      <h2><span class="k">C</span>세션 롤 (연속 생성)</h2>
+      <p class="one">같은 프롬프트를 N번 차례로 생성하고, 도는 동안 ★ 보관, 끝나면 보관한 것만 저장.</p>
+      <div class="shots">
+        <a href="c-generate.png"><img src="c-generate.png" alt="C 생성 중"><span>연속 생성 중 · concept-c.html#generate</span></a>
+        <a href="c-review.png"><img src="c-review.png" alt="C 세션 검토"><span>세션 검토 · #review</span></a>
+        <a href="c-prompt.png"><img src="c-prompt.png" alt="C 프롬프트"><span>반복 설정 시트 · #prompt</span></a>
+        <a href="c-settings.png"><img src="c-settings.png" alt="C 설정"><span>비용 보호 설정 · #settings</span></a>
+      </div>
+      <h3>장점</h3>
+      <ul><li>랜덤 캐릭터(🎲)와 잘 맞는다. 생성 버튼을 반복해서 누를 필요가 없다.</li><li>보관/저장 분리로 세션이 비워지기 전에 고르는 흐름이 생긴다.</li></ul>
+      <h3>비용</h3>
+      <ul><li>새 동작: 요청 반복, 비용 보호, 화면 켜둠. 한도 소모 규칙은 아직 모른다.</li><li>잘못 만들면 Anlas를 쓰게 되므로 가장 위험하다.</li></ul>
+    </section>
+  </div>
+
+  <div class="rec"><b>추천:</b> <b>A</b>를 기본 방향으로. 먼저 저위험 정리부터 (무대 높이, 44px 터치 영역, 상태 알약 하나, 한국어 라벨, 생성 설정/앱 설정 분리). 그다음 A의 오른쪽 레일과 반 높이 프롬프트 시트. 시트 안의 편집은 <b>B</b>의 섹션 탭과 “키보드 위 한 줄 도구”를 빌린다. <b>C</b>의 반복 생성은 비용 보호가 확인된 뒤 A의 독에 “반복” 옵션으로만 더한다.</div>
+</div>
+</body>
+</html>

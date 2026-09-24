@@ -18,7 +18,11 @@ const largeResolutions = [
   ["Large Landscape", 1536, 1024],
 ] as const;
 
-export function SettingsSheet({ onClose }: { onClose: () => void }) {
+/** "generation" = per-generation values (생성 설정), "app" = one-time configuration (앱 설정). */
+export type SettingsScope = "generation" | "app";
+
+export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: SettingsScope }) {
+  const generation = scope === "generation";
   const settings = useGenerationStore((state) => state.settings);
   const setSetting = useGenerationStore((state) => state.setSetting);
   const token = useConnectionStore((state) => state.tokenInput);
@@ -29,16 +33,21 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   const message = useConnectionStore((state) => state.message);
   const saveFormat = useUiStore((state) => state.saveFormat);
   const setSaveFormat = useUiStore((state) => state.setSaveFormat);
+  const showTagDiff = useUiStore((state) => state.showTagDiff);
+  const setShowTagDiff = useUiStore((state) => state.setShowTagDiff);
+  const showHints = useUiStore((state) => state.showHints);
+  const setShowHints = useUiStore((state) => state.setShowHints);
 
   return (
     <div className="sheet settings-sheet">
       <div className="sheet-head">
         <div className="drag-handle" />
-        <div><h2>Settings</h2></div>
+        <div><h2>{generation ? "생성 설정" : "앱 설정"}</h2></div>
         <button type="button" className="icon-button" onClick={onClose} aria-label="설정 닫기">↓</button>
       </div>
 
       <div className="settings-body">
+        {!generation && (
         <section>
           <h3>NovelAI</h3>
           {status === "error" && <p className="connection-error">{message}</p>}
@@ -59,7 +68,9 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             )}
           </div>
         </section>
+        )}
 
+        {generation && (<>
         <section>
           <h3>Model</h3>
           <div className="segmented">
@@ -138,7 +149,9 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             {SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
           </select>
         </section>
+        </>)}
 
+        {!generation && (<>
         <section>
           <h3>저장 형식</h3>
           <div className="segmented">
@@ -151,9 +164,22 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </div>
         </section>
 
+        <section>
+          <h3>화면 도움말</h3>
+          <label className="help-toggle">
+            <span>직전 대비 표시<small>직전 생성과 달라진 태그 수 (+N −N)</small></span>
+            <input type="checkbox" checked={showTagDiff} onChange={(event) => setShowTagDiff(event.target.checked)} />
+          </label>
+          <label className="help-toggle">
+            <span>조작 안내 문구 표시<small>편집기와 캐릭터 탭의 설명 문구</small></span>
+            <input type="checkbox" checked={showHints} onChange={(event) => setShowHints(event.target.checked)} />
+          </label>
+        </section>
+
         <TranslationSettings />
 
         <BackupSection />
+        </>)}
       </div>
     </div>
   );

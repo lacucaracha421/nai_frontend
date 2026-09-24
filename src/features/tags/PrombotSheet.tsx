@@ -12,11 +12,11 @@ import {
 } from "../prompt/prombotFavorites";
 
 const DESTINATION_LABEL: Record<PromptSectionKey | "character", string> = {
-  artist: "Artist",
-  other: "Other",
-  quality: "Quality",
-  negative: "Negative",
-  character: "Character Prompt",
+  artist: "작가",
+  other: "장면",
+  quality: "품질",
+  negative: "제외",
+  character: "캐릭터",
 };
 
 export function PrombotSheet({

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800">
+<title>Concept A · Canvas First</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  /* A: image-first canvas. The image fills the screen; a right-edge session rail holds the
+     image actions (Save lowest, nearest the thumb); a slim dock holds the prompt summary + Generate. */
+  .topbar { position: absolute; top: 32px; left: 16px; right: 12px; height: 52px; display: flex; align-items: center; gap: 4px; }
+  .topbar .sp { flex: 1; }
+  .stage { position: absolute; left: 16px; top: 92px; width: 676px; height: 988px; border-radius: 22px; }
+  .stage .hold { position: absolute; left: 14px; bottom: 14px; height: 44px; padding: 0 16px; display: flex; align-items: center; border-radius: 999px; background: rgba(10, 10, 14, .58); backdrop-filter: blur(8px); font-size: 14px; color: #f1eef6; }
+  .stage .fin { position: absolute; left: 14px; top: 14px; height: 32px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border-radius: 999px; background: rgba(10, 10, 14, .5); font-size: 13px; color: #e8e2ff; }
+  .rail { position: absolute; left: 700px; top: 92px; width: 88px; height: 988px; display: flex; flex-direction: column; gap: 8px; }
+  .rail .thumbs { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .rail .thumb { position: relative; width: 88px; height: 128px; flex: none; border-radius: 14px; }
+  .rail .thumb.on { outline: 2.5px solid var(--accent-hi); outline-offset: 2px; }
+  .rail .thumb .badge { right: 5px; bottom: 5px; }
+  .rail .count { height: 22px; font-size: 12px; color: var(--muted); text-align: center; }
+  .act { width: 88px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 18px; background: var(--surface-2); color: var(--text); font-size: 12.5px; flex: none; }
+  .act small { font-size: 11px; color: var(--muted); margin-top: -3px; }
+  .act.on { background: var(--accent-soft); color: var(--on-accent-soft); }
+  .act.save { height: 84px; background: #e6e3ea; color: #16151c; font-weight: 600; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; height: 190px; padding: 0 16px 20px; background: linear-gradient(180deg, rgba(15, 15, 19, 0), var(--bg) 22px); }
+  .dock .handle { margin-top: 6px; }
+  .sum { display: flex; gap: 8px; height: 48px; margin: 2px 0 12px; }
+  .sum .chip { height: 48px; border-radius: 14px; }
+  .sum .chip b { font-weight: 500; }
+  .sum .chip span { color: var(--muted); }
+  .sum .rand { width: 34px; height: 34px; margin-right: -6px; display: grid; place-items: center; border-radius: 10px; background: var(--accent); color: var(--on-accent); }
+  .genrow { display: flex; gap: 10px; }
+  .setchip { width: 232px; height: 72px; border-radius: 22px; background: var(--surface-2); display: flex; align-items: center; gap: 12px; padding: 0 18px; }
+  .setchip .col { display: flex; flex-direction: column; line-height: 20px; }
+  .setchip b { font-weight: 500; font-size: 16px; }
+  .setchip span { font-size: 12.5px; color: var(--muted); }
+  .genrow .gen { flex: 1; }
+
+  /* prompt sheet */
+  .psheet { top: 520px; padding: 0 20px; }
+  #prompt .scrim { background: rgba(8,8,11,.28); }
+  .ph { display: flex; align-items: center; gap: 4px; height: 52px; }
+  .ph h2 { flex: 1; margin: 0; font-size: 21px; font-weight: 500; }
+  .editor { margin-top: 12px; padding: 14px; min-height: 180px; border-radius: 20px; background: var(--surface-2); }
+  .sugg { margin-top: 8px; border-radius: 16px; background: var(--surface-3); overflow: hidden; }
+  .sugg .r { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .sugg .r:last-child { border-bottom: 0; }
+  .sugg .r .c { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .sugg .r .i { color: var(--faint); }
+  .tools { display: flex; gap: 8px; margin-top: 14px; }
+  .tools .chip { height: 48px; }
+  .charrow { margin-top: 18px; display: flex; gap: 10px; }
+  .charcard { flex: 1; min-height: 88px; border-radius: 18px; background: var(--surface-2); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .charcard .label { display: flex; align-items: center; gap: 6px; }
+  .charcard p { margin: 0; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .psheet .genrow { position: absolute; left: 20px; right: 20px; bottom: 24px; }
+
+  /* viewer */
+  .viewer { background: #050507; }
+  .vtop { position: absolute; top: 34px; left: 12px; right: 12px; height: 52px; display: flex; align-items: center; gap: 6px; z-index: 5; }
+  .vtop .ib { background: rgba(20, 20, 26, .6); color: #eee; }
+  .vtop .pos { flex: 1; text-align: center; font-size: 15px; color: #ddd; }
+  .info { top: 1000px; padding: 0 22px; background: var(--surface); }
+  .info .ph h2 { font-size: 19px; }
+  .kv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+  .kv div { border-radius: 14px; background: var(--surface-2); padding: 10px 12px; }
+  .kv span { display: block; font-size: 12px; color: var(--muted); }
+  .kv b { font-weight: 500; font-size: 15px; }
+  .pline { margin-top: 10px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vact { display: flex; gap: 8px; margin-top: 14px; }
+  .vact .btn { flex: 1; height: 56px; }
+
+  /* generation settings sheet */
+  .ssheet { top: 420px; padding: 0 22px; }
+  .res { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .res div { height: 86px; border-radius: 16px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13.5px; }
+  .res div i, .res div .shape { border: 1.6px solid var(--muted); border-radius: 3px; }
+  .res div span { font-size: 11.5px; color: var(--muted); }
+  .res div.on { background: var(--accent-soft); color: var(--on-accent-soft); }
+  .res div.on .shape { border-color: var(--on-accent-soft); }
+  .res div em { font-style: normal; font-size: 11px; color: var(--warn); }
+  .res div .free { color: var(--ok); }
+  .step { display: flex; align-items: center; gap: 10px; }
+  .step .v { min-width: 64px; text-align: center; font-size: 20px; font-weight: 500; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pair > div { border-radius: 18px; background: var(--surface-2); padding: 10px 12px 10px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .pair .t b { display: block; font-weight: 500; }
+  .pair .t span { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- #generate -->
+<section class="screen" id="generate">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="topbar">
+    <div class="pill"><span class="dot"></span>무료 생성 <small>· 한도 72% · 다음 1% 18분</small></div>
+    <span class="sp"></span>
+    <button class="ib"><i data-i="eye"></i></button>
+    <button class="ib"><i data-i="cog"></i></button>
+  </div>
+  <div class="stage art" data-art="11">
+    <div class="fin"><i data-i="sparkle" class="xs"></i>마무리 · 애니</div>
+    <div class="hold">누르고 있으면 원본</div>
+  </div>
+  <div class="rail">
+    <div class="count num">세션 12</div>
+    <div class="thumbs">
+      <div class="thumb art on" data-art="11"></div>
+      <div class="thumb art" data-art="12"><span class="badge">UP</span></div>
+      <div class="thumb art" data-art="13"></div>
+      <div class="thumb art" data-art="14"></div>
+    </div>
+    <button class="act"><i data-i="seed"></i>Seed</button>
+    <button class="act"><i data-i="upscale"></i>업스케일<small>1 Anlas</small></button>
+    <button class="act on"><i data-i="sparkle"></i>마무리</button>
+    <button class="act save"><i data-i="save" class="lg"></i>저장</button>
+  </div>
+  <div class="dock">
+    <div class="handle"></div>
+    <div class="sum">
+      <button class="chip"><span class="dot d-artist"></span><b>작가</b><span>2</span></button>
+      <button class="chip"><span class="dot d-character"></span><b>캐릭터</b><span>랜덤 · 최근 frieren</span><span class="rand"><i data-i="dice" class="sm"></i></span></button>
+      <button class="chip"><span class="dot d-general"></span><b>장면</b><span>18</span></button>
+      <button class="chip"><b>품질·제외</b></button>
+    </div>
+    <div class="genrow">
+      <button class="setchip"><i data-i="sliders"></i><span class="col"><b class="num">832×1216</b><span class="num">28 steps · CFG 5</span></span></button>
+      <button class="gen"><span class="col">생성<small>무료 · 한도 내</small></span></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:150px;width:300px">이미지가 화면의 주인공. <b>676×988</b> (현재 376×550의 약 3.2배 면적). 빈 무대·숨김 상태도 같은 자리.</div>
+  <div class="note" data-n="2" style="left:420px;top:40px;width:250px">Anlas·사용 한도·비용을 <b>상태 하나</b>로. 누르면 새로고침과 상세.</div>
+  <div class="note" data-n="3" style="left:462px;top:560px;width:220px">오른쪽 레일: 위는 <b>세션 썸네일</b>, 아래는 동작. <b>저장</b>이 엄지와 가장 가까움. 프롬프트 복사는 이미지 정보로.</div>
+  <div class="note" data-n="4" style="left:200px;top:1018px;width:300px">독: 프롬프트 요약 칩 + 생성. 위로 밀거나 칩을 누르면 편집 시트.</div>
+</div>
+</section>
+
+<!-- #prompt -->
+<section class="screen" id="prompt">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="stage art" data-art="11"></div>
+  <div class="scrim"></div>
+  <div class="sheet psheet" style="bottom:0">
+    <div class="handle"></div>
+    <div class="ph">
+      <h2>프롬프트</h2>
+      <button class="ib"><i data-i="undo"></i></button>
+      <button class="ib"><i data-i="redo"></i></button>
+      <button class="ib"><i data-i="chevdown"></i></button>
+    </div>
+    <div class="seg">
+      <div><span class="dot d-artist" style="width:8px;height:8px;border-radius:50%"></span>작가 <span class="n">2</span></div>
+      <div><span class="dot d-character" style="width:8px;height:8px;border-radius:50%"></span>캐릭터 <span class="n">1</span></div>
+      <div class="on"><span class="dot d-general" style="width:8px;height:8px;border-radius:50%"></span>장면 <span class="n">18</span></div>
+      <div>품질·제외</div>
+    </div>
+    <div class="editor">
+      <div class="tags">
+        <span class="tag">1girl</span><span class="tag">solo</span><span class="tag">looking at viewer</span><span class="tag w">1.2::soft smile:: <em>1.2</em></span>
+        <span class="tag">white dress</span><span class="tag">flower field</span><span class="tag">wind</span><span class="tag">golden hour</span>
+        <span class="tag">from side</span><span class="tag">depth of field</span><span class="tag sel">backlight</span><span class="tag input">petal<span class="caret"></span></span>
+      </div>
+    </div>
+    <div class="sugg">
+      <div class="r"><span class="dot d-general" style="width:9px;height:9px;border-radius:50%"></span>petals<span class="c num">312,540</span><i data-i="star" class="sm"></i></div>
+      <div class="r"><span class="dot d-general" style="width:9px;height:9px;border-radius:50%"></span>petals on liquid<span class="c num">9,812</span><i data-i="star" class="sm"></i></div>
+    </div>
+    <div class="tools">
+      <button class="chip num">−0.1</button><button class="chip num">+0.1</button>
+      <button class="chip"><i data-i="book" class="sm"></i>태그사전</button>
+      <button class="chip"><i data-i="translate" class="sm"></i>번역</button>
+      <button class="chip"><i data-i="copy" class="sm"></i>전체 복사</button>
+      <button class="chip">⋯</button>
+    </div>
+    <div class="genrow">
+      <button class="setchip"><i data-i="sliders"></i><span class="col"><b class="num">832×1216</b><span class="num">28 steps · CFG 5</span></span></button>
+      <button class="gen"><span class="col">생성<small>무료 · 한도 내</small></span></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:120px;width:320px">시트는 반 높이. <b>이미지가 위에 남아</b> 결과를 보며 고친다. 현재는 전체 화면 시트로 이미지가 가려짐.</div>
+  <div class="note" data-n="2" style="left:36px;top:440px;width:330px">섹션은 탭으로 전환. ARTIST/OTHER 같은 영문 라벨 대신 <b>작가·캐릭터·장면·품질·제외</b>.</div>
+  <div class="note" data-n="3" style="left:400px;top:1110px;width:360px">자주 쓰는 도구 5개 + ⋯ (Prombot, 전체 지우기). 생성은 툴바 버튼이 아니라 <b>항상 같은 자리</b>.</div>
+  <div class="note" data-n="4" style="left:36px;top:210px;width:330px">키보드가 올라오면 시트는 전체 높이가 되고 생성 줄은 키보드 위에 붙는다 (기기 확인 필요).</div>
+</div>
+</section>
+
+<!-- #viewer -->
+<section class="screen" id="viewer">
+<div class="dev viewer">
+  <div data-sbar></div>
+  <div class="art" data-art="11" style="position:absolute;left:0;top:40px;width:800px;height:1169px"></div>
+  <div class="vtop">
+    <button class="ib"><i data-i="back"></i></button>
+    <span class="pos num">1 / 12</span>
+    <button class="ib"><i data-i="eye"></i></button>
+  </div>
+  <div class="sheet info">
+    <div class="handle"></div>
+    <div class="ph"><h2>이미지 정보</h2><button class="ib"><i data-i="chevdown"></i></button></div>
+    <div class="kv">
+      <div><span>Seed</span><b class="num">2841093321</b></div>
+      <div><span>크기</span><b class="num">832×1216</b></div>
+      <div><span>Steps · CFG</span><b class="num">28 · 5.0</b></div>
+      <div><span>마무리</span><b>애니</b></div>
+    </div>
+    <div class="pline">artist:mika pikazo, 1girl, solo, looking at viewer, 1.2::soft smile::, white dress, flower field …</div>
+    <div class="vact">
+      <button class="btn"><i data-i="seed" class="sm"></i>Seed만 사용</button>
+      <button class="btn"><i data-i="copy" class="sm"></i>프롬프트 복사</button>
+      <button class="btn tonal"><i data-i="load" class="sm"></i>이 설정 불러오기</button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:30px;top:110px;width:300px">전체 화면 보기는 좌우로 넘김 (현재와 같음). <b>정보 시트</b>를 위로 올리면 Seed·프롬프트·설정.</div>
+  <div class="note" data-n="2" style="left:420px;top:920px;width:340px">Seed·Prompt 버튼을 메인 화면에서 빼서 여기로. <b>이 설정 불러오기</b>는 기존 불러오기(NAI-007)를 세션 이미지에도.</div>
+</div>
+</section>
+
+<!-- #settings -->
+<section class="screen" id="settings">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="stage art" data-art="11"></div>
+  <div class="scrim"></div>
+  <div class="sheet ssheet">
+    <div class="handle"></div>
+    <div class="ph"><h2>생성 설정</h2><button class="ib"><i data-i="chevdown"></i></button></div>
+    <div class="seg" style="margin-bottom:14px"><div class="on">V5 Full</div><div>V5 Curated</div></div>
+    <div class="h-sec">해상도<span class="rule"></span></div>
+    <div class="res">
+      <div class="on"><span class="shape" style="width:20px;height:29px"></span>세로<span class="num">832×1216</span></div>
+      <div><span class="shape" style="width:24px;height:24px"></span>정사각<span class="num">1024×1024</span></div>
+      <div><span class="shape" style="width:17px;height:30px"></span>길쭉<span class="num">768×1344</span></div>
+      <div><span class="shape" style="width:29px;height:20px"></span>가로<span class="num">1216×832</span></div>
+      <div><span class="shape" style="width:22px;height:32px"></span>큰 세로<em>Anlas</em></div>
+      <div><span class="shape" style="width:28px;height:28px"></span>큰 정사각<em>Anlas</em></div>
+      <div><span class="shape" style="width:32px;height:22px"></span>큰 가로<em>Anlas</em></div>
+      <div style="background:transparent"></div>
+    </div>
+    <div class="h-sec" style="margin-top:10px">품질<span class="rule"></span></div>
+    <div class="pair">
+      <div><span class="t"><b>Steps</b><span>28 이하 무료</span></span><span class="step"><button class="ib soft"><i data-i="minus"></i></button><span class="v num">28</span><button class="ib soft"><i data-i="plus"></i></button></span></div>
+      <div><span class="t"><b>CFG</b><span>Guidance</span></span><span class="step"><button class="ib soft"><i data-i="minus"></i></button><span class="v num">5.0</span><button class="ib soft"><i data-i="plus"></i></button></span></div>
+    </div>
+    <div class="list" style="margin-top:12px">
+      <button class="rowbtn"><span class="t"><b>Seed</b><span>매번 무작위</span></span><span class="v">무작위</span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><span class="t"><b>샘플러 · CFG Rescale</b><span>잘 바꾸지 않는 값</span></span><span class="v">Euler Ancestral · 0</span><i data-i="chev" class="sm"></i></button>
+    </div>
+    <div class="list" style="margin-top:12px">
+      <button class="rowbtn"><i data-i="load"></i><span class="t"><b>이미지에서 불러오기</b><span>NovelAI PNG·WebP의 프롬프트와 설정</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><i data-i="cog"></i><span class="t"><b>앱 설정</b><span>NovelAI 연결 · 저장 형식 · 번역 · 백업</span></span><i data-i="chev" class="sm"></i></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:140px;width:330px">독의 <b>832×1216 · 28 steps</b> 칩에서 열림. 매번 바꿀 수 있는 값만. 지금은 세 버튼이 모두 전체 설정을 연다.</div>
+  <div class="note" data-n="2" style="left:36px;top:250px;width:330px">해상도는 모양 카드 + <b>무료/Anlas</b> 표시. 숫자 입력 대신 ± 버튼 (48px).</div>
+  <div class="note" data-n="3" style="left:420px;top:1196px;width:330px">토큰·저장 형식·번역 API·백업은 한 번 설정하는 값 → <b>앱 설정</b>으로 분리.</div>
+</div>
+</section>
+
+<script src="proto.js"></script>
+</body>
+</html>

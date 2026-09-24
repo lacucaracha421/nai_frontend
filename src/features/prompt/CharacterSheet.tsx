@@ -8,6 +8,7 @@ import { favoriteLocalTags } from "../tags/localTagIndex";
 import { PrombotSheet } from "../tags/PrombotSheet";
 import { chooseCharacterTag } from "./characterTag";
 import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
+import { BACK_PRIORITY, useBackLayer } from "../../app/backStack";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
 type Props = {
@@ -31,6 +32,8 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [prombotOpen, setPrombotOpen] = useState(false);
   const active = characters.find((character) => character.id === selected) ?? characters[0];
+  useBackLayer(libraryOpen, () => setLibraryOpen(false), BACK_PRIORITY.nestedSheet);
+  useBackLayer(prombotOpen, () => setPrombotOpen(false), BACK_PRIORITY.nestedSheet);
 
   useEffect(() => {
     if (legacyMigrated) return;
@@ -80,16 +83,16 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
       <div className="sheet character-sheet">
         <div className="sheet-head">
           <div className="drag-handle" />
-          <div><h2>Character Prompts</h2></div>
+          <div><h2>캐릭터 설정</h2></div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 설정 닫기">↓</button>
         </div>
 
         <div className="character-sheet-body">
           <section>
-            <div className="section-title"><strong>Positioning</strong></div>
+            <div className="section-title"><strong>위치</strong></div>
             <div className="position-mode">
-              <button className={!useCoords ? "active" : ""} onClick={() => setUseCoords(false)}>AI&apos;s Choice</button>
-              <button className={useCoords ? "active" : ""} onClick={() => setUseCoords(true)}>Manual Position</button>
+              <button className={!useCoords ? "active" : ""} onClick={() => setUseCoords(false)}>AI 선택</button>
+              <button className={useCoords ? "active" : ""} onClick={() => setUseCoords(true)}>직접 지정</button>
             </div>
             {useCoords && (
               <div className="manual-position-box">
@@ -107,7 +110,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
           <div className="character-tabs">
             {characters.map((character, index) => (
               <button key={character.id} className={active?.id === character.id ? "active" : ""} onClick={() => setSelected(character.id)}>
-                <span>{index + 1}</span>{character.name || `Character ${index + 1}`}
+                <span>{index + 1}</span>{character.name || `캐릭터 ${index + 1}`}
               </button>
             ))}
             <button className="add-character" onClick={() => {
@@ -143,7 +146,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
                 spellCheck={false}
               />
 
-              <label className="field-label">Character Prompt</label>
+              <label className="field-label">캐릭터 프롬프트</label>
               <AutocompleteTextarea
                 value={active.prompt}
                 onChange={(prompt) => update(active.id, { prompt })}
@@ -157,7 +160,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
               />
 
               <details>
-                <summary>Character Negative</summary>
+                <summary>캐릭터 제외</summary>
                 <AutocompleteTextarea
                   value={active.negative}
                   onChange={(negative) => update(active.id, { negative })}

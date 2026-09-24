@@ -57,3 +57,8 @@
 ## 2026-09-24 NAI-007 — Load settings from an image
 - "불러오기" in the quick-settings row reads NovelAI metadata from a picked PNG/WebP (PNG text chunks → WebP XMP → stealth alpha) and applies prompts, characters/positions, exact seed and generation settings immediately, with a 6 s undo toast. See BACKLOG NAI-007.
 - Checked with `tsc -b` and `vitest run` (including the user's real NovelAI PNG and WebP files F/D when present). Not yet checked: the Android picker and loading on the S11.
+
+## 2026-09-24 NAI-010 — Tag-first main screen (B2-1)
+- The main screen is now a compact top band (status pill, current thumbnail, other session images, 저장), section tabs 작가 · 캐릭터 · 장면 · 품질·제외, and a full-width chip editor with a tap bubble (weight ±0.1, move, 수정, 삭제), inline add with autocomplete, a tool row (태그사전, 번역, undo/redo, ⋯) and 생성 설정 + 생성 at the bottom. Typing collapses the band and puts ±0.1, 사전, 번역, undo and 생성 above the keyboard. Image actions (저장, 마무리, Seed, 업스케일, ⋯) moved to the full-screen viewer. Settings split into 생성 설정 and 앱 설정. See BACKLOG NAI-010.
+- Checked with `tsc -b`, `vitest run` (chip operations, diff, viewport keyboard detection) and headless Chrome at 800×1280 with injected demo state (no API calls). Not yet checked: the S11 WebView keyboard behaviour and touch feel.
+

@@ -19,6 +19,10 @@ type PersistedUi = {
   finishParams: FinishParams;
   /** Save file format: verified lossy WebP (default, NovelAI-readable) or the original PNG. */
   saveFormat: SaveFormat;
+  /** Main-screen "직전 대비 +N −N" chip (앱 설정 → 화면 도움말; off by default). */
+  showTagDiff: boolean;
+  /** Instructional hint lines on the main screen (off by default). */
+  showHints: boolean;
 };
 
 type State = PersistedUi & {
@@ -29,6 +33,8 @@ type State = PersistedUi & {
   /** Changes one detail value (clamped) and turns the filter on. */
   setFinishParam: (key: FinishParamKey, value: number) => void;
   setSaveFormat: (format: SaveFormat) => void;
+  setShowTagDiff: (value: boolean) => void;
+  setShowHints: (value: boolean) => void;
 };
 
 export const UI_STORE_VERSION = 2;
@@ -47,6 +53,8 @@ const DEFAULT_UI: PersistedUi = {
   finishPreset: "anime",
   finishParams: { ...FINISH_PRESETS.anime },
   saveFormat: "webp",
+  showTagDiff: false,
+  showHints: false,
 };
 
 function isPresetKey(value: unknown): value is FinishPresetKey {
@@ -58,8 +66,10 @@ export function migrateUiState(persisted: unknown, version: number): PersistedUi
   const old = persisted && typeof persisted === "object" ? (persisted as Record<string, unknown>) : {};
   const showFixedPrompts = typeof old.showFixedPrompts === "boolean" ? old.showFixedPrompts : DEFAULT_UI.showFixedPrompts;
   const saveFormat: SaveFormat = old.saveFormat === "png" ? "png" : "webp";
+  const showTagDiff = old.showTagDiff === true;
+  const showHints = old.showHints === true;
   if (version < 1) {
-    return { ...DEFAULT_UI, showFixedPrompts, finishEnabled: old.grainEnabled === true, saveFormat };
+    return { ...DEFAULT_UI, showFixedPrompts, finishEnabled: old.grainEnabled === true, saveFormat, showTagDiff, showHints };
   }
   const finishPreset = isPresetKey(old.finishPreset) ? old.finishPreset : DEFAULT_UI.finishPreset;
   const storedParams = sanitizeFinishParams(old.finishParams, FINISH_PRESETS[finishPreset]);
@@ -72,6 +82,8 @@ export function migrateUiState(persisted: unknown, version: number): PersistedUi
     finishPreset,
     finishParams,
     saveFormat,
+    showTagDiff,
+    showHints,
   };
 }
 
@@ -89,6 +101,8 @@ export const useUiStore = create<State>()(
         set({ finishParams: sanitizeFinishParams({ ...current, [key]: value }, current), finishEnabled: true });
       },
       setSaveFormat: (saveFormat) => set({ saveFormat }),
+      setShowTagDiff: (showTagDiff) => set({ showTagDiff }),
+      setShowHints: (showHints) => set({ showHints }),
     }),
     {
       name: "nai-v5-s11-ui",
@@ -102,6 +116,8 @@ export const useUiStore = create<State>()(
         finishPreset: state.finishPreset,
         finishParams: state.finishParams,
         saveFormat: state.saveFormat,
+        showTagDiff: state.showTagDiff,
+        showHints: state.showHints,
       }),
     },
   ),

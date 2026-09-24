@@ -47,7 +47,7 @@ function stripArtistPrefix(query: string) {
   return trimmed;
 }
 
-function autocompleteQuery(query: string, tagPrefix?: string) {
+export function autocompleteQuery(query: string, tagPrefix?: string) {
   if (tagPrefix?.toLowerCase() === "artist:") return stripArtistPrefix(query);
   return query.trim();
 }

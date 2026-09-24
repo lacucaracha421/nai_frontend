@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800">
+<title>Concept C · Session Roll</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  /* C: session roll. The session is the working object: repeat a prompt N times (one image per
+     request, sent one after another), mark keepers with a star while it runs, save keepers at the end. */
+  .topbar { position: absolute; top: 32px; left: 16px; right: 12px; height: 52px; display: flex; align-items: center; gap: 4px; }
+  .topbar .sp { flex: 1; }
+  .stage { position: absolute; left: 16px; top: 92px; width: 600px; height: 877px; border-radius: 22px; }
+  .stage .star { position: absolute; right: 14px; top: 14px; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(10, 10, 14, .55); color: #ffd873; }
+  .roll { position: absolute; left: 628px; top: 92px; width: 156px; height: 877px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .roll .hd { height: 22px; font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; }
+  .rc { position: relative; width: 156px; height: 228px; flex: none; border-radius: 16px; }
+  .rc.on { outline: 2.5px solid var(--accent-hi); outline-offset: 2px; }
+  .rc .s { position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(10, 10, 14, .5); color: rgba(255, 255, 255, .7); }
+  .rc .s.k { color: #ffd873; }
+  .rc .n { position: absolute; left: 8px; bottom: 8px; font-size: 12px; padding: 0 7px; line-height: 20px; border-radius: 6px; background: rgba(0, 0, 0, .55); }
+  .rc.run { background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 13px; }
+  .rc.run .bar { width: 110px; height: 6px; border-radius: 6px; background: var(--surface-4); overflow: hidden; }
+  .rc.run .bar span { display: block; width: 62%; height: 100%; background: var(--accent-hi); }
+  .rc.wait { height: 64px; background: transparent; border: 1.5px dashed var(--line-strong); display: grid; place-items: center; color: var(--faint); font-size: 13px; }
+  .deck { position: absolute; left: 16px; right: 16px; top: 983px; display: flex; flex-direction: column; gap: 10px; }
+  .deck .r { display: flex; gap: 8px; align-items: center; }
+  .deck .r .btn { height: 56px; }
+  .deck .keep { background: #3a3220; color: #ffd873; }
+  .deck .lab { font-size: 13px; color: var(--muted); width: 44px; }
+  .deck .seg { width: 300px; }
+  .deck .seg > div { height: 44px; }
+  .deck .sp { flex: 1; }
+  .deck .cost { font-size: 13px; color: var(--muted); text-align: right; line-height: 17px; }
+  .deck .cost b { color: var(--ok); font-weight: 500; }
+  .tool { width: 100px; height: 72px; border-radius: 22px; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 13px; flex: none; }
+  .tool.stop { background: #3a2226; color: #ffc9c1; }
+  .gen.running { position: relative; overflow: hidden; background: var(--accent-soft); color: var(--on-accent-soft); box-shadow: none; flex: 1; }
+  .gen.running::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 66%; background: rgba(129, 119, 194, .45); }
+  .gen.running > * { position: relative; }
+
+  /* review */
+  .page { position: absolute; left: 0; right: 0; top: 28px; bottom: 20px; padding: 0 16px; }
+  .page .ph { display: flex; align-items: center; gap: 6px; height: 64px; }
+  .page .ph h2 { margin: 0; font-size: 22px; font-weight: 500; }
+  .page .ph .sub { color: var(--muted); font-size: 14px; margin-left: 4px; }
+  .page .ph .sp { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .gi { position: relative; height: 312px; border-radius: 16px; }
+  .gi.dim { opacity: .38; }
+  .gi .s { position: absolute; right: 8px; top: 8px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(10, 10, 14, .5); color: rgba(255, 255, 255, .75); }
+  .gi .s.k { color: #ffd873; }
+  .gi .tagx { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 4px; }
+  .gi .tagx span { font-size: 11.5px; line-height: 22px; padding: 0 7px; border-radius: 6px; background: rgba(0, 0, 0, .6); }
+  .gi .tagx .ok { color: var(--ok); }
+  .rbar { position: absolute; left: 0; right: 0; bottom: 20px; padding: 14px 16px 12px; background: var(--surface); border-top: 1px solid var(--line); }
+  .rbar .warn { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--warn); margin-bottom: 12px; }
+  .rbar .r { display: flex; gap: 10px; }
+  .rbar .btn { height: 64px; }
+  .rbar .btn.primary { flex: 1; font-size: 17px; }
+
+  /* prompt sheet */
+  .psheet { top: 360px; padding: 0 20px; }
+  .ph2 { display: flex; align-items: center; gap: 4px; height: 52px; }
+  .ph2 h2 { flex: 1; margin: 0; font-size: 21px; font-weight: 500; }
+  .sect { display: flex; flex-direction: column; gap: 2px; border-radius: 20px; overflow: hidden; }
+  .sect .rowbtn { min-height: 72px; }
+  .sect .rowbtn .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .tog { width: 60px; height: 34px; border-radius: 34px; background: var(--surface-4); position: relative; flex: none; }
+  .tog::after { content: ""; position: absolute; left: 4px; top: 4px; width: 26px; height: 26px; border-radius: 50%; background: var(--muted); }
+  .tog.on { background: var(--accent); }
+  .tog.on::after { left: 30px; background: #fff; }
+  .rowbtn .t b span.newf { display: inline; }
+  .newf { font-size: 11px; color: var(--warn); border: 1px solid rgba(232, 184, 106, .5); border-radius: 6px; padding: 0 6px; line-height: 18px; margin-left: 6px; vertical-align: 1px; }
+  .psheet .genrow { position: absolute; left: 20px; right: 20px; bottom: 28px; display: flex; gap: 10px; }
+  .psheet .genrow .gen { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- #generate -->
+<section class="screen" id="generate">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="topbar">
+    <div class="pill"><span class="dot"></span>무료 생성 <small>· 한도 72%</small></div>
+    <span class="sp"></span>
+    <button class="ib"><i data-i="eye"></i></button>
+    <button class="ib"><i data-i="cog"></i></button>
+  </div>
+  <div class="stage art" data-art="31"><span class="star"><i data-i="starf" class="lg"></i></span></div>
+  <div class="roll">
+    <div class="hd"><span>세션 12</span><span>보관 5</span></div>
+    <div class="rc wait">대기 · 4/4</div>
+    <div class="rc run"><span>생성 중 3/4</span><span class="bar"><span></span></span><span class="num" style="font-size:12px">약 6초</span></div>
+    <div class="rc art on" data-art="31"><span class="s k"><i data-i="starf" class="sm"></i></span><span class="n num">2/4</span></div>
+    <div class="rc art" data-art="32"><span class="s"><i data-i="star" class="sm"></i></span><span class="n num">1/4</span></div>
+    <div class="rc art" data-art="33"><span class="s k"><i data-i="starf" class="sm"></i></span></div>
+  </div>
+  <div class="deck">
+    <div class="r">
+      <button class="btn keep"><i data-i="starf" class="sm"></i>보관됨</button>
+      <button class="btn"><i data-i="save" class="sm"></i>저장</button>
+      <button class="btn"><i data-i="sparkle" class="sm"></i>마무리</button>
+      <button class="btn"><i data-i="seed" class="sm"></i>Seed</button>
+      <span class="sp"></span>
+      <button class="btn ghost">⋯</button>
+    </div>
+    <div class="r">
+      <span class="lab">반복</span>
+      <div class="seg"><div>1</div><div>2</div><div class="on">4</div><div>8</div></div>
+      <button class="chip sel"><i data-i="dice" class="sm"></i>매번 랜덤 캐릭터</button>
+      <span class="sp"></span>
+      <span class="cost"><b>무료 × 4</b><br>한도 안에서</span>
+    </div>
+    <div class="r">
+      <button class="tool"><i data-i="scene"></i>프롬프트</button>
+      <button class="tool stop"><i data-i="stop"></i>중지</button>
+      <button class="gen running"><span class="col">생성 중 3 / 4<small>끝나면 알림 · 화면 켜둠</small></span></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:110px;width:320px">현재 이미지는 600×877 (현재 앱의 약 2.5배 면적). 오른쪽 위 <b>★ 보관</b>이 가장 큰 결정 버튼.</div>
+  <div class="note" data-n="2" style="left:390px;top:560px;width:220px">세션 롤: 새 결과가 위로. 대기·진행이 보이고, 생성 중에도 앞 결과를 보관할 수 있다.</div>
+  <div class="note" data-n="3" style="left:250px;top:880px;width:350px"><b>반복 4</b> = 한 장짜리 요청을 4번 차례로 (한 번에 1장 규칙 유지). 시작 전 비용을 보여준다.</div>
+</div>
+</section>
+
+<!-- #review -->
+<section class="screen" id="review">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="page">
+    <div class="ph"><button class="ib"><i data-i="back"></i></button><h2>이번 세션</h2><span class="sub num">12장</span><span class="sp"></span><button class="ib"><i data-i="compare"></i></button></div>
+    <div class="seg"><div class="on">전체 <span class="n">12</span></div><div>보관 <span class="n">5</span></div><div>업스케일 <span class="n">1</span></div><div>저장됨 <span class="n">2</span></div></div>
+    <div class="grid">
+      <div class="gi art" data-art="31"><span class="s k"><i data-i="starf" class="sm"></i></span></div>
+      <div class="gi art" data-art="33"><span class="s k"><i data-i="starf" class="sm"></i></span><span class="tagx"><span class="ok">✓ 저장됨</span></span></div>
+      <div class="gi art" data-art="35"><span class="s k"><i data-i="starf" class="sm"></i></span><span class="tagx"><span>UP</span><span class="ok">✓ 저장됨</span></span></div>
+      <div class="gi art" data-art="36"><span class="s k"><i data-i="starf" class="sm"></i></span></div>
+      <div class="gi art" data-art="38"><span class="s k"><i data-i="starf" class="sm"></i></span><span class="tagx"><span>마무리</span></span></div>
+      <div class="gi art" data-art="32"><span class="s"><i data-i="star" class="sm"></i></span></div>
+      <div class="gi art" data-art="39"><span class="s"><i data-i="star" class="sm"></i></span></div>
+      <div class="gi art" data-art="40"><span class="s"><i data-i="star" class="sm"></i></span></div>
+      <div class="gi art" data-art="41"><span class="s"><i data-i="star" class="sm"></i></span></div>
+    </div>
+  </div>
+  <div class="rbar">
+    <div class="warn"><i data-i="info" class="sm"></i>앱을 다시 열면 세션은 비워집니다 · 보관했지만 저장 안 한 이미지 3장</div>
+    <div class="r">
+      <button class="btn"><i data-i="compare" class="sm"></i>나란히 비교</button>
+      <button class="btn"><i data-i="upscale" class="sm"></i>업스케일</button>
+      <button class="btn primary"><i data-i="save"></i>보관 3장 저장</button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:430px;top:40px;width:300px">썸네일 줄 대신 세션 전체를 <b>보관/버림</b>으로 추리는 화면. 기록은 저장하지 않는다 (재실행 시 빈 무대, 스펙 유지).</div>
+  <div class="note" data-n="2" style="left:300px;top:1080px;width:470px">한 번에 저장: 보관한 것 중 아직 저장 안 한 것만. 저장 형식·마무리 설정은 지금과 같다.</div>
+</div>
+</section>
+
+<!-- #prompt -->
+<section class="screen" id="prompt">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="stage art" data-art="31"></div>
+  <div class="scrim"></div>
+  <div class="sheet psheet">
+    <div class="handle"></div>
+    <div class="ph2"><h2>프롬프트</h2><button class="ib"><i data-i="chevdown"></i></button></div>
+    <div class="sect">
+      <button class="rowbtn"><span class="dot d-artist"></span><span class="t"><b>작가</b><span>artist:mika pikazo, artist:ask (askzy)</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><span class="dot d-character"></span><span class="t"><b>캐릭터 1</b><span>랜덤 · 41명 중 · 그 외 태그 유지: white dress, twintails</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><span class="dot d-general"></span><span class="t"><b>장면</b><span>1girl, solo, looking at viewer, 1.2::soft smile::, flower field, wind …</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><span class="dot" style="background:var(--faint)"></span><span class="t"><b>품질 · 제외</b><span>거의 고정 · 마지막 변경 9월 20일</span></span><i data-i="chev" class="sm"></i></button>
+    </div>
+    <div class="h-sec" style="margin-top:14px">반복할 때마다 바꾸기<span class="rule"></span></div>
+    <div class="sect">
+      <div class="rowbtn"><i data-i="dice"></i><span class="t"><b>캐릭터를 랜덤으로</b><span>Prombot 북마크 41명 · 캐릭터 태그만 바꿈</span></span><span class="tog on"></span></div>
+      <div class="rowbtn"><i data-i="seed"></i><span class="t"><b>Seed 무작위</b><span>끄면 같은 Seed로 태그만 비교</span></span><span class="tog on"></span></div>
+      <div class="rowbtn"><i data-i="repeat"></i><span class="t"><b>선택지 태그 <span class="newf">새 기능</span></b><span>{white|black} dress 처럼 쓰면 매번 하나 고름</span></span><span class="tog"></span></div>
+    </div>
+    <div class="genrow">
+      <button class="tool" style="width:120px;height:72px;border-radius:22px;background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:13px"><i data-i="book"></i>태그사전</button>
+      <button class="gen"><span class="col">4장 연속 생성<small>무료 × 4 · 한도 안에서</small></span></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:130px;width:330px">섹션은 한 줄 요약. 누르면 현재와 같은 편집기. C의 시트는 <b>무엇을 반복하나</b>에 집중.</div>
+  <div class="note" data-n="2" style="left:36px;top:1110px;width:520px">랜덤 캐릭터는 지금의 🎲와 같은 동작 (NAI-009: 다른 태그 유지). 선택지 태그는 새 제안.</div>
+</div>
+</section>
+
+<!-- #settings -->
+<section class="screen" id="settings">
+<div class="dev">
+  <div data-sbar></div>
+  <div class="page" style="padding:0 20px">
+    <div class="ph"><button class="ib"><i data-i="back"></i></button><h2>설정</h2></div>
+    <div class="h-sec">연속 생성 · 비용 보호<span class="rule"></span></div>
+    <div class="list">
+      <div class="rowbtn"><i data-i="shield"></i><span class="t"><b>무료 범위를 넘으면 멈춤</b><span>Anlas가 드는 요청은 보내지 않고 멈춘 뒤 묻기</span></span><span class="tog on"></span></div>
+      <div class="rowbtn"><i data-i="bolt"></i><span class="t"><b>사용 한도가 낮으면 멈춤</b><span>남은 한도가 이 값보다 낮아지면</span></span><span class="v num">20%</span><i data-i="chev" class="sm"></i></div>
+      <div class="rowbtn"><i data-i="clock"></i><span class="t"><b>요청 사이 간격</b><span>연속 요청을 천천히 보내기</span></span><span class="v num">3초</span><i data-i="chev" class="sm"></i></div>
+      <div class="rowbtn"><i data-i="eye"></i><span class="t"><b>생성 중 화면 켜둠</b><span>반복이 끝나면 진동으로 알림</span></span><span class="tog on"></span></div>
+    </div>
+    <div class="h-sec" style="margin-top:14px">생성<span class="rule"></span></div>
+    <div class="list">
+      <button class="rowbtn"><i data-i="sliders"></i><span class="t"><b>생성 설정</b><span>V5 Full · 832×1216 · 28 steps · CFG 5 · Euler Ancestral</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><i data-i="sparkle"></i><span class="t"><b>마무리 필터</b><span>애니 마무리 · 세부 조절됨</span></span><i data-i="chev" class="sm"></i></button>
+    </div>
+    <div class="h-sec" style="margin-top:14px">앱<span class="rule"></span></div>
+    <div class="list">
+      <button class="rowbtn"><i data-i="key"></i><span class="t"><b>NovelAI 연결</b><span>연결됨 · 토큰 저장됨</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><i data-i="save"></i><span class="t"><b>저장</b><span>WebP · Pictures/NAI V5 Studio</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><i data-i="translate"></i><span class="t"><b>번역</b><span>Ollama · gemma3</span></span><i data-i="chev" class="sm"></i></button>
+      <button class="rowbtn"><i data-i="layers"></i><span class="t"><b>백업 · 복원</b><span>전체 백업 내보내기, 불러오기</span></span><i data-i="chev" class="sm"></i></button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:36px;top:1100px;width:480px">연속 생성은 비용 보호가 먼저. 비용 추정은 지금처럼 알려진 경우만 “무료”, 그 외는 <b>비용 미확인 → 멈춤</b>. 간격·화면 켜둠은 기기 확인 필요.</div>
+</div>
+</section>
+
+<script src="proto.js"></script>
+</body>
+</html>

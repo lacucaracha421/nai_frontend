@@ -84,7 +84,8 @@ type State = {
   restoreLoadSnapshot: (snapshot: LoadSnapshot) => void;
   positivePrompt: () => string;
   generate: () => Promise<void>;
-  upscaleActive: () => Promise<void>;
+  /** Upscales the image at `index` (default: the current one); the result becomes current. */
+  upscaleActive: (index?: number) => Promise<void>;
 };
 
 const append = (base: string, value: string) => {
@@ -233,10 +234,10 @@ export const useGenerationStore = create<State>()(
         }
       },
 
-      upscaleActive: async () => {
+      upscaleActive: async (index) => {
         const snapshot = get();
         if (isBusy(snapshot.status)) return;
-        const image = snapshot.images[snapshot.activeImage];
+        const image = snapshot.images[index ?? snapshot.activeImage];
         if (!image) return;
         if (image.width * image.height > 1024 * 1024) {
           set({

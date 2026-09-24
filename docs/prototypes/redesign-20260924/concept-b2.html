@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=800">
+<title>Concept B2 · Tag Workbench</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  /* B2: B refined after user feedback. Tag editing is the hero; the image is a small thumbnail
+     that opens the full-screen viewer, where the image actions live. Two layout variants. */
+  .topbar { position: absolute; top: 32px; left: 16px; right: 12px; height: 52px; display: flex; align-items: center; gap: 4px; }
+  .topbar .sp { flex: 1; }
+
+  /* bigger tag chips than B: the editor is the main surface */
+  .tags { gap: 10px; }
+  .tag { height: 52px; padding: 0 16px; font-size: 17px; border-radius: 12px; }
+  .tag.w em { font-size: 14px; }
+  .tag.sel { background: var(--accent-soft); color: var(--on-accent-soft); outline: 2px solid var(--accent-hi); }
+  .tag.input { color: var(--muted); }
+  .ed { position: relative; border-radius: 22px; background: var(--surface); padding: 16px; overflow: hidden; }
+  .ed .cap { display: flex; align-items: center; gap: 8px; height: 36px; margin: -4px 0 10px; font-size: 13px; color: var(--faint); }
+  .ed .cap .sp { flex: 1; }
+  .diffq { height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 13px; }
+  .diffq .p { color: var(--ok); } .diffq .m { color: var(--danger); }
+  /* action bubble for the selected chip: weight, move, edit, delete in one tap each */
+  .bubble { position: absolute; z-index: 5; display: flex; gap: 4px; padding: 6px; border-radius: 16px; background: var(--surface-4); box-shadow: 0 10px 28px rgba(0,0,0,.5); }
+  .bubble button { min-width: 52px; height: 48px; padding: 0 10px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-size: 15px; color: var(--text); }
+  .bubble button.del { color: var(--danger); }
+  .bubble .sep { width: 1px; margin: 8px 2px; background: var(--line-strong); }
+  .bubble::before { content: ""; position: absolute; top: -7px; left: var(--ax, 60px); width: 14px; height: 14px; background: var(--surface-4); transform: rotate(45deg); }
+
+  .tools { display: flex; gap: 8px; }
+  .tools .chip { height: 52px; padding: 0 16px; font-size: 15px; }
+  .tools .sp { flex: 1; }
+  .genrow { position: absolute; left: 16px; right: 16px; bottom: 28px; display: flex; gap: 10px; }
+  .setbtn { width: 220px; height: 72px; border-radius: 22px; background: var(--surface-2); display: flex; align-items: center; gap: 12px; padding: 0 18px; flex: none; }
+  .setbtn .col { display: flex; flex-direction: column; line-height: 19px; }
+  .setbtn b { font-weight: 500; font-size: 15px; color: var(--text); }
+  .setbtn span { font-size: 12.5px; color: var(--faint); }
+  .genrow .gen { flex: 1; }
+
+  .thumbimg { position: relative; border-radius: 16px; }
+  .thumbimg .exp { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(10,10,14,.55); color: #eee; }
+  .save1 { height: 56px; border-radius: 16px; background: #e6e3ea; color: #16151c; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; }
+  .ses { position: relative; border-radius: 10px; flex: none; }
+  .ses.on { outline: 2.5px solid var(--accent-hi); outline-offset: 2px; }
+  .more { border-radius: 10px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); flex: none; }
+
+  /* ---------- V1: compact top band ---------- */
+  .band { position: absolute; left: 16px; right: 16px; top: 92px; height: 132px; display: flex; gap: 12px; align-items: stretch; }
+  .band .thumbimg { width: 90px; height: 132px; flex: none; }
+  .band .strip { flex: 1; display: flex; gap: 8px; align-items: flex-end; }
+  .band .ses { width: 58px; height: 84px; }
+  .band .more { width: 58px; height: 84px; }
+  .band .save1 { width: 118px; align-self: flex-end; }
+  .v1 .tabs { position: absolute; left: 16px; right: 16px; top: 240px; }
+  .v1 .tabs > div { height: 56px; font-size: 16px; }
+  .v1 .ed { position: absolute; left: 16px; right: 16px; top: 316px; height: 770px; }
+  .v1 .tools { position: absolute; left: 16px; right: 16px; top: 1100px; }
+
+  /* ---------- keyboard ---------- */
+  .kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 410px; background: #202024; padding: 12px 10px 30px; display: flex; flex-direction: column; gap: 10px; }
+  .kbd .kr { display: flex; gap: 8px; justify-content: center; }
+  .kbd .k { width: 66px; height: 64px; border-radius: 10px; background: #34343a; display: grid; place-items: center; font-size: 22px; color: #e8e8ec; }
+  .kbd .k.w { width: 110px; font-size: 15px; color: #bbb; }
+  .kbd .k.sp { width: 360px; }
+  .kacc { position: absolute; left: 0; right: 0; bottom: 410px; height: 68px; background: var(--surface-2); display: flex; align-items: center; gap: 6px; padding: 0 10px; border-top: 1px solid var(--line); }
+  .kacc .chip { height: 50px; background: var(--surface-3); padding: 0 14px; }
+  .kacc .sp { flex: 1; }
+  .kacc .gen { height: 50px; border-radius: 14px; padding: 0 26px; font-size: 17px; box-shadow: none; }
+  .sugg { position: absolute; z-index: 6; border-radius: 16px; background: var(--surface-3); overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+  .sugg .r { height: 54px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .sugg .r:last-child { border-bottom: 0; }
+  .sugg .r .c { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .sugg .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .khead { position: absolute; left: 16px; right: 16px; top: 36px; height: 64px; display: flex; align-items: center; gap: 10px; }
+  .khead .thumbimg { width: 44px; height: 64px; border-radius: 10px; flex: none; }
+  .khead .seg { flex: 1; }
+  .khead .seg > div { height: 48px; }
+
+  /* ---------- V2: left column (image + vertical section tabs) ---------- */
+  .lcol { position: absolute; left: 16px; top: 92px; width: 184px; display: flex; flex-direction: column; gap: 10px; }
+  .lcol .thumbimg { width: 184px; height: 269px; }
+  .lcol .thumbimg .sv { position: absolute; left: 8px; bottom: 8px; right: 8px; height: 48px; border-radius: 12px; background: rgba(230,227,234,.94); color: #16151c; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; }
+  .lcol .srow { display: flex; gap: 6px; }
+  .lcol .ses { width: 40px; height: 58px; border-radius: 8px; }
+  .lcol .more { width: 40px; height: 58px; border-radius: 8px; font-size: 12px; }
+  .vtabs { display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 18px; background: var(--surface-2); margin-top: 4px; }
+  .vtabs > div { height: 64px; border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 16px; color: var(--muted); }
+  .vtabs > div .n { margin-left: auto; font-size: 13px; color: var(--faint); }
+  .vtabs > .on { background: var(--surface-4); color: var(--text); font-weight: 500; }
+  .vtabs .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .v2 .ed { position: absolute; left: 212px; right: 16px; top: 92px; height: 994px; }
+  .v2 .tools { position: absolute; left: 16px; right: 16px; top: 1100px; }
+
+  /* ---------- viewer ---------- */
+  .viewer { background: #050507; }
+  .vtop { position: absolute; top: 34px; left: 12px; right: 12px; height: 52px; display: flex; align-items: center; gap: 6px; z-index: 5; }
+  .vtop .ib { background: rgba(20,20,26,.6); color: #eee; }
+  .vtop .pos { flex: 1; text-align: center; font-size: 15px; color: #ddd; }
+  .vbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 30px; background: linear-gradient(180deg, rgba(5,5,7,0), rgba(5,5,7,.92) 30%); }
+  .vbar .meta { font-size: 13px; color: #aaa7b1; margin: 0 4px 12px; }
+  .vbar .r { display: flex; gap: 8px; }
+  .vbar .btn { height: 64px; flex: 1; background: rgba(46,45,53,.92); }
+  .vbar .btn.on { background: var(--accent-soft); color: var(--on-accent-soft); }
+  .vbar .btn.sv { background: #e6e3ea; color: #16151c; font-weight: 600; flex: 1.4; }
+  .vbar .btn small { color: var(--muted); font-size: 12px; }
+  .vbar .btn.more { flex: none; width: 64px; }
+</style>
+</head>
+<body>
+
+<!-- #v1 : compact top band -->
+<section class="screen" id="v1">
+<div class="dev v1">
+  <div data-sbar></div>
+  <div class="topbar">
+    <div class="pill"><span class="dot"></span>무료 생성 <small>· 한도 72%</small></div>
+    <span class="sp"></span>
+    <button class="ib"><i data-i="eye"></i></button>
+    <button class="ib"><i data-i="cog"></i></button>
+  </div>
+  <div class="band">
+    <div class="thumbimg art" data-art="21"><span class="exp"><i data-i="upscale" class="xs"></i></span></div>
+    <div class="strip">
+      <div class="ses art on" data-art="21"></div>
+      <div class="ses art" data-art="22"></div>
+      <div class="ses art" data-art="23"></div>
+      <div class="ses art" data-art="24"></div>
+      <div class="more num">+8</div>
+    </div>
+    <button class="save1"><i data-i="save"></i>저장</button>
+  </div>
+  <div class="tabs seg">
+    <div><span class="dot d-artist" style="width:9px;height:9px;border-radius:50%"></span>작가 <span class="n">2</span></div>
+    <div><span class="dot d-character" style="width:9px;height:9px;border-radius:50%"></span>캐릭터 <span class="n">1</span></div>
+    <div class="on"><span class="dot d-general" style="width:9px;height:9px;border-radius:50%"></span>장면 <span class="n">18</span></div>
+    <div>품질·제외</div>
+  </div>
+  <div class="ed">
+    <div class="cap"><span>누르면 선택 · 두 번 누르면 수정</span><span class="sp"></span><span class="diffq">직전 대비 <span class="p">+2</span> <span class="m">−2</span></span></div>
+    <div class="tags">
+      <span class="tag">1girl</span><span class="tag">solo</span><span class="tag">looking at viewer</span><span class="tag w">soft smile <em>1.2</em></span>
+      <span class="tag">white dress</span><span class="tag">flower field</span><span class="tag">wind</span><span class="tag">golden hour</span>
+      <span class="tag">from side</span><span class="tag sel">backlight</span><span class="tag">depth of field</span><span class="tag">petals</span>
+      <span class="tag">hair ribbon</span><span class="tag">sitting</span><span class="tag">hand on own knee</span><span class="tag">blue sky</span>
+      <span class="tag">cloud</span><span class="tag">sun</span><span class="tag input">＋ 태그 추가</span>
+    </div>
+    <div class="bubble" style="left:286px;top:184px;--ax:114px">
+      <button class="num">−0.1</button><button class="num">+0.1</button><span class="sep"></span>
+      <button><i data-i="back" class="sm"></i></button><button><i data-i="chev" class="sm"></i></button><span class="sep"></span>
+      <button>수정</button><button class="del"><i data-i="trash" class="sm"></i></button>
+    </div>
+  </div>
+  <div class="tools">
+    <button class="chip"><i data-i="book" class="sm"></i>태그사전</button>
+    <button class="chip"><i data-i="translate" class="sm"></i>번역</button>
+    <button class="chip"><i data-i="undo" class="sm"></i></button>
+    <button class="chip"><i data-i="redo" class="sm"></i></button>
+    <span class="sp"></span>
+    <button class="chip">⋯</button>
+  </div>
+  <div class="genrow">
+    <button class="setbtn"><i data-i="sliders"></i><span class="col"><b>생성 설정</b><span class="num">832×1216 · 28 · CFG 5</span></span></button>
+    <button class="gen"><span class="col">생성<small>무료 · 한도 내</small></span></button>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:300px;top:40px;width:250px">이미지는 작은 썸네일. <b>누르면 전체 화면</b>. 저장만 한 번에.</div>
+  <div class="note" data-n="2" style="left:420px;top:640px;width:330px">태그를 누르면 바로 옆에 <b>가중치·이동·수정·삭제</b>. 각 1탭, 끌기 없이 순서 변경.</div>
+  <div class="note" data-n="3" style="left:420px;top:700px;width:330px">“달라진 점”은 편집기 오른쪽 위 조용한 한 줄 <b>+2 −2</b>. 누를 때만 펼침.</div>
+</div>
+</section>
+
+<!-- #v1-keyboard -->
+<section class="screen" id="v1-keyboard">
+<div class="dev v1">
+  <div data-sbar></div>
+  <div class="khead">
+    <div class="thumbimg art" data-art="21"></div>
+    <div class="seg">
+      <div>작가</div><div>캐릭터</div><div class="on">장면 <span class="n">18</span></div><div>품질·제외</div>
+    </div>
+  </div>
+  <div class="ed" style="top:112px;height:680px">
+    <div class="tags">
+      <span class="tag">1girl</span><span class="tag">solo</span><span class="tag">looking at viewer</span><span class="tag w">soft smile <em>1.2</em></span>
+      <span class="tag">white dress</span><span class="tag">flower field</span><span class="tag">wind</span><span class="tag">golden hour</span>
+      <span class="tag">from side</span><span class="tag">backlight</span><span class="tag">depth of field</span><span class="tag">petals</span>
+      <span class="tag">hair ribbon</span><span class="tag">sitting</span><span class="tag">hand on own knee</span><span class="tag input" style="border-color:var(--accent-hi);color:var(--text)">sunfl<span class="caret"></span></span>
+    </div>
+  </div>
+  <div class="sugg" style="left:32px;right:32px;top:314px">
+    <div class="r"><span class="dot d-general"></span>sunflower<span class="c num">88,410</span></div>
+    <div class="r"><span class="dot d-general"></span>sunflower field<span class="c num">6,203</span></div>
+    <div class="r"><span class="dot d-copyright"></span>sunflower (series)<span class="c num">412</span></div>
+  </div>
+  <div class="kacc">
+    <button class="chip num">−0.1</button><button class="chip num">+0.1</button>
+    <button class="chip"><i data-i="book" class="sm"></i>사전</button>
+    <button class="chip"><i data-i="translate" class="sm"></i>번역</button>
+    <button class="chip"><i data-i="undo" class="sm"></i></button>
+    <span class="sp"></span>
+    <button class="gen">생성</button>
+  </div>
+  <div class="kbd">
+    <div class="kr"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span></div>
+    <div class="kr"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span></div>
+    <div class="kr"><span class="k w">⇧</span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k w">⌫</span></div>
+    <div class="kr"><span class="k w">!#1</span><span class="k">,</span><span class="k sp"></span><span class="k">.</span><span class="k w">완료</span></div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:420px;top:540px;width:330px">키보드가 올라오면 썸네일·탭이 한 줄로. 쉼표나 완료로 태그 확정.</div>
+  <div class="note" data-n="2" style="left:420px;top:740px;width:340px">키보드 위 한 줄에 가중치·사전·번역·되돌리기 + <b>생성</b>.</div>
+</div>
+</section>
+
+<!-- #v2 : left column -->
+<section class="screen" id="v2">
+<div class="dev v2">
+  <div data-sbar></div>
+  <div class="topbar">
+    <div class="pill"><span class="dot"></span>무료 생성 <small>· 한도 72%</small></div>
+    <span class="sp"></span>
+    <button class="ib"><i data-i="eye"></i></button>
+    <button class="ib"><i data-i="cog"></i></button>
+  </div>
+  <div class="lcol">
+    <div class="thumbimg art" data-art="21"><span class="exp"><i data-i="upscale" class="xs"></i></span><button class="sv"><i data-i="save" class="sm"></i>저장</button></div>
+    <div class="srow">
+      <div class="ses art on" data-art="21"></div><div class="ses art" data-art="22"></div><div class="ses art" data-art="23"></div><div class="more num">+9</div>
+    </div>
+    <div class="vtabs">
+      <div><span class="dot d-artist"></span>작가<span class="n">2</span></div>
+      <div><span class="dot d-character"></span>캐릭터<span class="n">1</span></div>
+      <div class="on"><span class="dot d-general"></span>장면<span class="n">18</span></div>
+      <div><span class="dot" style="background:var(--faint)"></span>품질</div>
+      <div><span class="dot" style="background:var(--faint)"></span>제외</div>
+    </div>
+  </div>
+  <div class="ed">
+    <div class="cap"><span>장면</span><span class="sp"></span><span class="diffq">직전 대비 <span class="p">+2</span> <span class="m">−2</span></span></div>
+    <div class="tags">
+      <span class="tag">1girl</span><span class="tag">solo</span><span class="tag">looking at viewer</span><span class="tag w">soft smile <em>1.2</em></span>
+      <span class="tag">white dress</span><span class="tag">flower field</span><span class="tag">wind</span><span class="tag">golden hour</span>
+      <span class="tag">from side</span><span class="tag sel">backlight</span><span class="tag">depth of field</span><span class="tag">petals</span>
+      <span class="tag">hair ribbon</span><span class="tag">sitting</span><span class="tag">hand on own knee</span><span class="tag">blue sky</span>
+      <span class="tag">cloud</span><span class="tag">sun</span><span class="tag input">＋ 태그 추가</span>
+    </div>
+    <div class="bubble" style="left:110px;top:244px;--ax:70px">
+      <button class="num">−0.1</button><button class="num">+0.1</button><span class="sep"></span>
+      <button><i data-i="back" class="sm"></i></button><button><i data-i="chev" class="sm"></i></button><span class="sep"></span>
+      <button>수정</button><button class="del"><i data-i="trash" class="sm"></i></button>
+    </div>
+  </div>
+  <div class="tools">
+    <button class="chip"><i data-i="book" class="sm"></i>태그사전</button>
+    <button class="chip"><i data-i="translate" class="sm"></i>번역</button>
+    <button class="chip"><i data-i="undo" class="sm"></i></button>
+    <button class="chip"><i data-i="redo" class="sm"></i></button>
+    <span class="sp"></span>
+    <button class="chip">⋯</button>
+  </div>
+  <div class="genrow">
+    <button class="setbtn"><i data-i="sliders"></i><span class="col"><b>생성 설정</b><span class="num">832×1216 · 28 · CFG 5</span></span></button>
+    <button class="gen"><span class="col">생성<small>무료 · 한도 내</small></span></button>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:24px;top:840px;width:176px">세로 탭: 5개 섹션이 항상 보이고 품질·제외도 1탭.</div>
+  <div class="note" data-n="2" style="left:300px;top:40px;width:250px">썸네일 누르면 전체 화면. <b>저장</b>은 썸네일 위.</div>
+  <div class="note" data-n="3" style="left:400px;top:680px;width:340px">편집 영역이 화면 높이 거의 전체 (994px). 태그가 많아도 스크롤이 적다.</div>
+</div>
+</section>
+
+<!-- #v2-keyboard -->
+<section class="screen" id="v2-keyboard">
+<div class="dev v2">
+  <div data-sbar></div>
+  <div class="lcol" style="top:40px">
+    <div class="thumbimg art" data-art="21" style="height:190px;width:130px"></div>
+    <div class="vtabs">
+      <div><span class="dot d-artist"></span>작가<span class="n">2</span></div>
+      <div><span class="dot d-character"></span>캐릭터<span class="n">1</span></div>
+      <div class="on"><span class="dot d-general"></span>장면<span class="n">18</span></div>
+      <div><span class="dot" style="background:var(--faint)"></span>품질</div>
+      <div><span class="dot" style="background:var(--faint)"></span>제외</div>
+    </div>
+  </div>
+  <div class="ed" style="top:40px;height:740px">
+    <div class="tags">
+      <span class="tag">1girl</span><span class="tag">solo</span><span class="tag">looking at viewer</span><span class="tag w">soft smile <em>1.2</em></span>
+      <span class="tag">white dress</span><span class="tag">flower field</span><span class="tag">wind</span><span class="tag">golden hour</span>
+      <span class="tag">from side</span><span class="tag">backlight</span><span class="tag">depth of field</span><span class="tag">petals</span>
+      <span class="tag">hair ribbon</span><span class="tag">sitting</span><span class="tag input" style="border-color:var(--accent-hi);color:var(--text)">sunfl<span class="caret"></span></span>
+    </div>
+  </div>
+  <div class="sugg" style="left:228px;right:32px;top:302px">
+    <div class="r"><span class="dot d-general"></span>sunflower<span class="c num">88,410</span></div>
+    <div class="r"><span class="dot d-general"></span>sunflower field<span class="c num">6,203</span></div>
+    <div class="r"><span class="dot d-copyright"></span>sunflower (series)<span class="c num">412</span></div>
+  </div>
+  <div class="kacc">
+    <button class="chip num">−0.1</button><button class="chip num">+0.1</button>
+    <button class="chip"><i data-i="book" class="sm"></i>사전</button>
+    <button class="chip"><i data-i="translate" class="sm"></i>번역</button>
+    <button class="chip"><i data-i="undo" class="sm"></i></button>
+    <span class="sp"></span>
+    <button class="gen">생성</button>
+  </div>
+  <div class="kbd">
+    <div class="kr"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span></div>
+    <div class="kr"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span></div>
+    <div class="kr"><span class="k w">⇧</span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k w">⌫</span></div>
+    <div class="kr"><span class="k w">!#1</span><span class="k">,</span><span class="k sp"></span><span class="k">.</span><span class="k w">완료</span></div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:24px;top:640px;width:176px">키보드가 떠도 <b>세로 탭은 그대로</b>. 입력 중 섹션 이동 1탭.</div>
+</div>
+</section>
+
+<!-- #viewer -->
+<section class="screen" id="viewer">
+<div class="dev viewer">
+  <div data-sbar></div>
+  <div class="art" data-art="21" style="position:absolute;left:0;top:40px;width:800px;height:1169px"></div>
+  <div class="vtop">
+    <button class="ib"><i data-i="back"></i></button>
+    <span class="pos num">1 / 12</span>
+    <button class="ib"><i data-i="eye"></i></button>
+  </div>
+  <div class="vbar">
+    <div class="meta num">Seed 2841093321 · 832×1216 · 28 steps · CFG 5 · 직전 대비 +backlight +soft smile −night −city lights</div>
+    <div class="r">
+      <button class="btn sv"><i data-i="save"></i>저장</button>
+      <button class="btn on"><i data-i="sparkle" class="sm"></i>마무리</button>
+      <button class="btn"><i data-i="seed" class="sm"></i>Seed</button>
+      <button class="btn"><i data-i="upscale" class="sm"></i>업스케일 <small>1</small></button>
+      <button class="btn more">⋯</button>
+    </div>
+  </div>
+  <div data-gbar></div>
+  <div class="note" data-n="1" style="left:30px;top:110px;width:330px">썸네일을 누르면 여기. 좌우로 세션 넘김. <b>이미지 동작은 모두 여기</b>, ⋯ = 프롬프트 복사, 이 설정 불러오기, 마무리 조절.</div>
+</div>
+</section>
+
+<script src="proto.js"></script>
+</body>
+</html>

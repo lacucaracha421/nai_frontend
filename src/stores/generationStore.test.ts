@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGenerationStore } from "./generationStore";
 import { useCharacterLibraryStore } from "./characterLibraryStore";
-import { generateNovelAiImage } from "../adapters/novelai/client";
+import { generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
 import { buildNovelAiRequest } from "../adapters/novelai/buildRequest";
 
 vi.mock("../adapters/novelai/client", () => ({
@@ -69,5 +69,19 @@ describe("random character requests", () => {
     await useGenerationStore.getState().generate();
     expect(generateNovelAiImage).not.toHaveBeenCalled();
     expect(useGenerationStore.getState().errorMessage).toContain("Prombot");
+  });
+});
+
+describe("upscale from the viewer", () => {
+  it("upscales the image at the given index, not the current one", async () => {
+    const image = (path: string) => ({ src: path, filePath: path, index: 0, seed: 7, width: 832, height: 1216,
+      positivePrompt: path, kind: "generation" as const, createdAt: 1 });
+    useGenerationStore.setState({ images: [image("old.png"), image("current.png")], activeImage: 1 });
+    vi.mocked(upscaleNovelAiImage).mockResolvedValue([{ path: "up.png", index: 0, seed: 7, width: 1664, height: 2432 }]);
+    await useGenerationStore.getState().upscaleActive(0);
+    expect(upscaleNovelAiImage).toHaveBeenCalledWith("old.png");
+    const state = useGenerationStore.getState();
+    expect(state.images.at(-1)).toMatchObject({ filePath: "up.png", kind: "upscale", positivePrompt: "old.png" });
+    expect(state.activeImage).toBe(2);
   });
 });
