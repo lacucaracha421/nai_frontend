@@ -91,6 +91,8 @@ describe("Prombot favorites import", () => {
       series: {},
       unknown: ["renamed_character", "removed_character"],
       seriesFavorites: [{ series: "touhou", members: 333, favorited: 333 }],
+      total: 378,
+      largestGroups: [{ series: "fate_(series)", members: 10, favorited: 7 }],
     };
     const result = mergePrombotFavorites(
       inflated,
@@ -99,17 +101,23 @@ describe("Prombot favorites import", () => {
     expect(result.entries.filter((item) => item.prombotFavorite).length).toBe(43);
     expect(result.stats).toEqual({ added: 0, existing: 43, removed: 336, total: 43 });
     expect(prombotImportMessage(catalog, result.stats)).toBe([
-      "북마크 43명 · 시리즈 즐겨찾기 1개 제외 · 알 수 없는 이름 2개 제외 · 신규 0 · 기존 43 · 제거 336",
+      "Prombot 원본 378명 → 43명 · 시리즈 ☆ 1개(333명) 제외 · 알 수 없는 이름 2개 제외",
+      "도감 신규 0 · 기존 43 · 제거 336",
       "제외한 시리즈: touhou 333/333명",
+      "가장 많이 담긴 시리즈(유지): fate (series) 7/10명",
       "알 수 없는 이름: renamed character, removed character",
     ].join("\n"));
   });
 
-  it("says so when Prombot's character list could not be loaded", () => {
+  it("says so, with the reason, when Prombot's character list could not be loaded", () => {
     const message = prombotImportMessage(
-      { available: false, characters: ["a"], series: {}, unknown: [], seriesFavorites: [] },
+      { available: false, error: "HTTP 503", total: 1, characters: ["a"], series: {}, unknown: [], seriesFavorites: [] },
       { added: 1, existing: 0, removed: 0, total: 1 },
     );
-    expect(message).toBe("북마크 1명 · Prombot 캐릭터 목록을 받지 못해 필터 없이 가져옴 · 신규 1 · 기존 0 · 제거 0");
+    expect(message).toBe([
+      "Prombot 원본 1명 → 1명 · 캐릭터 목록을 받지 못해 필터 없이 가져옴",
+      "도감 신규 1 · 기존 0 · 제거 0",
+      "목록 오류: HTTP 503",
+    ].join("\n"));
   });
 });

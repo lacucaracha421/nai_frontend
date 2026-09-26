@@ -4,6 +4,7 @@ import {
   useCharacterLibraryStore,
   type CharacterLibraryEntry,
 } from "../../stores/characterLibraryStore";
+import { randomCharacterPool } from "./randomCharacter";
 import "./characterLibrary.css";
 
 function normalized(value: string) {
@@ -90,6 +91,8 @@ export function CharacterLibrarySheet({
   onSelect: (entry: CharacterLibraryEntry) => void;
 }) {
   const entries = useCharacterLibraryStore((state) => state.entries);
+  const prombotImportSummary = useCharacterLibraryStore((state) => state.prombotImportSummary);
+  const randomCount = useMemo(() => randomCharacterPool(entries).length, [entries]);
   const moveTag = useCharacterLibraryStore((state) => state.moveTag);
   const [series, setSeries] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -159,7 +162,7 @@ export function CharacterLibrarySheet({
           ) : null}
           <div>
             <h2>캐릭터 태그 도감</h2>
-            <span>{q ? "전체 검색" : series ? `도감 / ${series}` : `${grouped.length}개 시리즈 · ${entries.length}명`}</span>
+            <span>{q ? "전체 검색" : series ? `도감 / ${series}` : `${grouped.length}개 시리즈 · ${entries.length}명 · 🎲 북마크 ${randomCount}명`}</span>
           </div>
         </div>
         <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 도감 닫기">↓</button>
@@ -174,6 +177,9 @@ export function CharacterLibrarySheet({
           autoComplete="off"
           spellCheck={false}
         />
+        {prombotImportSummary && !q && !series && (
+          <small className="character-library-import-summary">마지막 가져오기: {prombotImportSummary}</small>
+        )}
 
         {!entries.length ? (
           <div className="character-library-empty">

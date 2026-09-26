@@ -14,6 +14,8 @@ export type CharacterLibraryEntry = {
 type State = {
   entries: CharacterLibraryEntry[];
   legacyFavoritesMigrated: boolean;
+  /** Breakdown of the last Prombot bookmark import (raw → kept, excluded). */
+  prombotImportSummary: string | null;
   addTag: (tag: Pick<LocalTag, "raw" | "display">, series?: string) => void;
   addMany: (tags: Array<Pick<LocalTag, "raw" | "display">>) => void;
   toggleTag: (tag: Pick<LocalTag, "raw" | "display">) => void;
@@ -61,6 +63,7 @@ export const useCharacterLibraryStore = create<State>()(
     (set, get) => ({
       entries: [],
       legacyFavoritesMigrated: false,
+      prombotImportSummary: null,
       addTag: (tag, series) => set((state) => {
         if (state.entries.some((entry) => entry.raw === tag.raw)) return state;
         return { entries: [makeEntry(tag, series), ...state.entries] };

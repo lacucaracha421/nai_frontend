@@ -81,38 +81,55 @@ export function mergePrombotFavorites(
 export type PrombotFavoriteCatalog = {
   /** False when Prombot's character list could not be loaded (nothing filtered). */
   available: boolean;
+  /** Why the character list could not be loaded. */
+  error?: string | null;
+  /** Distinct raw bookmarks read from Prombot. */
+  total?: number;
   /** Individually bookmarked characters, in Prombot order. */
   characters: string[];
   series: Record<string, string>;
   /** Bookmarks missing from Prombot's characters.csv (renamed/removed). */
   unknown: string[];
   /** Series-level ☆ that Prombot expanded to every member. */
-  seriesFavorites: Array<{ series: string; members: number; favorited: number }>;
+  seriesFavorites: PrombotSeriesCount[];
+  /** Kept groups with the most bookmarks (to spot a series ☆ the filter missed). */
+  largestGroups?: PrombotSeriesCount[];
 };
+
+export type PrombotSeriesCount = { series: string; members: number; favorited: number };
 
 function seriesLabel(series: string) {
   return series ? displayRaw(series) : "Other series";
 }
 
-/** Import summary line, e.g. "북마크 45명 · 시리즈 즐겨찾기 1개 제외 · 알 수 없는 이름 2개 제외". */
+function seriesCounts(items: PrombotSeriesCount[]) {
+  return items.map((item) => `${seriesLabel(item.series)} ${item.favorited}/${item.members}명`).join(", ");
+}
+
+/**
+ * One-line breakdown of the last import, kept so the random screen can show
+ * where its count came from, e.g. "Prombot 원본 378명 → 45명 · 시리즈 ☆ 1개(333명) 제외 · 알 수 없는 이름 0개".
+ */
+export function prombotImportBreakdown(catalog: PrombotFavoriteCatalog) {
+  const raw = catalog.total ?? catalog.characters.length;
+  const head = `Prombot 원본 ${raw}명 → ${catalog.characters.length}명`;
+  if (!catalog.available) return `${head} · 캐릭터 목록을 받지 못해 필터 없이 가져옴`;
+  const excluded = catalog.seriesFavorites.reduce((sum, item) => sum + item.favorited, 0);
+  return `${head} · 시리즈 ☆ ${catalog.seriesFavorites.length}개(${excluded}명) 제외 · 알 수 없는 이름 ${catalog.unknown.length}개 제외`;
+}
+
+/** Import summary shown after importing: the breakdown, merge counts and details. */
 export function prombotImportMessage(
   catalog: PrombotFavoriteCatalog,
   stats: { added: number; existing: number; removed: number; total: number },
 ) {
-  const parts = [`북마크 ${stats.total}명`];
-  if (catalog.available) {
-    parts.push(`시리즈 즐겨찾기 ${catalog.seriesFavorites.length}개 제외`);
-    parts.push(`알 수 없는 이름 ${catalog.unknown.length}개 제외`);
-  } else {
-    parts.push("Prombot 캐릭터 목록을 받지 못해 필터 없이 가져옴");
-  }
-  parts.push(`신규 ${stats.added} · 기존 ${stats.existing} · 제거 ${stats.removed}`);
-  const lines = [parts.join(" · ")];
-  if (catalog.seriesFavorites.length) {
-    lines.push(`제외한 시리즈: ${catalog.seriesFavorites
-      .map((item) => `${seriesLabel(item.series)} ${item.favorited}/${item.members}명`)
-      .join(", ")}`);
-  }
+  const lines = [
+    prombotImportBreakdown(catalog),
+    `도감 신규 ${stats.added} · 기존 ${stats.existing} · 제거 ${stats.removed}`,
+  ];
+  if (!catalog.available && catalog.error) lines.push(`목록 오류: ${catalog.error}`);
+  if (catalog.seriesFavorites.length) lines.push(`제외한 시리즈: ${seriesCounts(catalog.seriesFavorites)}`);
+  if (catalog.largestGroups?.length) lines.push(`가장 많이 담긴 시리즈(유지): ${seriesCounts(catalog.largestGroups)}`);
   if (catalog.unknown.length) {
     const sample = catalog.unknown.slice(0, 5).map(displayRaw).join(", ");
     lines.push(`알 수 없는 이름: ${sample}${catalog.unknown.length > 5 ? ` 외 ${catalog.unknown.length - 5}개` : ""}`);

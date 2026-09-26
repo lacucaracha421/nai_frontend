@@ -162,6 +162,7 @@ export function V5Studio() {
   const lastRandomCharacter = useGenerationStore((s) => s.lastRandomCharacter);
   // Same pool the 🎲 draws from (deduplicated), so the number shown is the number drawn from.
   const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries).length);
+  const prombotImportSummary = useCharacterLibraryStore((s) => s.prombotImportSummary);
   const settings = useGenerationStore((s) => s.settings);
   const images = useGenerationStore((s) => s.images);
   const active = useGenerationStore((s) => s.activeImage);
@@ -659,6 +660,7 @@ export function V5Studio() {
         <p className="b2-random-note">
           🎲 생성할 때마다 첫 캐릭터의 캐릭터 태그만 북마크 {randomCharacterCount}명 중 하나로 바뀝니다
           {lastRandomCharacter ? ` · 최근 ${lastRandomCharacter}` : ""}
+          {prombotImportSummary ? <><br />마지막 가져오기: {prombotImportSummary}</> : null}
         </p>
       )}
       {tab === "fixed" && (

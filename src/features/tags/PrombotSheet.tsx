@@ -6,6 +6,7 @@ import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { favoriteLocalTags } from "./localTagIndex";
 import {
   mergePrombotFavorites,
+  prombotImportBreakdown,
   prombotImportMessage,
   resolvePrombotTags,
   type PrombotFavoriteCatalog,
@@ -88,7 +89,10 @@ export function PrombotSheet({
       }));
       const current = useCharacterLibraryStore.getState().entries;
       const result = mergePrombotFavorites(current, incoming);
-      useCharacterLibraryStore.setState({ entries: result.entries });
+      useCharacterLibraryStore.setState({
+        entries: result.entries,
+        prombotImportSummary: prombotImportBreakdown(catalog),
+      });
       setMessage(rawKeys.length
         ? prombotImportMessage(catalog, result.stats)
         : `현재 북마크 0명 · Prombot에서 가져온 캐릭터 ${result.stats.removed}명을 도감에서 제거했습니다.`);

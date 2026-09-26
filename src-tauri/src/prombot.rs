@@ -6,8 +6,10 @@ use std::{
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 const PROMBOT_URL: &str = "https://prombot.net/";
-const PROMBOT_CHARACTERS_URL: &str =
-    "https://huggingface.co/Jio7/Prombot/resolve/main/characters.csv.gz";
+const PROMBOT_CHARACTERS_URLS: [&str; 2] = [
+    "https://prombot.net/characters.csv.gz",
+    "https://huggingface.co/Jio7/Prombot/resolve/main/characters.csv.gz",
+];
 const FAVORITES_SCHEME: &str = "nai-prombot";
 const FAVORITES_HOST: &str = "favorites";
 
@@ -158,6 +160,13 @@ const PROMBOT_MISC_GROUP: &str = "";
 /// (almost) all bookmarked are treated as series-level favorites.
 const SERIES_FAVORITE_MIN_MEMBERS: usize = 5;
 const SERIES_FAVORITE_MIN_COVERAGE_PERCENT: usize = 80;
+/// A series ☆ appends the members that were not bookmarked yet in one go, in
+/// Prombot's list order. A run this long of consecutive group members in that
+/// order is a series ☆ even when coverage is now lower (members added to the
+/// series later, or some unstarred afterwards).
+const SERIES_FAVORITE_MIN_RUN: usize = 20;
+/// How many of the largest kept groups the import reports for diagnosis.
+const LARGEST_GROUPS_REPORTED: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,6 +183,10 @@ pub struct FavoriteCatalog {
     /// False when Prombot's character list could not be loaded; nothing is
     /// filtered in that case.
     pub available: bool,
+    /// Why the character list could not be loaded (when `available` is false).
+    pub error: Option<String>,
+    /// Distinct raw bookmarks read from Prombot.
+    pub total: usize,
     /// Individually bookmarked characters, in Prombot order.
     pub characters: Vec<String>,
     /// Series for each kept character.
@@ -182,6 +195,8 @@ pub struct FavoriteCatalog {
     pub unknown: Vec<String>,
     /// Series-level ☆ expansions that were excluded.
     pub series_favorites: Vec<SeriesFavorite>,
+    /// The kept groups with the most bookmarks (diagnosis of a missed series ☆).
+    pub largest_groups: Vec<SeriesFavorite>,
 }
 
 /// prombot.net splits `characters.csv` on commas without unquoting, so a
@@ -194,6 +209,15 @@ fn prombot_raw_name(name: &str) -> String {
     }
 }
 
+fn distinct(wanted: &[String]) -> Vec<&str> {
+    let mut seen = HashSet::new();
+    wanted
+        .iter()
+        .map(String::as_str)
+        .filter(|name| seen.insert(*name))
+        .collect()
+}
+
 fn classify_favorites(csv: &str, wanted: &[String]) -> FavoriteCatalog {
     #[derive(serde::Deserialize)]
     struct Row {
@@ -201,10 +225,11 @@ fn classify_favorites(csv: &str, wanted: &[String]) -> FavoriteCatalog {
         series: String,
     }
     let mut rows = Vec::new();
+    let mut names = HashSet::new();
     let mut reader = csv::Reader::from_reader(csv.as_bytes());
     for row in reader.deserialize::<Row>().flatten() {
         let character = row.character.trim().to_string();
-        if !character.is_empty() {
+        if !character.is_empty() && names.insert(character.clone()) {
             rows.push((character, row.series.trim().to_string()));
         }
     }
@@ -215,8 +240,8 @@ fn classify_favorites(csv: &str, wanted: &[String]) -> FavoriteCatalog {
             *series_sizes.entry(series.as_str()).or_default() += 1;
         }
     }
-    // name (and Prombot's quoted spelling) -> (series, group)
-    let mut by_name = HashMap::<String, (&str, &str)>::new();
+    // name (and Prombot's quoted spelling) -> (series, group, position in group)
+    let mut by_name = HashMap::<String, (&str, &str, usize)>::new();
     let mut group_sizes = HashMap::<&str, usize>::new();
     for (character, series) in &rows {
         let group = if series_sizes.get(series.as_str()).copied().unwrap_or(0) >= 2 {
@@ -224,84 +249,150 @@ fn classify_favorites(csv: &str, wanted: &[String]) -> FavoriteCatalog {
         } else {
             PROMBOT_MISC_GROUP
         };
-        *group_sizes.entry(group).or_default() += 1;
-        by_name.insert(character.clone(), (series.as_str(), group));
-        by_name.insert(prombot_raw_name(character), (series.as_str(), group));
+        let size = group_sizes.entry(group).or_default();
+        let position = *size;
+        *size += 1;
+        by_name.insert(character.clone(), (series.as_str(), group, position));
+        by_name.insert(
+            prombot_raw_name(character),
+            (series.as_str(), group, position),
+        );
     }
 
-    let mut seen = HashSet::new();
+    let wanted = distinct(wanted);
     let mut favorited = HashMap::<&str, usize>::new();
-    for name in wanted {
-        if !seen.insert(name.as_str()) {
-            continue;
-        }
-        if let Some((_, group)) = by_name.get(name) {
+    for name in &wanted {
+        if let Some((_, group, _)) = by_name.get(*name) {
             *favorited.entry(group).or_default() += 1;
         }
     }
-    let mut series_favorites = favorited
-        .iter()
-        .filter_map(|(group, count)| {
-            let members = group_sizes.get(group).copied().unwrap_or(0);
-            (members >= SERIES_FAVORITE_MIN_MEMBERS
-                && count * 100 >= members * SERIES_FAVORITE_MIN_COVERAGE_PERCENT)
-                .then(|| SeriesFavorite {
-                    series: (*group).to_string(),
-                    members,
-                    favorited: *count,
-                })
-        })
-        .collect::<Vec<_>>();
-    series_favorites.sort_by(|a, b| b.favorited.cmp(&a.favorited).then(a.series.cmp(&b.series)));
+
+    // Longest run of consecutive bookmarks that are consecutive members of one
+    // group (skipping members bookmarked before the run), as a series ☆ writes.
+    let mut longest_run = HashMap::<&str, usize>::new();
+    let mut earlier = HashSet::<(&str, usize)>::new();
+    let mut earlier_upto = 0;
+    let mut run: Option<(&str, usize, usize)> = None; // group, last position, length
+    for (index, name) in wanted.iter().enumerate() {
+        let Some(&(_, group, position)) = by_name.get(*name) else {
+            run = None;
+            continue;
+        };
+        let continues = run.is_some_and(|(run_group, last, _)| {
+            run_group == group && {
+                let mut next = last + 1;
+                while earlier.contains(&(group, next)) {
+                    next += 1;
+                }
+                next == position
+            }
+        });
+        let length = match run {
+            Some((_, _, length)) if continues => length + 1,
+            _ => {
+                // Members bookmarked before this run were skipped by Prombot's Set.
+                for previous in &wanted[earlier_upto..index] {
+                    if let Some(&(_, g, p)) = by_name.get(*previous) {
+                        earlier.insert((g, p));
+                    }
+                }
+                earlier_upto = index;
+                1
+            }
+        };
+        run = Some((group, position, length));
+        let best = longest_run.entry(group).or_default();
+        *best = (*best).max(length);
+    }
+
+    let mut series_favorites = Vec::new();
+    let mut largest_groups = Vec::new();
+    for (group, count) in &favorited {
+        let members = group_sizes.get(group).copied().unwrap_or(0);
+        let summary = SeriesFavorite {
+            series: (*group).to_string(),
+            members,
+            favorited: *count,
+        };
+        let covered = members >= SERIES_FAVORITE_MIN_MEMBERS
+            && count * 100 >= members * SERIES_FAVORITE_MIN_COVERAGE_PERCENT;
+        let run = longest_run.get(group).copied().unwrap_or(0) >= SERIES_FAVORITE_MIN_RUN;
+        if covered || run {
+            series_favorites.push(summary);
+        } else {
+            largest_groups.push(summary);
+        }
+    }
+    let by_count = |a: &SeriesFavorite, b: &SeriesFavorite| {
+        b.favorited.cmp(&a.favorited).then(a.series.cmp(&b.series))
+    };
+    series_favorites.sort_by(by_count);
+    largest_groups.sort_by(by_count);
+    largest_groups.truncate(LARGEST_GROUPS_REPORTED);
     let excluded_groups = series_favorites
         .iter()
-        .map(|favorite| favorite.series.as_str())
+        .map(|favorite| favorite.series.clone())
         .collect::<HashSet<_>>();
 
     let mut catalog = FavoriteCatalog {
         available: true,
+        total: wanted.len(),
         ..FavoriteCatalog::default()
     };
-    let mut seen = HashSet::new();
-    for name in wanted {
-        if !seen.insert(name.as_str()) {
-            continue;
-        }
-        match by_name.get(name) {
-            None => catalog.unknown.push(name.clone()),
-            Some((_, group)) if excluded_groups.contains(group) => {}
-            Some((series, _)) => {
+    for name in &wanted {
+        match by_name.get(*name) {
+            None => catalog.unknown.push((*name).to_string()),
+            Some((_, group, _)) if excluded_groups.contains(*group) => {}
+            Some((series, _, _)) => {
                 if !series.is_empty() {
-                    catalog.series.insert(name.clone(), (*series).to_string());
+                    catalog
+                        .series
+                        .insert((*name).to_string(), (*series).to_string());
                 }
-                catalog.characters.push(name.clone());
+                catalog.characters.push((*name).to_string());
             }
         }
     }
     catalog.series_favorites = series_favorites;
+    catalog.largest_groups = largest_groups;
     catalog
 }
 
-async fn download_characters_csv() -> Result<String, String> {
+async fn download_characters_csv_from(url: &str) -> Result<String, String> {
     let response = reqwest::Client::new()
-        .get(PROMBOT_CHARACTERS_URL)
+        .get(url)
         .timeout(std::time::Duration::from_secs(20))
         .send()
         .await
-        .map_err(|error| format!("Could not download Prombot character data: {error}"))?;
+        .map_err(|error| format!("{url}: {error}"))?;
     if !response.status().is_success() {
-        return Err(format!(
-            "Prombot character data returned HTTP {}.",
-            response.status()
-        ));
+        return Err(format!("{url}: HTTP {}", response.status()));
     }
-    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("{url}: {error}"))?;
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return String::from_utf8(bytes.to_vec()).map_err(|error| format!("{url}: {error}"));
+    }
     let mut decoder = flate2::read::GzDecoder::new(bytes.as_ref());
     let mut csv = String::new();
     decoder
         .read_to_string(&mut csv)
-        .map_err(|error| format!("Could not unpack Prombot character data: {error}"))?;
+        .map_err(|error| format!("{url}: could not unpack: {error}"))?;
     Ok(csv)
+}
+
+/// Prombot's own copy first (the list its series ☆ used), then the mirror.
+async fn download_characters_csv() -> Result<String, String> {
+    let mut errors = Vec::new();
+    for url in PROMBOT_CHARACTERS_URLS {
+        match download_characters_csv_from(url).await {
+            Ok(csv) => return Ok(csv),
+            Err(error) => errors.push(error),
+        }
+    }
+    Err(errors.join(" / "))
 }
 
 /// Splits raw Prombot bookmarks into individual character favorites,
@@ -316,11 +407,19 @@ pub async fn favorite_catalog(wanted: Vec<String>) -> Result<FavoriteCatalog, St
     match download_characters_csv().await {
         Ok(csv) => Ok(classify_favorites(&csv, &wanted)),
         // Offline: keep every bookmark rather than dropping the user's list.
-        Err(_) => Ok(FavoriteCatalog {
-            available: false,
-            characters: wanted,
-            ..FavoriteCatalog::default()
-        }),
+        Err(error) => {
+            let characters = distinct(&wanted)
+                .into_iter()
+                .map(String::from)
+                .collect::<Vec<_>>();
+            Ok(FavoriteCatalog {
+                available: false,
+                error: Some(error),
+                total: characters.len(),
+                characters,
+                ..FavoriteCatalog::default()
+            })
+        }
     }
 }
 
@@ -456,7 +555,8 @@ mod tests {
         wanted.extend((0..7).map(|index| format!("fate_{index}")));
         wanted.extend(["miku", "rin", "len"].map(String::from));
         wanted.extend((0..333).map(|index| format!("touhou_{index}")));
-        wanted.extend((0..30).map(|index| format!("solo_{index}")));
+        // Hand picks, not in Prombot's list order (an ordered run would read as a ☆).
+        wanted.extend((0..30).rev().map(|index| format!("solo_{index}")));
         wanted.push("nameless".into());
         wanted.push("robin_(fire_emblem)".into());
         wanted.push(prombot_raw_name("tharja_(\"normal_girl\")_(fire_emblem)"));
@@ -513,6 +613,45 @@ mod tests {
         assert_eq!(catalog.characters, wanted);
         assert!(catalog.series_favorites.is_empty());
         assert!(catalog.unknown.is_empty());
+    }
+
+    #[test]
+    fn detects_a_series_star_by_its_run_when_coverage_is_low() {
+        // The series grew (or members were unstarred) after the ☆, so only 45 %
+        // is bookmarked, but Prombot appended the members in one ordered run.
+        // touhou_5 was picked by hand first, so the ☆ skipped it.
+        let mut wanted = vec!["touhou_5".to_string(), "miku".into()];
+        wanted.extend(
+            (0..150)
+                .filter(|index| *index != 5)
+                .map(|index| format!("touhou_{index}")),
+        );
+        wanted.push("fate_2".into());
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert_eq!(catalog.characters, vec!["miku", "fate_2"]);
+        assert_eq!(catalog.series_favorites[0].series, "touhou");
+        assert_eq!(catalog.series_favorites[0].favorited, 150);
+        assert_eq!(catalog.total, 152);
+    }
+
+    #[test]
+    fn keeps_many_hand_picks_from_one_series_and_reports_them() {
+        // Picked by hand in no particular order: no long ordered run.
+        let mut wanted = (0..30)
+            .map(|index| format!("touhou_{}", (index * 7) % 30))
+            .collect::<Vec<_>>();
+        wanted.push("miku".into());
+        let catalog = classify_favorites(&catalog_csv(), &wanted);
+        assert_eq!(catalog.characters.len(), 31);
+        assert!(catalog.series_favorites.is_empty());
+        assert_eq!(
+            catalog.largest_groups[0],
+            SeriesFavorite {
+                series: "touhou".into(),
+                members: 333,
+                favorited: 30
+            }
+        );
     }
 
     #[test]
