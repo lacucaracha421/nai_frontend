@@ -8,7 +8,7 @@ import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { useTranslationStore } from "../../stores/translationStore";
 import { Icon } from "../../components/Icon";
-import { BACK_PRIORITY, useBackLayer } from "../../app/backStack";
+import { useBackLayer } from "../../app/backStack";
 import { adjustEmphasis } from "./weight";
 import {
   adjustTagWeightAt,
@@ -53,6 +53,8 @@ type Props = {
   /** Quiet line above the chips (hint, diff chip, character row). */
   header?: ReactNode;
   renderTools: (tools: TagBoardTools) => ReactNode;
+  /** Editing mode: true while a tag input is open (it drives the compact layout, not the keyboard). */
+  onEditingChange?: (editing: boolean) => void;
 };
 
 type Anchor = { top: number; left: number; arrow: number };
@@ -81,6 +83,28 @@ export function emptyAreaTap(input: {
   return "start-input";
 }
 
+/** Room kept around the input or selected chip when the board scrolls to it. */
+export const REVEAL_MARGIN = 12;
+
+/**
+ * Board scroll position that shows an anchor (the tag input or the selected chip):
+ * unchanged when it is already fully visible, otherwise the smallest scroll that shows
+ * it (its top wins when it is taller than the board). `anchorTop` is measured from the
+ * board's visible top. Only the board scrolls, never the page or the shell.
+ */
+export function revealScrollTop(input: {
+  scrollTop: number;
+  viewHeight: number;
+  anchorTop: number;
+  anchorHeight: number;
+  margin?: number;
+}) {
+  const { scrollTop, viewHeight, anchorTop, anchorHeight, margin = REVEAL_MARGIN } = input;
+  const overBottom = anchorTop + anchorHeight + margin - viewHeight;
+  const delta = anchorTop < margin ? anchorTop - margin : overBottom > 0 ? Math.min(overBottom, anchorTop - margin) : 0;
+  return Math.max(0, scrollTop + delta);
+}
+
 /** Whether a pointerdown target is outside the bubble, the chips and selection tools. */
 export function closesBubble(target: { closest: (selector: string) => unknown } | null) {
   return !target || !target.closest(KEEPS_BUBBLE);
@@ -104,6 +128,7 @@ export function TagBoard({
   onSelectTag,
   header,
   renderTools,
+  onEditingChange,
 }: Props) {
   const tags = useMemo(() => splitTags(value), [value]);
   const [selected, setSelected] = useState<number | null>(null);
@@ -151,13 +176,14 @@ export function TagBoard({
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [selected]);
 
-  // Android Back: bubble / suggestions first, then leave typing.
-  useBackLayer(selected !== null, () => setSelected(null), BACK_PRIORITY.popover);
-  useBackLayer(suggestions.length > 0, () => setSuggestions([]), BACK_PRIORITY.popover);
+  // Android Back (newest layer first): with the keyboard hidden, suggestions close first
+  // (they open after the input), then editing ends (the typed tag is kept).
+  useBackLayer(selected !== null, () => setSelected(null));
+  useBackLayer(suggestions.length > 0, () => setSuggestions([]));
   useBackLayer(draft !== null, () => {
     commitDraft(true);
     inputRef.current?.blur();
-  }, BACK_PRIORITY.typing);
+  });
 
   // Tags changed from outside (undo, dictionary insert, load): drop a stale selection.
   useEffect(() => {
@@ -228,6 +254,28 @@ export function TagBoard({
     else setSelected(index);
   };
 
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  /**
+   * Keeps the tag input (or else the selected chip) visible by scrolling the board only.
+   * `scrollIntoView` also scrolled the shell and panned the page, which made the whole
+   * screen jump while the keyboard opened and closed.
+   */
+  const revealAnchor = () => {
+    const scroller = scrollRef.current;
+    const anchor = draftRef.current ? inputRef.current : selectedRef.current !== null ? chipRefs.current[selectedRef.current] : null;
+    if (!scroller || !anchor) return;
+    const view = scroller.getBoundingClientRect();
+    const box = anchor.getBoundingClientRect();
+    const next = revealScrollTop({
+      scrollTop: scroller.scrollTop,
+      viewHeight: scroller.clientHeight,
+      anchorTop: box.top - view.top,
+      anchorHeight: box.height,
+    });
+    if (next !== scroller.scrollTop) scroller.scrollTop = next;
+  };
+
   // Focus the input as soon as it appears (same task as the tap, so Android raises the keyboard).
   const draftKey = draft ? `${draft.mode}:${draft.mode === "new" ? draft.at : draft.index}` : null;
   useLayoutEffect(() => {
@@ -235,25 +283,38 @@ export function TagBoard({
     const input = inputRef.current;
     if (!input) return;
     if (document.activeElement !== input) input.focus({ preventScroll: true });
-    input.scrollIntoView({ block: "nearest" });
+    revealAnchor();
   }, [draftKey]);
 
-  // Keep the input visible while the soft keyboard resizes the viewport.
+  // The board changes height when editing mode compacts the header and when the keyboard
+  // opens or closes; the anchor stays where it is on screen when it can, else it scrolls
+  // into the board once.
+  const anchored = draftKey !== null || selected !== null;
   useEffect(() => {
-    if (!draftKey) return;
-    const viewport = window.visualViewport;
-    const reveal = () => inputRef.current?.scrollIntoView({ block: "nearest" });
-    viewport?.addEventListener("resize", reveal);
-    window.addEventListener("resize", reveal);
-    return () => {
-      viewport?.removeEventListener("resize", reveal);
-      window.removeEventListener("resize", reveal);
-    };
-  }, [draftKey]);
+    const scroller = scrollRef.current;
+    if (!anchored || !scroller || typeof ResizeObserver === "undefined") return;
+    let height = scroller.clientHeight;
+    const observer = new ResizeObserver(() => {
+      if (scroller.clientHeight === height) return;
+      height = scroller.clientHeight;
+      revealAnchor();
+    });
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [anchored]);
 
-  // Autocomplete for the tag being typed.
   const draftText = draft?.text ?? "";
   const drafting = draft !== null;
+
+  // Editing mode is reported before paint, so the layout switches in the same frame as the tap.
+  const editingChangeRef = useRef(onEditingChange);
+  editingChangeRef.current = onEditingChange;
+  useLayoutEffect(() => {
+    editingChangeRef.current?.(drafting);
+  }, [drafting]);
+  useLayoutEffect(() => () => editingChangeRef.current?.(false), []);
+
+  // Autocomplete for the tag being typed.
   useEffect(() => {
     const query = autocompleteQuery(draftText, tagPrefix);
     if (!drafting || query.length < 2) {

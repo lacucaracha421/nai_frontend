@@ -36,3 +36,28 @@ describe("empty-area tap", async () => {
     expect(emptyAreaTap({ ...tap, typing: true })).toBe("none");
   });
 });
+
+describe("board-only reveal of the input or selected chip", async () => {
+  const { REVEAL_MARGIN, revealScrollTop } = await import("./TagBoard");
+  const view = { scrollTop: 300, viewHeight: 400, anchorHeight: 52 };
+
+  it("does not move a visible anchor (no jump when the keyboard opens or closes)", () => {
+    expect(revealScrollTop({ ...view, anchorTop: 100 })).toBe(300);
+    expect(revealScrollTop({ ...view, anchorTop: REVEAL_MARGIN })).toBe(300);
+    expect(revealScrollTop({ ...view, anchorTop: 400 - 52 - REVEAL_MARGIN })).toBe(300);
+  });
+
+  it("scrolls just enough to show an anchor below the board (keyboard took the space)", () => {
+    // Input at 500 in a board that shrank to 400: its bottom plus margin must fit.
+    expect(revealScrollTop({ ...view, anchorTop: 500 })).toBe(300 + 500 + 52 + REVEAL_MARGIN - 400);
+  });
+
+  it("scrolls up to an anchor above the board, never below zero", () => {
+    expect(revealScrollTop({ ...view, anchorTop: -80 })).toBe(300 - 80 - REVEAL_MARGIN);
+    expect(revealScrollTop({ ...view, scrollTop: 20, anchorTop: -20 })).toBe(0);
+  });
+
+  it("keeps the top of an anchor taller than the board in view", () => {
+    expect(revealScrollTop({ ...view, anchorTop: 200, anchorHeight: 600 })).toBe(300 + 200 - REVEAL_MARGIN);
+  });
+});

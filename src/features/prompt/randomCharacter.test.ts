@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyRandomCharacter, pickRandomCharacter } from "./randomCharacter";
+import { applyRandomCharacter, characterIdentity, pickRandomCharacter, randomCharacterPool } from "./randomCharacter";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 import type { GenerationDraft } from "../../adapters/novelai/types";
 
@@ -32,6 +32,34 @@ describe("random character generation", () => {
   it("draws only from Prombot-imported favorites", () => {
     expect(pickRandomCharacter(library, () => 0)?.raw).toBe("rupa");
     expect(pickRandomCharacter(library, () => 0.99)?.raw).toBe("nina");
+  });
+
+  it("counts and draws each bookmarked character once (NAI-011: 378명 vs. far fewer)", () => {
+    const entry = (raw: string, prombotFavorite?: boolean): CharacterLibraryEntry => ({
+      raw, display: raw.replace(/_/g, " "), series: "s", addedAt: 1, prombotFavorite,
+    });
+    const entries = [
+      entry("rupa_(girls_band_cry)", true),
+      entry("rupa (girls band cry)", true),
+      entry("Rupa_\\(girls_band_cry\\)", true),
+      entry('"tharja_(""normal_girl"")_(fire_emblem)"', true),
+      entry('tharja_("normal_girl")_(fire_emblem)', true),
+      entry("nina_iseri", true),
+      entry("manual_only"),
+      entry("unstarred", false),
+    ];
+    const pool = randomCharacterPool(entries);
+    expect(pool.map((item) => item.raw)).toEqual([
+      "rupa_(girls_band_cry)",
+      '"tharja_(""normal_girl"")_(fire_emblem)"',
+      "nina_iseri",
+    ]);
+    expect(characterIdentity(entries[3])).toBe(characterIdentity(entries[4]));
+    // Every draw lands inside the counted pool, and every pooled character can be drawn.
+    const drawn = new Set(Array.from({ length: pool.length }, (_, i) =>
+      pickRandomCharacter(entries, () => (i + 0.5) / pool.length)?.raw));
+    expect(drawn).toEqual(new Set(pool.map((item) => item.raw)));
+    expect(randomCharacterPool(entries.filter((item) => !item.prombotFavorite))).toEqual([]);
   });
 
   it("replaces only the structured character for the request and preserves its slot settings", async () => {

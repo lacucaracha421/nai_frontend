@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { GenerationImage } from "../types/generation";
 import { Icon } from "./Icon";
-import { FIT, classifyRelease, dragMode, fittedSize, isZoomed, panBy, pinchTo, type Transform } from "./viewerGesture";
-
-type Point = { x: number; y: number };
+import { FIT, ViewerGestureTracker, fittedSize, type PointerSample, type Transform } from "./viewerGesture";
 
 /**
  * Full-screen session viewer: swipe left/right between session images, swipe down to
@@ -31,29 +29,19 @@ export function ImageViewer({
 }) {
   const image = images[index];
   const stageRef = useRef<HTMLDivElement>(null);
-  const pointers = useRef(new Map<number, Point>());
-  const gesture = useRef<{
-    start: Point;
-    startAt: number;
-    from: Transform;
-    pinched: boolean;
-    pinch: { mid: Point; distance: number } | null;
-  } | null>(null);
-  const [transform, setTransformState] = useState<Transform>(FIT);
-  const transformRef = useRef<Transform>(FIT);
+  const trackerRef = useRef<ViewerGestureTracker | null>(null);
+  trackerRef.current ??= new ViewerGestureTracker();
+  const tracker = trackerRef.current;
+  const [transform, setTransform] = useState<Transform>(FIT);
   const [dragging, setDragging] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
-  const setTransform = (next: Transform) => {
-    transformRef.current = next;
-    setTransformState(next);
-  };
-
   // Each image opens at fit size.
   useEffect(() => {
-    transformRef.current = FIT;
-    setTransformState(FIT);
-  }, [index]);
+    tracker.reset();
+    setTransform(FIT);
+    setDragging(false);
+  }, [index, tracker]);
 
   if (!image) return null;
 
@@ -67,29 +55,18 @@ export function ImageViewer({
     };
   };
 
-  const pinchInfo = () => {
-    const [a, b] = [...pointers.current.values()];
-    const { centre } = geometry();
-    return {
-      mid: { x: (a.x + b.x) / 2 - centre.x, y: (a.y + b.y) / 2 - centre.y },
-      distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
-    };
-  };
+  const sample = (event: ReactPointerEvent<HTMLDivElement>): PointerSample => ({
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    time: event.timeStamp,
+    primary: event.isPrimary,
+  });
 
-  /** (Re)starts the gesture from the current fingers and transform. */
-  const rebase = (pinched: boolean) => {
-    const first = [...pointers.current.values()][0];
-    if (!first) {
-      gesture.current = null;
-      return;
-    }
-    gesture.current = {
-      start: first,
-      startAt: Date.now(),
-      from: transformRef.current,
-      pinched,
-      pinch: pointers.current.size >= 2 ? pinchInfo() : null,
-    };
+  /** Mirrors the tracker into React state (the transition is off while a finger is down). */
+  const sync = () => {
+    setTransform(tracker.transform);
+    setDragging(tracker.active);
   };
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -99,59 +76,23 @@ export function ImageViewer({
     } catch {
       // Capture is best-effort (fails for pointers the browser no longer tracks).
     }
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    setDragging(true);
-    if (pointers.current.size === 1) rebase(false);
-    else rebase(true);
+    tracker.down(sample(event), geometry());
+    sync();
   };
 
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!pointers.current.has(event.pointerId) || !gesture.current) return;
+    if (!tracker.active) return;
     event.preventDefault();
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    const current = gesture.current;
-    const { stage, fitted } = geometry();
-    const mode = dragMode(pointers.current.size, isZoomed(current.from));
-    if (mode === "pinch" && current.pinch) {
-      const now = pinchInfo();
-      setTransform(pinchTo(current.from, current.pinch.mid, now.mid, now.distance / current.pinch.distance, fitted, stage));
-    } else if (mode === "pan") {
-      const point = pointers.current.get(event.pointerId)!;
-      setTransform(panBy(current.from, point.x - current.start.x, point.y - current.start.y, fitted, stage));
-    }
-    // "swipe" is decided on release.
+    if (tracker.move(sample(event), geometry())) setTransform(tracker.transform);
   };
 
-  const pointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const end = pointers.current.get(event.pointerId) ?? { x: event.clientX, y: event.clientY };
-    pointers.current.delete(event.pointerId);
-    const current = gesture.current;
-    if (pointers.current.size > 0) {
-      // A finger stays down (end of a pinch): keep panning from here.
-      rebase(true);
-      return;
+  const pointerEnd = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const action = tracker.end(sample(event), geometry(), cancelled);
+    sync();
+    if (action === "close") onClose();
+    if (action === "next" || action === "previous") {
+      onIndex(Math.max(0, Math.min(images.length - 1, index + (action === "next" ? 1 : -1))));
     }
-    gesture.current = null;
-    setDragging(false);
-    if (!current) return;
-
-    const kind = classifyRelease({
-      dx: end.x - current.start.x,
-      dy: end.y - current.start.y,
-      durationMs: Date.now() - current.startAt,
-      pinched: current.pinched,
-      zoomed: isZoomed(current.from) || isZoomed(transformRef.current),
-    });
-    if (kind === "close") onClose();
-    if (kind === "next" || kind === "previous") {
-      onIndex(Math.max(0, Math.min(images.length - 1, index + (kind === "next" ? 1 : -1))));
-    }
-    if (kind === "tap") {
-      // A single tap acts at once: a zoomed image fits again, a fitted one closes.
-      if (isZoomed(transformRef.current)) setTransform(FIT);
-      else onClose();
-    }
-    if (transformRef.current.scale <= 1.02 && transformRef.current !== FIT) setTransform(FIT);
   };
 
   const src = (!showOriginal && displaySrc) || image.src;
@@ -184,8 +125,8 @@ export function ImageViewer({
         className="viewer-stage"
         onPointerDown={pointerDown}
         onPointerMove={pointerMove}
-        onPointerUp={pointerEnd}
-        onPointerCancel={pointerEnd}
+        onPointerUp={(event) => pointerEnd(event, false)}
+        onPointerCancel={(event) => pointerEnd(event, true)}
       >
         <img
           src={src}

@@ -11,13 +11,17 @@
   stroke-linejoin: round;
 }
 
-/* The app is pinned to the visual viewport, so the bottom rows sit right above the keyboard. */
+/* NAI-011 keyboard model: on Android the WebView itself shrinks above the keyboard, so the
+   shell just fills the layout viewport (height 100%, follows the resize in the same frame).
+   --vv-height/--vv-top are set only when the visual viewport is smaller (overlaying
+   keyboard, zoom). overflow: clip — the shell must never be scrolled by focus or
+   scrollIntoView (hidden still allows programmatic scrolling); only the board scrolls. */
 .b2-shell {
   position: fixed;
   top: var(--vv-top, 0px);
   left: 0;
   right: 0;
-  height: var(--vv-height, 100dvh);
+  height: var(--vv-height, 100%);
   width: min(100%, 960px);
   margin: 0 auto;
   display: flex;
@@ -26,14 +30,16 @@
   padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 12px);
   box-sizing: border-box;
   overflow: hidden;
+  overflow: clip;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
 }
 .b2-shell.compact {
   gap: 8px;
   padding-top: calc(env(safe-area-inset-top) + 8px);
-  padding-bottom: 8px;
 }
+/* The keyboard covers the navigation bar, so its inset no longer applies at the bottom. */
+.b2-shell.keyboard { padding-bottom: 8px; }
 .b2-shell button {
   -webkit-user-select: none;
   user-select: none;

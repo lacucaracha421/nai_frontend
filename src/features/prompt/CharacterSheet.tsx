@@ -8,7 +8,7 @@ import { favoriteLocalTags } from "../tags/localTagIndex";
 import { PrombotSheet } from "../tags/PrombotSheet";
 import { chooseCharacterTag } from "./characterTag";
 import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
-import { BACK_PRIORITY, useBackLayer } from "../../app/backStack";
+import { useBackLayer } from "../../app/backStack";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
 type Props = {
@@ -32,8 +32,8 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [prombotOpen, setPrombotOpen] = useState(false);
   const active = characters.find((character) => character.id === selected) ?? characters[0];
-  useBackLayer(libraryOpen, () => setLibraryOpen(false), BACK_PRIORITY.nestedSheet);
-  useBackLayer(prombotOpen, () => setPrombotOpen(false), BACK_PRIORITY.nestedSheet);
+  useBackLayer(libraryOpen, () => setLibraryOpen(false));
+  useBackLayer(prombotOpen, () => setPrombotOpen(false));
 
   useEffect(() => {
     if (legacyMigrated) return;

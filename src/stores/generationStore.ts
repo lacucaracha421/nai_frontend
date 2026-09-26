@@ -4,7 +4,7 @@ import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/bui
 import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import { useCharacterLibraryStore } from "./characterLibraryStore";
-import { applyRandomCharacter, pickRandomCharacter } from "../features/prompt/randomCharacter";
+import { applyRandomCharacter, pickRandomCharacter, randomCharacterPool } from "../features/prompt/randomCharacter";
 import type { LoadedGeneration } from "../features/generator/load/mapNovelAiMetadata";
 import type {
   CharacterPrompt,
@@ -151,7 +151,7 @@ export const useGenerationStore = create<State>()(
         set((state) => ({ characters: state.characters.map((character) => character.id === id ? { ...character, ...patch } : character) })),
       setUseCharacterCoords: (useCharacterCoords) => set({ useCharacterCoords }),
       setRandomCharacterEnabled: (randomCharacterEnabled) => {
-        if (randomCharacterEnabled && !useCharacterLibraryStore.getState().entries.some((entry) => entry.prombotFavorite)) {
+        if (randomCharacterEnabled && !randomCharacterPool(useCharacterLibraryStore.getState().entries).length) {
           set({ errorMessage: "Prombot 북마크를 먼저 가져오시와요." });
           return;
         }

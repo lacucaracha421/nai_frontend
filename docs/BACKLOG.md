@@ -162,3 +162,12 @@ User reasoning: the image does not need to be large at first (tap opens it full 
 - Round 6: tapping empty editor space starts a new tag (a tap with the bubble open only closes it; swipes/scrolls do nothing). Session thumbnails open that image in the viewer without changing the current image; the viewer's 저장/Seed/업스케일/프롬프트 복사/이 설정 불러오기/마무리 act on the image shown there (an upscale still becomes the current image).
 - Released as 0.6.0 (version bumped in `package.json` and `tauri.conf.json`).
 - **Open:** S11 check of the keyboard (height, whether the WebView resizes, the tool row sitting on the keyboard), the bubble and double-tap feel, and chip sizes. The old full-screen prompt sheet (`PromptSheet.tsx`) and the `showFixedPrompts` setting are no longer used on screen.
+
+## NAI-011 — User requests (2026-09-26)
+
+Status: `VERIFY` — implemented in 0.6.1 (installed on the S11 2026-09-26, awaiting device checks): viewer gesture tracker (touch slop, 500 ms tap on max travel, ghost-pointer reset, cancelled touches never tap); one deduplicated `randomCharacterPool()` for the dice count and draw (if the count stays ~378, re-import Prombot bookmarks — see NAI-005); editing-driven compact layout, native IME inset once, board-only reveal, most-recently-opened Back order (NAI-010's "Back leaves typing mode" no longer applies), 사전 ends editing first; Ink Enso adaptive icon with a themed monochrome layer (Android icons are hand-made; don't run `tauri icon` straight into the repo).
+
+- Bug: after tapping a large (zoomed) image, it sometimes does not return to the normal fitted size and the image glitches/flickers.
+- Bug: the random draw screen shows "378명" next to the dice icon, but the character tag dictionary bookmarks contain far fewer characters; the count uses the wrong source or counts duplicates.
+- UX: in the tag editing area, the keyboard and Back handling feel inconsistent — the screen keeps jumping up and down as the keyboard opens/closes and Back is pressed. Redesign so the layout stays stable (predictable keyboard inset handling and a consistent Back order).
+- New app icon: a fresh design made for the Galaxy (One UI) squircle icon shape; the current one looks poor.

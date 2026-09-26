@@ -16,6 +16,7 @@ import { TagBoard, type TagBoardTools } from "../prompt/TagBoard";
 import { formatTagDiff, promptTagDiff, splitTags, type TagDiff } from "../prompt/tagChips";
 import { copyWholePrompt } from "../prompt/promptClipboard";
 import { chooseCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
+import { randomCharacterPool } from "../prompt/randomCharacter";
 import { QuickCopySheet } from "../tags/QuickCopySheet";
 import { PrombotSheet } from "../tags/PrombotSheet";
 import type { TagCategory } from "../tags/localTagIndex";
@@ -37,9 +38,9 @@ import { browserSaveDeps } from "./save/saveDeps";
 import { FinishSheet } from "./finish/FinishSheet";
 import { useQuotaClock } from "./useQuotaClock";
 import { useImageLoader } from "./load/ImageLoadButton";
-import { BACK_PRIORITY, useBackLayer } from "../../app/backStack";
+import { useBackLayer } from "../../app/backStack";
 import { classifyEditorSwipe } from "./editorSwipe";
-import { useEditableFocus, useSettledFlag, useVisualViewport } from "./useVisualViewport";
+import { useSettledFlag, useVisualViewport } from "./useVisualViewport";
 
 function imageFilename(createdAt: number, seed: number | null, kind: "generation" | "upscale") {
   const date = new Date(createdAt);
@@ -159,9 +160,8 @@ export function V5Studio() {
   const randomCharacterEnabled = useGenerationStore((s) => s.randomCharacterEnabled);
   const setRandomCharacterEnabled = useGenerationStore((s) => s.setRandomCharacterEnabled);
   const lastRandomCharacter = useGenerationStore((s) => s.lastRandomCharacter);
-  const randomCharacterCount = useCharacterLibraryStore((s) =>
-    s.entries.reduce((count, entry) => count + (entry.prombotFavorite ? 1 : 0), 0),
-  );
+  // Same pool the 🎲 draws from (deduplicated), so the number shown is the number drawn from.
+  const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries).length);
   const settings = useGenerationStore((s) => s.settings);
   const images = useGenerationStore((s) => s.images);
   const active = useGenerationStore((s) => s.activeImage);
@@ -215,10 +215,12 @@ export function V5Studio() {
   const loader = useImageLoader();
   const [sideSlot, setSideSlot] = useState<HTMLDivElement | null>(null);
   const viewport = useVisualViewport();
-  const editableFocused = useEditableFocus();
-  // Typing mode: the keyboard is up for a focused text field. Back (keyboard hidden),
-  // split screen or zoom alone do not trigger it; leaving it waits for the tap to end.
-  const typing = useSettledFlag(viewport.keyboard && editableFocused);
+  // Typing (editing) mode, NAI-011: a tag input is open on the board. Only this compacts
+  // the header. The keyboard never switches layouts; it only changes the height left for
+  // the board (the tool row rides on the keyboard, or sits at the bottom after Back hid it).
+  // Leaving waits for the tap to end so the layout never moves under a finger.
+  const [boardEditing, setBoardEditing] = useState(false);
+  const typing = useSettledFlag(boardEditing);
   // User-chosen editor size (session only): swipe up/down on the editor or its handle.
   const [expanded, setExpanded] = useState(false);
   const compactHeader = typing || expanded;
@@ -681,18 +683,18 @@ export function V5Studio() {
   ];
 
   // Android Back closes the topmost of these (see app/backStack.ts).
-  useBackLayer(menu !== null, () => setMenu(null), BACK_PRIORITY.menu);
-  useBackLayer(settingsScope !== null, () => setSettingsScope(null), BACK_PRIORITY.sheet);
-  useBackLayer(quickCopy !== null, () => setQuickCopy(null), BACK_PRIORITY.sheet);
-  useBackLayer(prombot !== null, () => setPrombot(null), BACK_PRIORITY.sheet);
-  useBackLayer(characterSheet, () => setCharacterSheet(false), BACK_PRIORITY.sheet);
-  useBackLayer(libraryOpen, () => setLibraryOpen(false), BACK_PRIORITY.sheet);
-  useBackLayer(rawEditor, () => setRawEditor(false), BACK_PRIORITY.sheet);
-  useBackLayer(placementId !== null, () => setPlacementId(null), BACK_PRIORITY.sheet);
-  useBackLayer(finishOpen, () => setFinishOpen(false), BACK_PRIORITY.sheet);
-  useBackLayer(diffOpen, () => setDiffOpen(false), BACK_PRIORITY.popover);
-  useBackLayer(viewer && !imagesHidden, () => setViewer(false), BACK_PRIORITY.viewer);
-  useBackLayer(expanded, () => setExpanded(false), BACK_PRIORITY.expandedEditor);
+  useBackLayer(menu !== null, () => setMenu(null));
+  useBackLayer(settingsScope !== null, () => setSettingsScope(null));
+  useBackLayer(quickCopy !== null, () => setQuickCopy(null));
+  useBackLayer(prombot !== null, () => setPrombot(null));
+  useBackLayer(characterSheet, () => setCharacterSheet(false));
+  useBackLayer(libraryOpen, () => setLibraryOpen(false));
+  useBackLayer(rawEditor, () => setRawEditor(false));
+  useBackLayer(placementId !== null, () => setPlacementId(null));
+  useBackLayer(finishOpen, () => setFinishOpen(false));
+  useBackLayer(diffOpen, () => setDiffOpen(false));
+  useBackLayer(viewer && !imagesHidden, () => setViewer(false));
+  useBackLayer(expanded, () => setExpanded(false));
 
   const finishHold = useHold(() => setFinishEnabled(!finishEnabled), () => setFinishOpen(true));
   const seedFixed = !!viewed && viewed.seed !== null && settings.seed === viewed.seed;
@@ -766,7 +768,9 @@ export function V5Studio() {
     <div className="b2-tools compact">
       <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(-0.1)}>−0.1</button>
       <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(0.1)}>+0.1</button>
-      <button type="button" onPointerDown={keepFocus} onClick={openDictionary}>
+      {/* No keepFocus: opening the dictionary commits the typed tag and ends editing,
+          so the keyboard never stays up over the sheet typing into a hidden input. */}
+      <button type="button" onClick={openDictionary}>
         <Icon name="book" />사전
       </button>
       <button type="button" data-keeps-selection disabled={!tools.canTranslate || tools.translating} onPointerDown={keepFocus} onClick={tools.translate}>
@@ -829,8 +833,8 @@ export function V5Studio() {
 
   return (
     <main
-      className={`b2-shell ${typing ? "compact" : ""} ${expanded && !typing ? "expanded" : ""}`}
-      style={{ "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } as CSSProperties}
+      className={`b2-shell ${typing ? "compact" : ""} ${expanded && !typing ? "expanded" : ""} ${viewport.keyboard ? "keyboard" : ""}`}
+      style={viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } as CSSProperties : undefined}
     >
       {compactHeader ? (
         <header className="b2-top compact">
@@ -940,6 +944,7 @@ export function V5Studio() {
           }}
           header={boardHeader}
           renderTools={renderTools}
+          onEditingChange={setBoardEditing}
         />
       </section>
 

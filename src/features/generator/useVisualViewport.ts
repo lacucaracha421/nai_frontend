@@ -1,16 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 
-export type ViewportBox = { height: number; top: number; keyboard: boolean };
+/**
+ * Visible box of the page.
+ *
+ * One keyboard model (NAI-011): on Android the native side shrinks the WebView above the
+ * soft keyboard (MainActivity pads the content view by the IME inset), so the layout
+ * viewport itself is the space left above the keyboard and the shell simply fills it
+ * (CSS, no JS lag). Only when the visual viewport is smaller than the layout viewport
+ * (an overlaying keyboard in a browser, pinch zoom) is the shell pinned to it in px;
+ * `min` never subtracts the keyboard twice.
+ */
+export type ViewportBox = {
+  height: number;
+  top: number;
+  /** A keyboard (or similar) takes the bottom of the screen. */
+  keyboard: boolean;
+  /** The visual viewport is smaller than or offset from the layout viewport: pin the shell to it. */
+  pinned: boolean;
+};
 
 /** Height the soft keyboard (or other overlay) takes from the bottom of the layout viewport. */
 export const KEYBOARD_MIN_INSET = 120;
 
-/**
- * Visible box of the page. With a resizing WebView the keyboard shrinks the layout
- * viewport itself; with an overlaying one only the visual viewport shrinks. Pinning
- * the app to the visual viewport keeps the bottom rows directly above the keyboard
- * in both cases.
- */
 export function viewportBox(
   layoutHeight: number,
   visual: { height: number; offsetTop: number } | null | undefined,
@@ -18,10 +29,12 @@ export function viewportBox(
   fullHeight = layoutHeight,
 ): ViewportBox {
   const height = visual ? Math.min(layoutHeight, visual.height) : layoutHeight;
+  const top = visual ? Math.max(0, visual.offsetTop) : 0;
   return {
     height,
-    top: visual ? Math.max(0, visual.offsetTop) : 0,
+    top,
     keyboard: Math.max(fullHeight, layoutHeight) - height > KEYBOARD_MIN_INSET,
+    pinned: top > 0 || layoutHeight - height > 1,
   };
 }
 
@@ -39,7 +52,9 @@ export function useVisualViewport(): ViewportBox {
     const update = () => {
       const next = read();
       setBox((current) =>
-        current.height === next.height && current.top === next.top && current.keyboard === next.keyboard ? current : next,
+        current.height === next.height && current.top === next.top && current.keyboard === next.keyboard && current.pinned === next.pinned
+          ? current
+          : next,
       );
     };
     update();
@@ -55,39 +70,13 @@ export function useVisualViewport(): ViewportBox {
   return box;
 }
 
-const NON_TEXT_INPUTS = new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]);
-
-/** Whether an element takes typed text (and so raises the soft keyboard). */
-export function isEditableElement(element: Element | null) {
-  if (!element) return false;
-  if (element instanceof HTMLTextAreaElement) return !element.readOnly && !element.disabled;
-  if (element instanceof HTMLInputElement) return !NON_TEXT_INPUTS.has(element.type) && !element.readOnly && !element.disabled;
-  return element instanceof HTMLElement && element.isContentEditable;
-}
-
-/** True while a text field has focus (Back can hide the keyboard without blurring it). */
-export function useEditableFocus() {
-  const [focused, setFocused] = useState(() => typeof document !== "undefined" && isEditableElement(document.activeElement));
-  useEffect(() => {
-    const update = () => setFocused(isEditableElement(document.activeElement));
-    // During focusout the next element is not active yet.
-    const later = () => window.setTimeout(update, 0);
-    document.addEventListener("focusin", update);
-    document.addEventListener("focusout", later);
-    return () => {
-      document.removeEventListener("focusin", update);
-      document.removeEventListener("focusout", later);
-    };
-  }, []);
-  return focused;
-}
-
 /** Delay after the finger lifts before a layout may expand again (after the click fires). */
 export const RELEASE_DELAY_MS = 120;
 
 /**
  * Follows `raw`, but a change to false waits until no pointer is down and the tap's
  * click has been delivered, so the layout never moves between pointerdown and click.
+ * A change to true applies in the same render.
  */
 export function useSettledFlag(raw: boolean) {
   const [value, setValue] = useState(raw);
@@ -117,5 +106,5 @@ export function useSettledFlag(raw: boolean) {
     const timer = window.setTimeout(() => setValue(false), RELEASE_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [raw, released]);
-  return value;
+  return raw || value;
 }
