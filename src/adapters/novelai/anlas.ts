@@ -79,15 +79,24 @@ export function formatUsageHint(
   const full = usage.isNegative !== true && typeof usage.percent === "number" && usage.percent >= 100;
   const duration = usage.timeUntilNextPercent;
   if (!full && typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    let next: number | null = null;
     if (!track || track.countdown) {
-      const seconds = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
-      parts.push(seconds === 0 ? "회복 시간 도달 · 갱신 대기" : `다음 1% 회복까지 약 ${formatSpan(seconds)}`);
+      next = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
+      parts.push(next === 0 ? "회복 시간 도달 · 갱신 대기" : `다음 1% 회복까지 약 ${formatSpan(next)}`);
     } else if (track.risenAt !== null) {
       const elapsed = Math.max(0, now - track.risenAt) / 1000;
-      const seconds = duration - (elapsed % duration);
-      parts.push(`다음 1% 회복까지 약 ${formatSpan(seconds)}`);
+      next = duration - (elapsed % duration);
+      parts.push(`다음 1% 회복까지 약 ${formatSpan(next)}`);
     } else {
       parts.push(`1% 회복에 약 ${formatSpan(duration)}`);
+    }
+    // Whole percents still missing after the next one, each taking one interval.
+    if (usage.isNegative !== true && typeof usage.percent === "number") {
+      const missing = Math.ceil(100 - usage.percent);
+      if (missing > 0) {
+        const toFull = (next ?? duration) + (missing - 1) * duration;
+        if (toFull > 0) parts.push(`가득 차기까지 약 ${formatSpan(toFull)}`);
+      }
     }
   }
   return parts.length ? parts.join(" · ") : null;
@@ -97,5 +106,10 @@ function formatSpan(seconds: number) {
   const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const rest = hours % 24;
+    return `${days}일${rest ? ` ${rest}시간` : ""}`;
+  }
   return hours > 0 ? `${hours}시간${minutes ? ` ${minutes}분` : ""}` : `${minutes}분`;
 }

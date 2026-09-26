@@ -157,8 +157,11 @@ pub fn favorites(state: State<'_, PrombotState>) -> Result<Vec<String>, String> 
 const PROMBOT_MISC_GROUP: &str = "";
 /// A Prombot series ☆ writes every member of that series into
 /// `prombot:charFavorites`. Groups at least this large whose members are
-/// (almost) all bookmarked are treated as series-level favorites.
-const SERIES_FAVORITE_MIN_MEMBERS: usize = 5;
+/// (almost) all bookmarked are treated as series-level favorites. Smaller
+/// casts are often picked by hand member by member (2026-09-26: 6 of the 7
+/// girls_band_cry characters were individual picks), and a ☆ on one adds only
+/// a few names, so they are always kept.
+const SERIES_FAVORITE_MIN_MEMBERS: usize = 12;
 const SERIES_FAVORITE_MIN_COVERAGE_PERCENT: usize = 80;
 /// A series ☆ appends the members that were not bookmarked yet in one go, in
 /// Prombot's list order. A run this long of consecutive group members in that

@@ -1,4 +1,4 @@
-import { EMPTY_USAGE_TRACK, trackUsage } from "../../stores/connectionStore";
+import { EMPTY_USAGE_TRACK, loadUsageTrack, trackUsage } from "../../stores/connectionStore";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { watchQuotaClock } from "./useQuotaClock";
 import { formatUsageHint } from "../../adapters/novelai/anlas";
@@ -43,8 +43,8 @@ describe("usage countdown", () => {
   it("counts down between replies and does not invent a recovered percentage at expiry", () => {
     expect(formatUsageHint(usage, 1000, 1000)).toContain("2분");
     expect(formatUsageHint(usage, 1000, 61_000)).toContain("1분");
-    expect(formatUsageHint(usage, 1000, 121_000)).toBe("회복 시간 도달 · 갱신 대기");
-    expect(formatUsageHint(usage, 1000, 999_000)).toBe("회복 시간 도달 · 갱신 대기");
+    expect(formatUsageHint(usage, 1000, 121_000)).toBe("회복 시간 도달 · 갱신 대기 · 가득 차기까지 약 54분");
+    expect(formatUsageHint(usage, 1000, 999_000)).toContain("회복 시간 도달 · 갱신 대기");
     expect(usage.percent).toBe(72);
   });
   it("handles hour rollover without displaying 1 hour 60 minutes", () => {
@@ -56,10 +56,10 @@ describe("usage recovery interval (value does not count down)", () => {
   const usage = { percent: 72, isNegative: false, timeUntilNextPercent: 7888 };
   it("shows the per-percent rate until a rise is seen, then counts from the rise", () => {
     const flat = { countdown: false, risenAt: null };
-    expect(formatUsageHint(usage, 1000, 61_000, flat)).toBe("1% 회복에 약 2시간 12분");
+    expect(formatUsageHint(usage, 1000, 61_000, flat)).toBe("1% 회복에 약 2시간 12분 · 가득 차기까지 약 2일 13시간");
     const risen = { countdown: false, risenAt: 0 };
-    expect(formatUsageHint(usage, 60_000, 3_600_000, risen)).toBe("다음 1% 회복까지 약 1시간 12분");
-    expect(formatUsageHint(usage, 60_000, 7_888_000 + 60_000, risen)).toBe("다음 1% 회복까지 약 2시간 11분");
+    expect(formatUsageHint(usage, 60_000, 3_600_000, risen)).toContain("다음 1% 회복까지 약 1시간 12분");
+    expect(formatUsageHint(usage, 60_000, 7_888_000 + 60_000, risen)).toContain("다음 1% 회복까지 약 2시간 11분");
   });
   it("keeps the countdown once the value was seen counting down", () => {
     expect(formatUsageHint({ ...usage, timeUntilNextPercent: 120 }, 1000, 61_000, { countdown: true, risenAt: null })).toContain("1분");
@@ -76,5 +76,26 @@ describe("trackUsage", () => {
     track = trackUsage(track, quota(73, 7888), 120_000);
     expect(track.risenAt).toBe(120_000);
     expect(trackUsage(track, quota(73, 7800), 180_000).countdown).toBe(true);
+  });
+});
+
+describe("usage time to full and persisted rise", () => {
+  it("adds the time until 100 % and nothing at a full battery", () => {
+    const at99 = { percent: 99, isNegative: false, timeUntilNextPercent: 7888 };
+    expect(formatUsageHint(at99, 0, 0, { countdown: false, risenAt: null })).toBe("1% 회복에 약 2시간 12분 · 가득 차기까지 약 2시간 12분");
+    expect(formatUsageHint({ ...at99, percent: 100 }, 0, 0, { countdown: false, risenAt: null })).toBeNull();
+  });
+  it("keeps the rise across a restart but does not time a rise seen after a long gap", () => {
+    const quota = (percent: number) => ({ anlas: null, subscriptionAnlas: null, paidAnlas: null, tier: null, usage: { percent, isNegative: false, timeUntilNextPercent: 7888 } });
+    const stored = new Map<string, string>();
+    const storage = { getItem: (k: string) => stored.get(k) ?? null, setItem: (k: string, v: string) => void stored.set(k, v) };
+    stored.set("nai-v5-usage-track", JSON.stringify({ percent: 73, risenAt: 5_000, at: 6_000 }));
+    const restored = loadUsageTrack(storage);
+    expect(restored).toMatchObject({ percent: 73, risenAt: 5_000 });
+    // Reopened hours later at a higher percent: the rise time is unknown, keep the anchor.
+    expect(trackUsage(restored, quota(75), 10_000_000).risenAt).toBe(5_000);
+    // Leaving 100 % between close polls starts a new interval.
+    const full = trackUsage(EMPTY_USAGE_TRACK, quota(100), 0);
+    expect(trackUsage(full, quota(99), 60_000).risenAt).toBe(60_000);
   });
 });
