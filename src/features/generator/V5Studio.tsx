@@ -183,6 +183,7 @@ export function V5Studio() {
   const connectionStatus = useConnectionStore((s) => s.status);
   const quota = useConnectionStore((s) => s.quota);
   const quotaReceivedAt = useConnectionStore((s) => s.quotaReceivedAt);
+  const usageTrack = useConnectionStore((s) => s.usageTrack);
   const quotaStatus = useConnectionStore((s) => s.quotaStatus);
   const refreshQuota = useConnectionStore((s) => s.refreshQuota);
   const checkpoint = usePromptHistoryStore((s) => s.checkpoint);
@@ -314,7 +315,7 @@ export function V5Studio() {
   const viewerPreviewUrl = previewUrlFor(viewed);
   const finishPending = finishEnabled && !!previewTarget && (finishBusy || !previewUrlFor(previewTarget)) && !finishError;
   const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
-  const usageHint = formatUsageHint(quota?.usage, quotaReceivedAt, quotaNow);
+  const usageHint = formatUsageHint(quota?.usage, quotaReceivedAt, quotaNow, usageTrack);
   const cost = connectionStatus === "connected" && quota
     ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota)
     : undefined;

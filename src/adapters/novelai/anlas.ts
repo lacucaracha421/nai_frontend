@@ -57,11 +57,19 @@ export function formatUsageLabel(usage: NovelAiUsage | null | undefined) {
   return `사용 한도 ${Math.round(usage.percent)}%`;
 }
 
-/** Tooltip/hint for the usage pill. `timeUntilNextPercent` is assumed to be seconds. */
+/**
+ * Tooltip/hint for the usage pill. `timeUntilNextPercent` is read as seconds.
+ *
+ * Without `track` (or when the value was seen counting down) it is a countdown from
+ * `receivedAt`. Otherwise it is the time one percent takes: the next percent is due one
+ * interval after the percentage was last seen rising, and before any rise is seen only
+ * the rate is known.
+ */
 export function formatUsageHint(
   usage: NovelAiUsage | null | undefined,
   receivedAt: number | null = null,
   now = Date.now(),
+  track?: { countdown: boolean; risenAt: number | null },
 ) {
   if (!usage) return null;
   const parts: string[] = [];
@@ -71,16 +79,23 @@ export function formatUsageHint(
   const full = usage.isNegative !== true && typeof usage.percent === "number" && usage.percent >= 100;
   const duration = usage.timeUntilNextPercent;
   if (!full && typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
-    const seconds = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
-    if (seconds === 0) {
-      parts.push("회복 시간 도달 · 갱신 대기");
+    if (!track || track.countdown) {
+      const seconds = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
+      parts.push(seconds === 0 ? "회복 시간 도달 · 갱신 대기" : `다음 1% 회복까지 약 ${formatSpan(seconds)}`);
+    } else if (track.risenAt !== null) {
+      const elapsed = Math.max(0, now - track.risenAt) / 1000;
+      const seconds = duration - (elapsed % duration);
+      parts.push(`다음 1% 회복까지 약 ${formatSpan(seconds)}`);
     } else {
-      const totalMinutes = Math.ceil(seconds / 60);
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      const span = hours > 0 ? `${hours}시간${minutes ? ` ${minutes}분` : ""}` : `${minutes}분`;
-      parts.push(`다음 1% 회복까지 약 ${span}`);
+      parts.push(`1% 회복에 약 ${formatSpan(duration)}`);
     }
   }
   return parts.length ? parts.join(" · ") : null;
+}
+
+function formatSpan(seconds: number) {
+  const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}시간${minutes ? ` ${minutes}분` : ""}` : `${minutes}분`;
 }
