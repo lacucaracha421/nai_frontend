@@ -16,7 +16,7 @@ import { TagBoard, switchCarriesEditing, type TagBoardTools } from "../prompt/Ta
 import { formatTagDiff, promptTagDiff, splitTags, type TagDiff } from "../prompt/tagChips";
 import { copyWholePrompt } from "../prompt/promptClipboard";
 import { chooseCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
-import { randomCharacterPool } from "../prompt/randomCharacter";
+import { randomCharacterPool, randomPickLabel } from "../prompt/randomCharacter";
 import { QuickCopySheet } from "../tags/QuickCopySheet";
 import { PrombotSheet } from "../tags/PrombotSheet";
 import type { TagCategory } from "../tags/localTagIndex";
@@ -159,7 +159,7 @@ export function V5Studio() {
   const addCharacter = useGenerationStore((s) => s.addCharacter);
   const randomCharacterEnabled = useGenerationStore((s) => s.randomCharacterEnabled);
   const setRandomCharacterEnabled = useGenerationStore((s) => s.setRandomCharacterEnabled);
-  const lastRandomCharacter = useGenerationStore((s) => s.lastRandomCharacter);
+  const keepRandomCharacter = useGenerationStore((s) => s.keepRandomCharacter);
   // Same pool the 🎲 draws from (deduplicated), so the number shown is the number drawn from.
   const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries).length);
   const prombotImportSummary = useCharacterLibraryStore((s) => s.prombotImportSummary);
@@ -305,6 +305,8 @@ export function V5Studio() {
   }, [connectionStatus, status, refreshQuota]);
 
   const selected = images[active];
+  const selectedPick = selected?.randomCharacter;
+  const selectedPickLabel = selectedPick ? randomPickLabel(selectedPick) : null;
   const viewed = viewerIndex !== null ? images[viewerIndex] : undefined;
   /** The image the 마무리 preview is made for: the one in the viewer, else the current one. */
   const previewTarget = viewed ?? selected;
@@ -537,7 +539,12 @@ export function V5Studio() {
 
   const generateNow = (tools?: TagBoardTools) => {
     tools?.flush();
-    void generate();
+    void generate().then(() => {
+      // The 🎲 pick only exists in the request, so name it wherever the user is.
+      const state = useGenerationStore.getState();
+      const pick = state.status === "success" ? state.images[state.activeImage]?.randomCharacter : undefined;
+      if (pick) showNotice(`🎲 ${randomPickLabel(pick).name}`, 2400);
+    });
   };
 
   const upscaleViewed = async () => {
@@ -656,10 +663,31 @@ export function V5Studio() {
   const boardHeader = (
     <>
       {characterRow}
+      {tab === "character" && (randomCharacterEnabled || selectedPick) && (
+        <div className="b2-random-pick" aria-live="polite">
+          <span className="b2-random-pick-icon" aria-hidden="true"><Icon name="dice" /></span>
+          {selectedPick && selectedPickLabel ? (
+            <span className="b2-random-pick-text">
+              <small>{randomCharacterEnabled ? "지금 이미지 캐릭터" : "이 이미지는 🎲로 뽑은 캐릭터"}</small>
+              <strong>{selectedPickLabel.name}</strong>
+              {selectedPickLabel.series && <em>{selectedPickLabel.series}</em>}
+            </span>
+          ) : (
+            <span className="b2-random-pick-text">
+              <small>랜덤 캐릭터</small>
+              <strong>생성하면 뽑아서 여기 보여드려요</strong>
+            </span>
+          )}
+          {selectedPick && selectedPickLabel && (
+            <button type="button" onClick={() => void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정 · 랜덤 OFF`, 1800))}>
+              이 캐릭터로 고정
+            </button>
+          )}
+        </div>
+      )}
       {showHints && tab === "character" && randomCharacterEnabled && (
         <p className="b2-random-note">
-          🎲 생성할 때마다 첫 캐릭터의 캐릭터 태그만 북마크 {randomCharacterCount}명 중 하나로 바뀝니다
-          {lastRandomCharacter ? ` · 최근 ${lastRandomCharacter}` : ""}
+          🎲 생성할 때마다 첫 캐릭터의 캐릭터 태그만 북마크 {randomCharacterCount}명 중 하나로 바뀝니다 · 다시 뽑으려면 생성
           {prombotImportSummary ? <><br />마지막 가져오기: {prombotImportSummary}</> : null}
         </p>
       )}
@@ -730,8 +758,12 @@ export function V5Studio() {
   const seedFixed = !!viewed && viewed.seed !== null && settings.seed === viewed.seed;
   const upscaleBlocked = !viewed || viewed.width * viewed.height > 1024 * 1024 || busy;
 
+  const viewedPick = viewed?.randomCharacter ? randomPickLabel(viewed.randomCharacter) : null;
   const viewerMeta = viewed && (
     <>
+      {viewedPick && (
+        <span className="viewer-random">🎲 <b>{viewedPick.name}</b>{viewedPick.series && ` · ${viewedPick.series}`}</span>
+      )}
       {viewed.seed !== null && <span>Seed {viewed.seed}</span>}
       <span>{viewed.width}×{viewed.height}</span>
       {viewed.kind === "upscale" && <span>업스케일</span>}
@@ -902,7 +934,7 @@ export function V5Studio() {
             <div className="b2-image-side">
               <div className={`b2-session ${imagesHidden ? "privacy-hidden" : ""}`} aria-label="이번 세션 이미지">
                 {sessionOthers.map(({ image, index }) => (
-                  <button type="button" key={`${image.createdAt}-${index}`} onClick={() => { if (!imagesHidden) setViewerIndex(index); }} aria-label={`세션 이미지 ${index + 1} 크게 보기`}>
+                  <button type="button" key={`${image.createdAt}-${index}`} onClick={() => { if (!imagesHidden) setViewerIndex(index); }} aria-label={`세션 이미지 ${index + 1}${image.randomCharacter ? ` (🎲 ${randomPickLabel(image.randomCharacter).name})` : ""} 크게 보기`}>
                     {imagesHidden ? <PrivacyGlyph /> : <img src={image.src} alt="" />}
                     {image.kind === "upscale" && <span className="b2-up-badge">UP</span>}
                   </button>

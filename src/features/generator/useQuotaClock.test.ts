@@ -56,7 +56,7 @@ describe("usage recovery interval (value does not count down)", () => {
   const usage = { percent: 72, isNegative: false, timeUntilNextPercent: 7888 };
   it("shows the per-percent rate until a rise is seen, then counts from the rise", () => {
     const flat = { countdown: false, risenAt: null };
-    expect(formatUsageHint(usage, 1000, 61_000, flat)).toBe("1% 회복에 약 2시간 12분 · 가득 차기까지 약 2일 13시간");
+    expect(formatUsageHint(usage, 1000, 61_000, flat)).toBe("1% 회복에 약 2시간 12분 · 가득 차기까지 최대 약 2일 13시간 · 하루 약 11%");
     const risen = { countdown: false, risenAt: 0 };
     expect(formatUsageHint(usage, 60_000, 3_600_000, risen)).toContain("다음 1% 회복까지 약 1시간 12분");
     expect(formatUsageHint(usage, 60_000, 7_888_000 + 60_000, risen)).toContain("다음 1% 회복까지 약 2시간 11분");
@@ -82,7 +82,12 @@ describe("trackUsage", () => {
 describe("usage time to full and persisted rise", () => {
   it("adds the time until 100 % and nothing at a full battery", () => {
     const at99 = { percent: 99, isNegative: false, timeUntilNextPercent: 7888 };
-    expect(formatUsageHint(at99, 0, 0, { countdown: false, risenAt: null })).toBe("1% 회복에 약 2시간 12분 · 가득 차기까지 약 2시간 12분");
+    // One percent missing: the next percent is the full battery, so the time is said once.
+    expect(formatUsageHint(at99, 0, 0, { countdown: false, risenAt: null })).toBe("가득 차기까지 최대 약 2시간 12분 · 하루 약 11%");
+    expect(formatUsageHint(at99, 0, 3_600_000, { countdown: false, risenAt: 0 })).toBe("가득 차기까지 약 1시간 12분 · 하루 약 11%");
+    expect(formatUsageHint({ ...at99, timeUntilNextPercent: 3600 }, 0, 600_000)).toBe("가득 차기까지 약 50분 · 하루 약 24%");
+    expect(formatUsageHint({ ...at99, percent: 98.5 }, 0, 0, { countdown: false, risenAt: 0 }))
+      .toBe("다음 1% 회복까지 약 2시간 12분 · 가득 차기까지 약 4시간 23분 · 하루 약 11%");
     expect(formatUsageHint({ ...at99, percent: 100 }, 0, 0, { countdown: false, risenAt: null })).toBeNull();
   });
   it("keeps the rise across a restart but does not time a rise seen after a long gap", () => {

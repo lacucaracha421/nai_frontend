@@ -1,6 +1,6 @@
 import { chooseCharacterTag, detectCharacterTagFromPrompt } from "./characterTag";
 import type { GenerationDraft } from "../../adapters/novelai/types";
-import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
+import { UNCATEGORIZED_SERIES, type CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
 /** One key per character, whatever spelling the entry arrived with (Prombot CSV quoting,
  * escaped brackets, underscores or spaces, letter case). */
@@ -40,9 +40,33 @@ export function pickRandomCharacter(
   return pool[index];
 }
 
+/** What the 🎲 drew for one generation, kept on the image so it can be shown later. */
+export type RandomCharacterPick = { display: string; series: string };
+
+export function toRandomPick(entry: Pick<CharacterLibraryEntry, "display" | "series">): RandomCharacterPick {
+  return { display: entry.display, series: entry.series };
+}
+
+/**
+ * Name and series for display. Danbooru-style names carry the series in brackets
+ * ("nina (girls band cry)"); that suffix is dropped when it repeats the series, and the
+ * "미분류" placeholder is never shown as a series.
+ */
+export function randomPickLabel(pick: RandomCharacterPick) {
+  const clean = (text: string) => text.replace(/\\+([()])/g, "$1").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  let name = clean(pick.display);
+  const series = clean(pick.series);
+  const showSeries = !!series && series !== UNCATEGORIZED_SERIES;
+  if (showSeries) {
+    const suffix = ` (${series.toLowerCase()})`;
+    if (name.toLowerCase().endsWith(suffix) && name.length > suffix.length) name = name.slice(0, -suffix.length).trim();
+  }
+  return { name, series: showSeries ? series : "" };
+}
+
 export async function applyRandomCharacter(
   draft: GenerationDraft,
-  entry: CharacterLibraryEntry,
+  entry: Pick<CharacterLibraryEntry, "display">,
 ): Promise<GenerationDraft> {
   const template = draft.characters.find((character) => character.enabled) ?? draft.characters[0];
   const position = template?.position ?? { x: 0.5, y: 0.5 };

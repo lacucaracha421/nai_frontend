@@ -4,7 +4,7 @@ import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/bui
 import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import { useCharacterLibraryStore } from "./characterLibraryStore";
-import { applyRandomCharacter, pickRandomCharacter, randomCharacterPool } from "../features/prompt/randomCharacter";
+import { applyRandomCharacter, pickRandomCharacter, randomCharacterPool, toRandomPick, type RandomCharacterPick } from "../features/prompt/randomCharacter";
 import type { LoadedGeneration } from "../features/generator/load/mapNovelAiMetadata";
 import type {
   CharacterPrompt,
@@ -61,7 +61,7 @@ type State = {
   characters: CharacterPrompt[];
   useCharacterCoords: boolean;
   randomCharacterEnabled: boolean;
-  lastRandomCharacter: string | null;
+  lastRandomCharacter: RandomCharacterPick | null;
   settings: GenerationSettings;
   status: GenerationStatus;
   images: GenerationImage[];
@@ -75,6 +75,8 @@ type State = {
   updateCharacter: (id: string, patch: Partial<CharacterPrompt>) => void;
   setUseCharacterCoords: (value: boolean) => void;
   setRandomCharacterEnabled: (value: boolean) => void;
+  /** Puts a drawn character into the first character's prompt and turns 🎲 off. */
+  keepRandomCharacter: (pick: RandomCharacterPick) => Promise<void>;
   setActiveImage: (index: number) => void;
   clearSessionImages: () => void;
   clearError: () => void;
@@ -157,6 +159,10 @@ export const useGenerationStore = create<State>()(
         }
         set({ randomCharacterEnabled });
       },
+      keepRandomCharacter: async (pick) => {
+        const next = await applyRandomCharacter(get(), pick);
+        set({ characters: next.characters, randomCharacterEnabled: false });
+      },
       setActiveImage: (activeImage) => set({ activeImage }),
       clearSessionImages: () => set({ images: [], activeImage: 0 }),
       clearError: () => set({ errorMessage: null, status: "idle" }),
@@ -199,12 +205,12 @@ export const useGenerationStore = create<State>()(
         set({ status: "generating", errorMessage: null });
         try {
           let effective = snapshot;
-          let randomCharacter: string | null = null;
+          let randomCharacter: RandomCharacterPick | null = null;
           if (snapshot.randomCharacterEnabled) {
             const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries);
             if (!picked) throw new Error("Prombot 북마크를 먼저 가져온 뒤 랜덤 캐릭터를 켜주시와요.");
             effective = await applyRandomCharacter(snapshot, picked) as State;
-            randomCharacter = picked.display;
+            randomCharacter = toRandomPick(picked);
           }
           const request = buildNovelAiRequest(effective);
           const result = await generateNovelAiImage(request);
@@ -220,6 +226,7 @@ export const useGenerationStore = create<State>()(
             positivePrompt,
             kind: "generation" as const,
             createdAt,
+            ...(randomCharacter ? { randomCharacter } : {}),
           }));
           if (!incoming.length) throw new Error("NovelAI 응답에 이미지가 없사와요.");
           set((state) => ({
@@ -260,6 +267,7 @@ export const useGenerationStore = create<State>()(
             positivePrompt: image.positivePrompt,
             kind: "upscale" as const,
             createdAt,
+            ...(image.randomCharacter ? { randomCharacter: image.randomCharacter } : {}),
           }));
           if (!incoming.length) throw new Error("Upscale 응답에 이미지가 없사와요.");
           set((state) => ({

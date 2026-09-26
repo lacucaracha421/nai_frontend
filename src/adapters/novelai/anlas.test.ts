@@ -41,6 +41,12 @@ describe("usage limit display", () => {
     expect(formatUsageHint(withinLimit)).toContain("다음 1% 회복까지 약 2시간 12분");
   });
 
+  it("adds the implied daily rate only when it is meaningful", () => {
+    expect(formatUsageHint({ percent: 50, isNegative: false, timeUntilNextPercent: 7888 })).toContain("· 하루 약 11%");
+    expect(formatUsageHint({ percent: 50, isNegative: false, timeUntilNextPercent: 20_000 })).toContain("· 하루 약 4.3%");
+    expect(formatUsageHint({ percent: 50, isNegative: false, timeUntilNextPercent: 600 })).not.toContain("하루");
+  });
+
   it("shows no recovery countdown when the battery is full", () => {
     const full = { percent: 100, isNegative: false, timeUntilNextPercent: 7920 };
     expect(formatUsageLabel(full)).toBe("사용 한도 100%");

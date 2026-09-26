@@ -51,7 +51,28 @@ describe("random character requests", () => {
     expect(current.characters).toBe(saved.characters);
     expect(current.settings).toBe(saved.settings);
     expect(buildNovelAiRequest(current)).toEqual(baseline);
-    expect(current.lastRandomCharacter).toBe("B");
+    expect(current.lastRandomCharacter).toEqual({ display: "B", series: "series" });
+    // Each image remembers its own pick so the viewer and the 캐릭터 tab can name it.
+    expect(current.images.map((image) => image.randomCharacter?.display)).toEqual(["A", "B"]);
+  });
+
+  it("keeps a drawn character in the first character's prompt and turns 🎲 off", async () => {
+    useGenerationStore.setState({
+      randomCharacterEnabled: true,
+      characters: [{ id: "saved", name: "Saved", prompt: "saved, red dress", negative: "", enabled: true, position: { x: 0.5, y: 0.5 } }],
+    });
+    await useGenerationStore.getState().keepRandomCharacter({ display: "B", series: "series" });
+    const current = useGenerationStore.getState();
+    expect(current.randomCharacterEnabled).toBe(false);
+    expect(current.characters[0]).toMatchObject({ id: "saved", name: "B", prompt: "B, red dress" });
+  });
+
+  it("carries the pick onto an upscaled copy", async () => {
+    vi.mocked(upscaleNovelAiImage).mockResolvedValue([{ path: "up.png", index: 0, seed: 1, width: 1664, height: 2432 }]);
+    useGenerationStore.setState({ images: [{ src: "s", filePath: "s.png", index: 0, seed: 1, width: 832, height: 1216,
+      positivePrompt: "", kind: "generation", createdAt: 1, randomCharacter: { display: "A", series: "series" } }] });
+    await useGenerationStore.getState().upscaleActive(0);
+    expect(useGenerationStore.getState().images[1]?.randomCharacter).toEqual({ display: "A", series: "series" });
   });
 
   it("refuses to enable with an empty pool but always allows turning mode off", () => {

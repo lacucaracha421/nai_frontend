@@ -495,6 +495,43 @@
 }
 .b2-character-add { width: 48px; justify-content: center; padding: 0 !important; }
 .b2-random.active { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.b2-random-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.b2-random-pick-icon { flex: none; display: inline-grid; place-items: center; font-size: 22px; }
+.b2-random-pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.b2-random-pick-text small { font-size: 12px; opacity: .75; }
+.b2-random-pick-text strong,
+.b2-random-pick-text em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.b2-random-pick-text strong { font-size: 18px; font-weight: 700; }
+.b2-random-pick-text em { font-size: 13px; font-style: normal; opacity: .8; }
+.b2-random-pick button {
+  flex: none;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--md-shape-md);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-size: 14px;
+}
 .b2-random-note {
   margin: 0 0 10px;
   color: var(--md-sys-color-on-surface-variant);
@@ -768,6 +805,8 @@
   white-space: nowrap;
 }
 .viewer-meta .viewer-diff { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.viewer-meta .viewer-random { color: #fff; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+.viewer-meta .viewer-random b { font-weight: 700; }
 .viewer-actions { display: flex; gap: 8px; }
 .viewer-actions button {
   flex: 1;

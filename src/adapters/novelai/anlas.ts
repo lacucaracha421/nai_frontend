@@ -79,27 +79,39 @@ export function formatUsageHint(
   const full = usage.isNegative !== true && typeof usage.percent === "number" && usage.percent >= 100;
   const duration = usage.timeUntilNextPercent;
   if (!full && typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
-    let next: number | null = null;
+    // Whole percents still missing (the next one included), each taking one interval.
+    const missing = usage.isNegative !== true && typeof usage.percent === "number"
+      ? Math.max(0, Math.ceil(100 - usage.percent))
+      : 0;
+    const toFull = (next: number) => next + (missing - 1) * duration;
     if (!track || track.countdown) {
-      next = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
-      parts.push(next === 0 ? "회복 시간 도달 · 갱신 대기" : `다음 1% 회복까지 약 ${formatSpan(next)}`);
+      const next = Math.max(0, duration - (receivedAt === null ? 0 : Math.max(0, now - receivedAt) / 1000));
+      if (next === 0) parts.push("회복 시간 도달 · 갱신 대기");
+      // With one percent missing, the next percent is the full battery: say it once.
+      else if (missing === 1) parts.push(`가득 차기까지 약 ${formatSpan(next)}`);
+      else parts.push(`다음 1% 회복까지 약 ${formatSpan(next)}`);
+      if (missing > 1) parts.push(`가득 차기까지 약 ${formatSpan(toFull(next))}`);
     } else if (track.risenAt !== null) {
       const elapsed = Math.max(0, now - track.risenAt) / 1000;
-      next = duration - (elapsed % duration);
-      parts.push(`다음 1% 회복까지 약 ${formatSpan(next)}`);
+      const next = duration - (elapsed % duration);
+      if (missing !== 1) parts.push(`다음 1% 회복까지 약 ${formatSpan(next)}`);
+      if (missing > 0) parts.push(`가득 차기까지 약 ${formatSpan(toFull(next))}`);
     } else {
-      parts.push(`1% 회복에 약 ${formatSpan(duration)}`);
+      // Only the rate is known, so the full battery is at most `missing` intervals away.
+      if (missing !== 1) parts.push(`1% 회복에 약 ${formatSpan(duration)}`);
+      if (missing > 0) parts.push(`가득 차기까지 최대 약 ${formatSpan(toFull(duration))}`);
     }
-    // Whole percents still missing after the next one, each taking one interval.
-    if (usage.isNegative !== true && typeof usage.percent === "number") {
-      const missing = Math.ceil(100 - usage.percent);
-      if (missing > 0) {
-        const toFull = (next ?? duration) + (missing - 1) * duration;
-        if (toFull > 0) parts.push(`가득 차기까지 약 ${formatSpan(toFull)}`);
-      }
-    }
+    const perDay = formatDailyRate(duration);
+    if (perDay) parts.push(perDay);
   }
   return parts.length ? parts.join(" · ") : null;
+}
+
+/** The implied daily recovery ("하루 약 11%" for 7888 s per percent); omitted above 100 %/day. */
+function formatDailyRate(secondsPerPercent: number) {
+  const perDay = 86_400 / secondsPerPercent;
+  if (perDay > 100) return null;
+  return `하루 약 ${perDay >= 10 ? Math.round(perDay) : Math.round(perDay * 10) / 10}%`;
 }
 
 function formatSpan(seconds: number) {

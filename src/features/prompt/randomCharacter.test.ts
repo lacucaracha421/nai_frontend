@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyRandomCharacter, characterIdentity, pickRandomCharacter, randomCharacterPool } from "./randomCharacter";
+import { applyRandomCharacter, characterIdentity, pickRandomCharacter, randomCharacterPool, randomPickLabel } from "./randomCharacter";
 import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 import type { GenerationDraft } from "../../adapters/novelai/types";
 
@@ -104,4 +104,15 @@ it("resolves a character from the prompt before the UI's debounced label has upd
   ]);
   const source = { ...draft, characters: [{ ...draft.characters[0], name: "old", prompt: "new_name, waving" }] };
   expect((await applyRandomCharacter(source, library[2])).characters[0].prompt).toBe("nina, waving");
+});
+
+describe("random pick label", () => {
+  it("names the character without repeating its series", () => {
+    expect(randomPickLabel({ display: "nina (girls band cry)", series: "girls band cry" })).toEqual({ name: "nina", series: "girls band cry" });
+    expect(randomPickLabel({ display: "iseri_nina_\\(girls_band_cry\\)", series: "Girls Band Cry" })).toEqual({ name: "iseri nina", series: "Girls Band Cry" });
+  });
+  it("keeps names whose brackets are not the series and hides the uncategorized folder", () => {
+    expect(randomPickLabel({ display: "saber (fate)", series: "fate/stay night" })).toEqual({ name: "saber (fate)", series: "fate/stay night" });
+    expect(randomPickLabel({ display: "rupa", series: "미분류" })).toEqual({ name: "rupa", series: "" });
+  });
 });
