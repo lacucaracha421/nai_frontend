@@ -104,14 +104,32 @@ export function formatUsageHint(
     const perDay = formatDailyRate(duration);
     if (perDay) parts.push(perDay);
   }
+  const images = estimateImages(usage);
+  if (images !== null) parts.unshift(`약 ${images.toLocaleString("ko-KR")}장 분량`);
   return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Images the user observed NovelAI refilling per day (2026-09-26: "하루에 190장"), at the
+ * rate the S11 reported then (7888 s per percent, about 10.95 % a day). One percent is
+ * therefore about 17 standard images; the estimate scales with the reported rate.
+ */
+export const DAILY_IMAGES_OBSERVED = 190;
+const OBSERVED_SECONDS_PER_PERCENT = 7888;
+
+/** Rough number of standard images the current usage percentage allows, or `null`. */
+export function estimateImages(usage: NovelAiUsage) {
+  if (usage.isNegative === true || typeof usage.percent !== "number" || usage.percent <= 0) return null;
+  const perPercent = DAILY_IMAGES_OBSERVED / (86_400 / OBSERVED_SECONDS_PER_PERCENT);
+  return Math.round((usage.percent * perPercent) / 10) * 10;
 }
 
 /** The implied daily recovery ("하루 약 11%" for 7888 s per percent); omitted above 100 %/day. */
 function formatDailyRate(secondsPerPercent: number) {
   const perDay = 86_400 / secondsPerPercent;
   if (perDay > 100) return null;
-  return `하루 약 ${perDay >= 10 ? Math.round(perDay) : Math.round(perDay * 10) / 10}%`;
+  const images = Math.round((perDay * DAILY_IMAGES_OBSERVED) / (86_400 / OBSERVED_SECONDS_PER_PERCENT) / 10) * 10;
+  return `하루 약 ${perDay >= 10 ? Math.round(perDay) : Math.round(perDay * 10) / 10}%(${images}장)`;
 }
 
 function formatSpan(seconds: number) {

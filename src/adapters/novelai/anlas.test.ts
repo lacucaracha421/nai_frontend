@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateAnlas, formatAnlasCost, formatUsageHint, formatUsageLabel, UPSCALE_ANLAS } from "./anlas";
+import { estimateAnlas, formatAnlasCost, formatUsageHint, estimateImages, formatUsageLabel, UPSCALE_ANLAS } from "./anlas";
 import type { NovelAiQuota } from "./client";
 
 const opus = (usage: NovelAiQuota["usage"]): NovelAiQuota => ({
@@ -50,15 +50,24 @@ describe("usage limit display", () => {
   it("shows no recovery countdown when the battery is full", () => {
     const full = { percent: 100, isNegative: false, timeUntilNextPercent: 7920 };
     expect(formatUsageLabel(full)).toBe("사용 한도 100%");
-    expect(formatUsageHint(full)).toBeNull();
+    expect(formatUsageHint(full)).toBe("약 1,730장 분량");
   });
 
   it("tolerates missing fields and flags a negative battery", () => {
     expect(formatUsageLabel(null)).toBeNull();
     expect(formatUsageLabel({ percent: null, isNegative: null, timeUntilNextPercent: null })).toBeNull();
-    expect(formatUsageHint({ percent: 50, isNegative: null, timeUntilNextPercent: null })).toBeNull();
+    expect(formatUsageHint({ percent: 50, isNegative: null, timeUntilNextPercent: null })).toBe("약 870장 분량");
     const negative = { percent: 0, isNegative: true, timeUntilNextPercent: 90 };
     expect(formatUsageLabel(negative)).toBe("사용 한도 초과");
     expect(formatUsageHint(negative)).toBe("V5 사용 한도를 넘어 생성마다 Anlas가 차감됩니다 · 다음 1% 회복까지 약 2분");
+  });
+});
+
+describe("image estimate", () => {
+  it("turns the usage percentage into standard images at the observed 190 a day", () => {
+    expect(estimateImages({ percent: 99, isNegative: false, timeUntilNextPercent: 7888 })).toBe(1720);
+    expect(estimateImages({ percent: 0, isNegative: false, timeUntilNextPercent: 7888 })).toBeNull();
+    expect(estimateImages({ percent: 40, isNegative: true, timeUntilNextPercent: 7888 })).toBeNull();
+    expect(formatUsageHint({ percent: 50, isNegative: false, timeUntilNextPercent: 7888 })).toContain("하루 약 11%(190장)");
   });
 });
