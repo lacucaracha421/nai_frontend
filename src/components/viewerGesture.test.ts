@@ -173,4 +173,19 @@ describe("viewer tracker: tapping a zoomed image (NAI-011)", () => {
     tracker.move(at(3, 405, 500, 2100), geometry);
     expect(tracker.end(at(3, 405, 500, 2150), geometry)).toBe("close");
   });
+
+  it("fits a panned, zoomed image on a tap at its left edge, then the next tap closes", () => {
+    const tracker = new ViewerGestureTracker();
+    zoomIn(tracker);
+    // Pan so the image's left part is on screen, then tap near the left edge.
+    tracker.down(at(1, 200, 500, 1000, true), geometry);
+    tracker.move(at(1, 600, 500, 1100), geometry);
+    expect(tracker.end(at(1, 600, 500, 1150), geometry)).toBe("none");
+    expect(isZoomed(tracker.transform)).toBe(true);
+    tracker.down(at(1, 8, 500, 2000, true), geometry);
+    expect(tracker.end(at(1, 9, 501, 2090), geometry)).toBe("fit");
+    expect(tracker.transform).toEqual(FIT);
+    tracker.down(at(1, 8, 500, 2400, true), geometry);
+    expect(tracker.end(at(1, 8, 500, 2480), geometry)).toBe("close");
+  });
 });

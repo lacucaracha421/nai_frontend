@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { GenerationImage } from "../types/generation";
+import { swallowGhostClicks } from "./ghostClick";
 import { Icon } from "./Icon";
 import { FIT, ViewerGestureTracker, fittedSize, type PointerSample, type Transform } from "./viewerGesture";
 
@@ -89,7 +90,12 @@ export function ImageViewer({
   const pointerEnd = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
     const action = tracker.end(sample(event), geometry(), cancelled);
     sync();
-    if (action === "close") onClose();
+    if (action === "close") {
+      // The browser's click for this tap arrives after pointerup and would land on the
+      // screen revealed underneath (태그사전, or the thumbnail that reopens the viewer).
+      swallowGhostClicks();
+      onClose();
+    }
     if (action === "next" || action === "previous") {
       onIndex(Math.max(0, Math.min(images.length - 1, index + (action === "next" ? 1 : -1))));
     }
