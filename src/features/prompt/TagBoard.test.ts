@@ -61,3 +61,22 @@ describe("board-only reveal of the input or selected chip", async () => {
     expect(revealScrollTop({ ...view, anchorTop: 200, anchorHeight: 600 })).toBe(300 + 200 - REVEAL_MARGIN);
   });
 });
+
+describe("section switch while editing", async () => {
+  const { initialDraft, switchCarriesEditing } = await import("./TagBoard");
+
+  it("carries editing over only while editing with the keyboard up", () => {
+    expect(switchCarriesEditing({ editing: true, keyboard: true })).toBe(true);
+    // Keyboard hidden with Back, or not editing: the switch behaves as before.
+    expect(switchCarriesEditing({ editing: true, keyboard: false })).toBe(false);
+    expect(switchCarriesEditing({ editing: false, keyboard: true })).toBe(false);
+    expect(switchCarriesEditing({ editing: false, keyboard: false })).toBe(false);
+  });
+
+  it("mounts the next board with a new-tag input at the end", () => {
+    expect(initialDraft(true, "a, b, 1.2::c, d ::")).toEqual({ mode: "new", at: 3, text: "" });
+    expect(initialDraft(true, "")).toEqual({ mode: "new", at: 0, text: "" });
+    expect(initialDraft(false, "a, b")).toBeNull();
+    expect(initialDraft(undefined, "a, b")).toBeNull();
+  });
+});

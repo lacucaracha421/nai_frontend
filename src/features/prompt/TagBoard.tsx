@@ -55,6 +55,12 @@ type Props = {
   renderTools: (tools: TagBoardTools) => ReactNode;
   /** Editing mode: true while a tag input is open (it drives the compact layout, not the keyboard). */
   onEditingChange?: (editing: boolean) => void;
+  /**
+   * Mount with the new-tag input already open and focused (read on mount only). Used when a
+   * section switch carries editing over, so focus moves within the same tap and Android
+   * keeps the keyboard up.
+   */
+  startEditing?: boolean;
 };
 
 type Anchor = { top: number; left: number; arrow: number };
@@ -105,6 +111,20 @@ export function revealScrollTop(input: {
   return Math.max(0, scrollTop + delta);
 }
 
+/**
+ * Whether switching section (tab, 품질/제외, character) keeps editing in the new section:
+ * only while a tag is being edited with the keyboard up. Otherwise the switch behaves as
+ * before (the input's blur commits it and the keyboard closes).
+ */
+export function switchCarriesEditing(state: { editing: boolean; keyboard: boolean }) {
+  return state.editing && state.keyboard;
+}
+
+/** First draft of a board: a new-tag input at the end when editing is carried over. */
+export function initialDraft(startEditing: boolean | undefined, value: string): Draft | null {
+  return startEditing ? { mode: "new", at: tagCount(value), text: "" } : null;
+}
+
 /** Whether a pointerdown target is outside the bubble, the chips and selection tools. */
 export function closesBubble(target: { closest: (selector: string) => unknown } | null) {
   return !target || !target.closest(KEEPS_BUBBLE);
@@ -129,11 +149,12 @@ export function TagBoard({
   header,
   renderTools,
   onEditingChange,
+  startEditing,
 }: Props) {
   const tags = useMemo(() => splitTags(value), [value]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [draft, setDraftState] = useState<Draft | null>(null);
-  const draftRef = useRef<Draft | null>(null);
+  const [draft, setDraftState] = useState<Draft | null>(() => initialDraft(startEditing, value));
+  const draftRef = useRef<Draft | null>(draft);
   const [armed, setArmed] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [bubble, setBubble] = useState<Anchor | null>(null);

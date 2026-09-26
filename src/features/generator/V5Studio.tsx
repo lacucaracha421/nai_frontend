@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useCharacterLibraryStore, type CharacterLibraryEntry } from "../../stores/characterLibraryStore";
@@ -12,7 +12,7 @@ import { CharacterSheet } from "../prompt/CharacterSheet";
 import { CharacterLibrarySheet } from "../prompt/CharacterLibrarySheet";
 import { CharacterStageOverlay } from "../prompt/CharacterStageOverlay";
 import { RawPromptSheet } from "../prompt/RawPromptSheet";
-import { TagBoard, type TagBoardTools } from "../prompt/TagBoard";
+import { TagBoard, switchCarriesEditing, type TagBoardTools } from "../prompt/TagBoard";
 import { formatTagDiff, promptTagDiff, splitTags, type TagDiff } from "../prompt/tagChips";
 import { copyWholePrompt } from "../prompt/promptClipboard";
 import { chooseCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
@@ -221,6 +221,31 @@ export function V5Studio() {
   // Leaving waits for the tap to end so the layout never moves under a finger.
   const [boardEditing, setBoardEditing] = useState(false);
   const typing = useSettledFlag(boardEditing);
+  // Section switch with the keyboard up keeps editing: the tab's pointerdown keeps focus in
+  // the input (no blur, so the IME stays), the click commits the typed tag, switches and
+  // mounts the next board with its input focused — all in the same tap. `carryEditing` is
+  // true only for the render that mounts that board.
+  const boardTools = useRef<TagBoardTools | null>(null);
+  const carryTap = useRef(false);
+  const carryEditing = useRef(false);
+  const startEditingOnMount = carryEditing.current;
+  useLayoutEffect(() => {
+    carryEditing.current = false;
+  });
+  const switchPointerDown = (event: { preventDefault: () => void }) => {
+    carryTap.current = switchCarriesEditing({ editing: boardEditing, keyboard: viewport.keyboard });
+    if (carryTap.current) event.preventDefault();
+  };
+  const switchSection = (change: () => void) => {
+    if (!carryTap.current) {
+      change();
+      return;
+    }
+    carryTap.current = false;
+    boardTools.current?.flush();
+    carryEditing.current = true;
+    flushSync(change);
+  };
   // User-chosen editor size (session only): swipe up/down on the editor or its handle.
   const [expanded, setExpanded] = useState(false);
   const compactHeader = typing || expanded;
@@ -572,7 +597,8 @@ export function V5Studio() {
             key={item.key}
             aria-selected={tab === item.key}
             className={tab === item.key ? "active" : ""}
-            onClick={() => setTab(item.key)}
+            onPointerDown={switchPointerDown}
+            onClick={() => switchSection(() => setTab(item.key))}
           >
             {item.dot && <span className={`tag-dot ${item.dot}`} />}
             {item.label}
@@ -591,7 +617,8 @@ export function V5Studio() {
             type="button"
             key={character.id}
             className={`${activeCharacter?.id === character.id ? "active" : ""} ${character.enabled ? "" : "disabled"}`}
-            onClick={() => setCharacterId(character.id)}
+            onPointerDown={switchPointerDown}
+            onClick={() => switchSection(() => setCharacterId(character.id))}
           >
             <span className="b2-character-index">{index + 1}</span>
             {character.name || `캐릭터 ${index + 1}`}
@@ -635,10 +662,10 @@ export function V5Studio() {
       )}
       {tab === "fixed" && (
         <div className="b2-fixed-switch" role="tablist" aria-label="품질 또는 제외">
-          <button type="button" role="tab" aria-selected={fixedPart === "quality"} className={fixedPart === "quality" ? "active" : ""} onClick={() => setFixedPart("quality")}>
+          <button type="button" role="tab" aria-selected={fixedPart === "quality"} className={fixedPart === "quality" ? "active" : ""} onPointerDown={switchPointerDown} onClick={() => switchSection(() => setFixedPart("quality"))}>
             품질 <small>{splitTags(quality).length}</small>
           </button>
-          <button type="button" role="tab" aria-selected={fixedPart === "negative"} className={fixedPart === "negative" ? "active" : ""} onClick={() => setFixedPart("negative")}>
+          <button type="button" role="tab" aria-selected={fixedPart === "negative"} className={fixedPart === "negative" ? "active" : ""} onPointerDown={switchPointerDown} onClick={() => switchSection(() => setFixedPart("negative"))}>
             제외 <small>{splitTags(negative).length}</small>
           </button>
         </div>
@@ -943,8 +970,12 @@ export function V5Studio() {
             if (tag.category === "character" && activeCharacter) updateCharacter(activeCharacter.id, { name: tag.display });
           }}
           header={boardHeader}
-          renderTools={renderTools}
+          renderTools={(tools) => {
+            boardTools.current = tools;
+            return renderTools(tools);
+          }}
           onEditingChange={setBoardEditing}
+          startEditing={startEditingOnMount}
         />
       </section>
 
