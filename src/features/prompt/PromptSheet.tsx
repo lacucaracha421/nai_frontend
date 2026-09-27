@@ -63,12 +63,10 @@ export function PromptSheet({
   section,
   onClose,
   onDictionary,
-  onPrombot,
 }: {
   section: PromptSectionKey;
   onClose: () => void;
   onDictionary: (section: PromptSectionKey) => void;
-  onPrombot: (section: PromptSectionKey) => void;
 }) {
   const touchY = useRef<number | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
@@ -171,7 +169,6 @@ export function PromptSheet({
         <button onPointerDown={(event) => { event.preventDefault(); weight(-0.1); }}>−0.1</button>
         <button onPointerDown={(event) => { event.preventDefault(); weight(0.1); }}>+0.1</button>
         <button onClick={() => onDictionary(section)}>태그사전</button>
-        <button onClick={() => onPrombot(section)}>Prombot</button>
         {copyAllSections.has(section) && (
           <button
             type="button"

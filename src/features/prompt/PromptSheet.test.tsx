@@ -9,7 +9,7 @@ vi.mock("../../stores/generationStore", () => ({
 vi.mock("../tags/AutocompleteTextarea", () => ({ AutocompleteTextarea: () => null }));
 
 const render = (section: "artist" | "other" | "quality" | "negative") => renderToStaticMarkup(
-  <PromptSheet section={section} onClose={() => {}} onDictionary={() => {}} onPrombot={() => {}} />,
+  <PromptSheet section={section} onClose={() => {}} onDictionary={() => {}} />,
 );
 
 describe("Whole-copy control", () => {

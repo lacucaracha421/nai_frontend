@@ -1,3 +1,4 @@
+import { splitTags } from "./tagChips";
 import { searchLocalTags, type LocalTag } from "../tags/localTagIndex";
 
 export function normalizedCharacterTag(value: string) {
@@ -7,6 +8,15 @@ export function normalizedCharacterTag(value: string) {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** A current catalog identity may be newer than the autocomplete database. */
+export function containsCharacterTag(prompt: string, name: string) {
+  const target = normalizedCharacterTag(name);
+  return !!target && splitTags(prompt).some(value => {
+    const plain = value.replace(/^(?:[+-]?(?:\d+(?:\.\d+)?)\s*::\s*)?[{\[]*/, "").replace(/[}\]]*(?:\s*::)?$/, "");
+    return normalizedCharacterTag(plain) === target;
+  });
 }
 
 function promptTerms(prompt: string) {
@@ -39,7 +49,7 @@ export function chooseCharacterTag(prompt: string, previousName: string, tag: st
   const previousKey = normalizedCharacterTag(previousName);
   const tagKey = normalizedCharacterTag(tag);
   let replaced = false;
-  const blocks = prompt.split(/[,\n]/).map((value) => value.trim()).filter(Boolean).flatMap((value) => {
+  const blocks = splitTags(prompt).map((value) => value.trim()).filter(Boolean).flatMap((value) => {
     // Numeric emphasis and brace emphasis belong to the tag being replaced.
     const match = value.match(/^((?:[+-]?(?:\d+(?:\.\d+)?)\s*::\s*)?[{\[]*)(.*?)([}\]]*(?:\s*::)?)$/)!;
     const key = normalizedCharacterTag(match[2]);

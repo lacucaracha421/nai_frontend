@@ -153,8 +153,8 @@ export const useGenerationStore = create<State>()(
         set((state) => ({ characters: state.characters.map((character) => character.id === id ? { ...character, ...patch } : character) })),
       setUseCharacterCoords: (useCharacterCoords) => set({ useCharacterCoords }),
       setRandomCharacterEnabled: (randomCharacterEnabled) => {
-        if (randomCharacterEnabled && !randomCharacterPool(useCharacterLibraryStore.getState().entries).length) {
-          set({ errorMessage: "Prombot 북마크를 먼저 가져오시와요." });
+        if (randomCharacterEnabled && !randomCharacterPool(useCharacterLibraryStore.getState().entries, useCharacterLibraryStore.getState()).length) {
+          set({ errorMessage: "내 도감에 캐릭터를 저장하고 랜덤 범위를 골라 주세요." });
           return;
         }
         set({ randomCharacterEnabled });
@@ -207,9 +207,9 @@ export const useGenerationStore = create<State>()(
           let effective = snapshot;
           let randomCharacter: RandomCharacterPick | null = null;
           if (snapshot.randomCharacterEnabled) {
-            const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries);
-            if (!picked) throw new Error("Prombot 북마크를 먼저 가져온 뒤 랜덤 캐릭터를 켜주시와요.");
-            effective = await applyRandomCharacter(snapshot, picked) as State;
+            const picked = pickRandomCharacter(useCharacterLibraryStore.getState().entries, Math.random, useCharacterLibraryStore.getState());
+            if (!picked) throw new Error("내 도감과 랜덤 범위를 확인해 주세요.");
+            effective = await applyRandomCharacter(snapshot, picked, useCharacterLibraryStore.getState().randomInsertMode) as State;
             randomCharacter = toRandomPick(picked);
           }
           const request = buildNovelAiRequest(effective);

@@ -7,8 +7,8 @@ vi.mock("../tags/localTagIndex", () => ({ searchLocalTags: vi.fn(async () => [])
 
 const library: CharacterLibraryEntry[] = [
   { raw: "manual", display: "manual", series: "x", addedAt: 1 },
-  { raw: "rupa", display: "rupa", series: "gbc", addedAt: 2, prombotFavorite: true },
-  { raw: "nina", display: "nina", series: "gbc", addedAt: 3, prombotFavorite: true },
+  { raw: "rupa", display: "rupa", series: "gbc", addedAt: 2 },
+  { raw: "nina", display: "nina", series: "gbc", addedAt: 3 },
 ];
 
 const draft: GenerationDraft = {
@@ -29,37 +29,39 @@ const draft: GenerationDraft = {
 };
 
 describe("random character generation", () => {
-  it("draws only from Prombot-imported favorites", () => {
-    expect(pickRandomCharacter(library, () => 0)?.raw).toBe("rupa");
+  it("draws from the whole library by default", () => {
+    expect(pickRandomCharacter(library, () => 0)?.raw).toBe("manual");
     expect(pickRandomCharacter(library, () => 0.99)?.raw).toBe("nina");
   });
 
   it("counts and draws each bookmarked character once (NAI-011: 378명 vs. far fewer)", () => {
-    const entry = (raw: string, prombotFavorite?: boolean): CharacterLibraryEntry => ({
-      raw, display: raw.replace(/_/g, " "), series: "s", addedAt: 1, prombotFavorite,
+    const entry = (raw: string): CharacterLibraryEntry => ({
+      raw, display: raw.replace(/_/g, " "), series: "s", addedAt: 1,
     });
     const entries = [
-      entry("rupa_(girls_band_cry)", true),
-      entry("rupa (girls band cry)", true),
-      entry("Rupa_\\(girls_band_cry\\)", true),
-      entry('"tharja_(""normal_girl"")_(fire_emblem)"', true),
-      entry('tharja_("normal_girl")_(fire_emblem)', true),
-      entry("nina_iseri", true),
+      entry("rupa_(girls_band_cry)"),
+      entry("rupa (girls band cry)"),
+      entry("Rupa_\\(girls_band_cry\\)"),
+      entry('"tharja_(""normal_girl"")_(fire_emblem)"'),
+      entry('tharja_("normal_girl")_(fire_emblem)'),
+      entry("nina_iseri"),
       entry("manual_only"),
-      entry("unstarred", false),
+      entry("unstarred"),
     ];
     const pool = randomCharacterPool(entries);
     expect(pool.map((item) => item.raw)).toEqual([
       "rupa_(girls_band_cry)",
       '"tharja_(""normal_girl"")_(fire_emblem)"',
       "nina_iseri",
+      "manual_only",
+      "unstarred",
     ]);
     expect(characterIdentity(entries[3])).toBe(characterIdentity(entries[4]));
     // Every draw lands inside the counted pool, and every pooled character can be drawn.
     const drawn = new Set(Array.from({ length: pool.length }, (_, i) =>
       pickRandomCharacter(entries, () => (i + 0.5) / pool.length)?.raw));
     expect(drawn).toEqual(new Set(pool.map((item) => item.raw)));
-    expect(randomCharacterPool(entries.filter((item) => !item.prombotFavorite))).toEqual([]);
+    expect(randomCharacterPool(entries, { randomScope: "series", randomSeries: [] })).toEqual([]);
   });
 
   it("replaces only the structured character for the request and preserves its slot settings", async () => {
@@ -116,3 +118,23 @@ describe("random pick label", () => {
     expect(randomPickLabel({ display: "rupa", series: "미분류" })).toEqual({ name: "rupa", series: "" });
   });
 });
+
+it("limits the pool to selected folders and includes future bookmarks in those folders", () => {
+  const scope = { randomScope: "series" as const, randomSeries: ["gbc"] };
+  expect(randomCharacterPool(library, scope).map(e => e.raw)).toEqual(["rupa", "nina"]);
+  expect(pickRandomCharacter(library, () => 0, scope)?.raw).toBe("rupa");
+  expect(randomCharacterPool([...library, { raw: "new", display: "new", series: "gbc", addedAt: 4 }], scope)).toHaveLength(3);
+});
+
+it("uses catalog appearance for random mode, with name-only fallback for new and manual entries", async () => {
+  const { loadCharacterCatalog } = await import("./characterCatalogClient");
+  vi.mocked(loadCharacterCatalog).mockResolvedValue([
+    { raw: "nina", display: "nina", series: "gbc", features: ["brown hair"], attire: ["uniform"], isNew: false, posts: 0 },
+  ]);
+  const next = await applyRandomCharacter(draft, library[2], "features");
+  expect(next.characters[0].prompt).toBe("nina, red dress, brown hair");
+  expect(next.characters[0].prompt).not.toContain("uniform");
+  const fallback = await applyRandomCharacter(draft, library[0], "features");
+  expect(fallback.characters[0].prompt).toBe("manual, red dress");
+});
+vi.mock("./characterCatalogClient", () => ({ loadCharacterCatalog: vi.fn(async () => []) }));

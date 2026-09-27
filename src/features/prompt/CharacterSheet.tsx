@@ -1,15 +1,9 @@
+import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { useEffect, useState } from "react";
 import { useGenerationStore } from "../../stores/generationStore";
 import { useTagStore } from "../../stores/tagStore";
 import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
-import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
-import { AutocompleteTextarea } from "../tags/AutocompleteTextarea";
 import { favoriteLocalTags } from "../tags/localTagIndex";
-import { PrombotSheet } from "../tags/PrombotSheet";
-import { chooseCharacterTag } from "./characterTag";
-import { CharacterLibrarySheet } from "./CharacterLibrarySheet";
-import { useBackLayer } from "../../app/backStack";
-import type { CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
 type Props = {
   onClose: () => void;
@@ -29,11 +23,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
   const legacyMigrated = useCharacterLibraryStore((s) => s.legacyFavoritesMigrated);
   const finishLegacyMigration = useCharacterLibraryStore((s) => s.finishLegacyMigration);
   const [selected, setSelected] = useState<string | null>(characters[0]?.id ?? null);
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [prombotOpen, setPrombotOpen] = useState(false);
   const active = characters.find((character) => character.id === selected) ?? characters[0];
-  useBackLayer(libraryOpen, () => setLibraryOpen(false));
-  useBackLayer(prombotOpen, () => setPrombotOpen(false));
 
   useEffect(() => {
     if (legacyMigrated) return;
@@ -47,44 +37,13 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
     return () => { cancelled = true; };
   }, [favorites, legacyMigrated, addManyToLibrary, removeFavorites, finishLegacyMigration]);
 
-  const insertFromPrombot = (text: string) => {
-    if (!active) return;
-    const clean = text.trim();
-    if (!clean) return;
-    usePromptHistoryStore.getState().checkpoint(`character:${active.id}:prompt`, {
-      value: active.prompt,
-      selectionStart: active.prompt.length,
-      selectionEnd: active.prompt.length,
-      activeIndex: active.prompt.split(/[,\n]/).filter((value) => value.trim()).length,
-    });
-    const prompt = active.prompt.trim()
-      ? `${active.prompt.trim().replace(/,\s*$/, "")}, ${clean}`
-      : clean;
-    update(active.id, { prompt });
-  };
-
-  const selectFromLibrary = (entry: CharacterLibraryEntry) => {
-    if (!active) return;
-    usePromptHistoryStore.getState().checkpoint(`character:${active.id}:prompt`, {
-      value: active.prompt,
-      selectionStart: active.prompt.length,
-      selectionEnd: active.prompt.length,
-      activeIndex: active.prompt.split(/[,\n]/).filter((value) => value.trim()).length,
-    });
-    update(active.id, {
-      name: entry.display,
-      prompt: chooseCharacterTag(active.prompt, active.name, entry.display),
-    });
-    setLibraryOpen(false);
-  };
-
   return (
     <>
       <div className="sheet character-sheet">
         <div className="sheet-head">
           <div className="drag-handle" />
-          <div><h2>캐릭터 설정</h2></div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 설정 닫기">↓</button>
+          <div><h2>캐릭터 관리</h2></div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="캐릭터 관리 닫기">↓</button>
         </div>
 
         <div className="character-sheet-body">
@@ -119,7 +78,7 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
                 const next = useGenerationStore.getState().characters;
                 setSelected(next[next.length - 1]?.id ?? null);
               });
-            }}>＋</button>
+            }}>＋ 캐릭터 추가</button>
           </div>
 
           {active && (
@@ -127,55 +86,28 @@ export function CharacterSheet({ onClose, onPlaceOnImage }: Props) {
               <div className="character-editor-head">
                 <label><input type="checkbox" checked={active.enabled} onChange={(event) => update(active.id, { enabled: event.target.checked })} /> 사용</label>
                 <div>
-                  <button type="button" className="character-library-launch" onClick={() => setLibraryOpen(true)}>태그사전 · 캐릭터 도감</button>
-                  <button type="button" className="character-library-launch" onClick={() => setPrombotOpen(true)}>Prombot</button>
                   {characters.length > 1 && <button className="danger-ghost" onClick={() => {
                     remove(active.id);
                     setSelected(characters.find((character) => character.id !== active.id)?.id ?? null);
                   }}>삭제</button>}
                 </div>
               </div>
-
-              <label className="field-label">캐릭터 태그</label>
-              <input
-                className="plain-tag-input"
-                value={active.name}
-                onChange={(event) => update(active.id, { name: event.target.value })}
-                placeholder="예: kaine"
-                autoComplete="off"
-                spellCheck={false}
-              />
-
-              <label className="field-label">캐릭터 프롬프트</label>
-              <AutocompleteTextarea
-                value={active.prompt}
-                onChange={(prompt) => update(active.id, { prompt })}
-                categories={["character", "general", "copyright", "meta"]}
-                historyKey={`character:${active.id}:prompt`}
-                rows={7}
-                placeholder="캐릭터 외형과 의상 태그"
-                onSelectTag={(tag) => {
-                  if (tag.category === "character") update(active.id, { name: tag.display });
-                }}
-              />
-
-              <details>
-                <summary>캐릭터 제외</summary>
+              <label className="character-negative">
+                <span>캐릭터 제외</span>
                 <AutocompleteTextarea
                   value={active.negative}
                   onChange={(negative) => update(active.id, { negative })}
                   categories={["general", "meta"]}
                   historyKey={`character:${active.id}:negative`}
-                  rows={4}
+                  rows={3}
                   placeholder="이 캐릭터에만 적용할 네거티브"
                 />
-              </details>
+              </label>
+              <p className="character-management-note">캐릭터 태그는 보드에서 고칩니다.</p>
             </section>
           )}
         </div>
       </div>
-      {libraryOpen && <CharacterLibrarySheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} />}
-      {prombotOpen && <PrombotSheet destination="character" onInsert={insertFromPrombot} onClose={() => setPrombotOpen(false)} />}
     </>
   );
 }

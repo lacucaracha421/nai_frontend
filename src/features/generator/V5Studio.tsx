@@ -2,23 +2,24 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal, flushSync } from "react-dom";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useGenerationStore } from "../../stores/generationStore";
-import { useCharacterLibraryStore, type CharacterLibraryEntry } from "../../stores/characterLibraryStore";
+import { useCharacterLibraryStore } from "../../stores/characterLibraryStore";
 import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useConnectionStore } from "../../stores/connectionStore";
-import type { GenerationImage, PromptSectionKey } from "../../types/generation";
+import type { CharacterPrompt, GenerationImage, PromptSectionKey } from "../../types/generation";
 import { joinPositivePrompt } from "../../adapters/novelai/buildRequest";
 import { CharacterSheet } from "../prompt/CharacterSheet";
-import { CharacterLibrarySheet } from "../prompt/CharacterLibrarySheet";
+import { CharacterFinderSheet, type FinderSelection } from "../prompt/CharacterFinderSheet";
+import { CharacterCatalogPrefetch } from "../prompt/CharacterCatalogPrefetch";
+import { insertCharacter } from "../prompt/characterCatalog";
 import { CharacterStageOverlay } from "../prompt/CharacterStageOverlay";
 import { RawPromptSheet } from "../prompt/RawPromptSheet";
 import { TagBoard, switchCarriesEditing, type TagBoardTools } from "../prompt/TagBoard";
 import { formatTagDiff, promptTagDiff, splitTags, type TagDiff } from "../prompt/tagChips";
 import { copyWholePrompt } from "../prompt/promptClipboard";
-import { chooseCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
-import { randomCharacterPool, randomPickLabel } from "../prompt/randomCharacter";
+import { chooseCharacterTag, containsCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
+import { randomCharacterPool, randomPickLabel, type RandomCharacterPick } from "../prompt/randomCharacter";
 import { QuickCopySheet } from "../tags/QuickCopySheet";
-import { PrombotSheet } from "../tags/PrombotSheet";
 import type { TagCategory } from "../tags/localTagIndex";
 import { SettingsSheet, type SettingsScope } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
@@ -28,7 +29,6 @@ import {
   UPSCALE_ANLAS,
   estimateAnlas,
   formatAnlasCost,
-  formatUsageHint,
   formatUsageLabel,
 } from "../../adapters/novelai/anlas";
 import { FinishSupersededError } from "./finish/finishProtocol";
@@ -116,6 +116,88 @@ function useHold(onTap: () => void, onHold: () => void) {
   };
 }
 
+export function promptToolbarLabels(typing: boolean, dictionaryLabel: string, sectionMenuLabel: string) {
+  const core = [dictionaryLabel, "번역", "되돌리기", "다시 실행", sectionMenuLabel];
+  return typing ? ["−0.1", "+0.1", ...core, "생성"] : core;
+}
+
+export function imageMenuLabels() {
+  return ["프롬프트 복사", "이 설정 불러오기", "파일에서 불러오기", "마무리 조절"];
+}
+
+export function promptMenuLabels() {
+  return ["전체 복사", "텍스트로 편집", "전체 지우기"];
+}
+
+type PromptToolbarProps = {
+  typing: boolean;
+  dictionaryLabel: string;
+  sectionMenuLabel: string;
+  tools: TagBoardTools;
+  onDictionary: () => void;
+  onMenu: () => void;
+  onGenerate: () => void;
+  generateLabel: string;
+  generateDisabled?: boolean;
+};
+
+export function PromptToolbar({
+  typing,
+  dictionaryLabel,
+  sectionMenuLabel,
+  tools,
+  onDictionary,
+  onMenu,
+  onGenerate,
+  generateLabel,
+  generateDisabled = false,
+}: PromptToolbarProps) {
+  const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
+  return (
+    <div className={`b2-tools ${typing ? "compact" : ""}`}>
+      {typing && (
+        <>
+          <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(-0.1)}>−0.1</button>
+          <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(0.1)}>+0.1</button>
+          <span className="b2-tools-divider" aria-hidden="true" />
+        </>
+      )}
+      <button type="button" onClick={onDictionary}>
+        <Icon name={dictionaryLabel === "캐릭터 찾기" ? "search" : "book"} />{dictionaryLabel}
+      </button>
+      <button type="button" data-keeps-selection disabled={!tools.canTranslate || tools.translating} onPointerDown={keepFocus} onClick={tools.translate}>
+        <Icon name="translate" />{tools.translating ? "번역 중…" : "번역"}
+      </button>
+      <button type="button" className="icon-only" aria-label="되돌리기" disabled={!tools.canUndo} onPointerDown={keepFocus} onClick={tools.undo}>
+        <Icon name="undo" />
+      </button>
+      <button type="button" className="icon-only" aria-label="다시 실행" disabled={!tools.canRedo} onPointerDown={keepFocus} onClick={tools.redo}>
+        <Icon name="redo" />
+      </button>
+      <span className="b2-tools-spacer" />
+      <button type="button" className="b2-section-menu" onClick={onMenu}>
+        <Icon name="more" />{sectionMenuLabel}
+      </button>
+      {typing && (
+        <button type="button" className="b2-generate-mini" disabled={generateDisabled} onPointerDown={keepFocus} onClick={onGenerate}>
+          {generateLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function RandomPickLine({ pick, onKeep }: { pick: RandomCharacterPick | undefined; onKeep: () => void }) {
+  if (!pick) return null;
+  const label = randomPickLabel(pick);
+  return (
+    <div className="b2-image-pick" aria-live="polite">
+      <span><span aria-hidden="true">🎲</span> <b>{label.name}</b>{label.series && ` · ${label.series}`}</span>
+      <button type="button" onClick={onKeep}>고정</button>
+    </div>
+  );
+}
+
 function PrivacyGlyph() {
   return (
     <div className="b2-privacy" aria-hidden="true">
@@ -161,8 +243,7 @@ export function V5Studio() {
   const setRandomCharacterEnabled = useGenerationStore((s) => s.setRandomCharacterEnabled);
   const keepRandomCharacter = useGenerationStore((s) => s.keepRandomCharacter);
   // Same pool the 🎲 draws from (deduplicated), so the number shown is the number drawn from.
-  const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries).length);
-  const prombotImportSummary = useCharacterLibraryStore((s) => s.prombotImportSummary);
+  const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries, s).length);
   const settings = useGenerationStore((s) => s.settings);
   const images = useGenerationStore((s) => s.images);
   const active = useGenerationStore((s) => s.activeImage);
@@ -183,8 +264,6 @@ export function V5Studio() {
   const showHints = useUiStore((s) => s.showHints);
   const connectionStatus = useConnectionStore((s) => s.status);
   const quota = useConnectionStore((s) => s.quota);
-  const quotaReceivedAt = useConnectionStore((s) => s.quotaReceivedAt);
-  const usageTrack = useConnectionStore((s) => s.usageTrack);
   const quotaStatus = useConnectionStore((s) => s.quotaStatus);
   const refreshQuota = useConnectionStore((s) => s.refreshQuota);
   const checkpoint = usePromptHistoryStore((s) => s.checkpoint);
@@ -195,13 +274,14 @@ export function V5Studio() {
   const [characterSheet, setCharacterSheet] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [quickCopy, setQuickCopy] = useState<PromptSectionKey | null>(null);
-  const [prombot, setPrombot] = useState<PromptSectionKey | "character" | null>(null);
+  const [finderAdd, setFinderAdd] = useState(false);
+  const [finderRandom, setFinderRandom] = useState(false);
   const [rawEditor, setRawEditor] = useState(false);
   const [settingsScope, setSettingsScope] = useState<SettingsScope | null>(null);
   // Full-screen viewer shows any session image without changing the current one.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const viewer = viewerIndex !== null;
-  const [menu, setMenu] = useState<"prompt" | "viewer" | null>(null);
+  const [menu, setMenu] = useState<"prompt" | "image" | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [placementId, setPlacementId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -285,7 +365,7 @@ export function V5Studio() {
           .find((item) => item.id === character.id);
         if (!current || current.prompt !== character.prompt) continue;
 
-        const nextName = detected?.display ?? "";
+        const nextName = containsCharacterTag(current.prompt, current.name) ? current.name : detected?.display ?? "";
         if (current.name !== nextName) updateCharacter(character.id, { name: nextName });
       }
     }, 220);
@@ -296,7 +376,8 @@ export function V5Studio() {
     };
   }, [characterPromptKey, updateCharacter]);
 
-  const quotaNow = useQuotaClock(connectionStatus === "connected", refreshQuota);
+  // Keeps the usage numbers fresh while connected.
+  useQuotaClock(connectionStatus === "connected", refreshQuota);
 
   useEffect(() => {
     if (connectionStatus === "connected" && status === "success") {
@@ -318,7 +399,6 @@ export function V5Studio() {
   const viewerPreviewUrl = previewUrlFor(viewed);
   const finishPending = finishEnabled && !!previewTarget && (finishBusy || !previewUrlFor(previewTarget)) && !finishError;
   const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
-  const usageHint = formatUsageHint(quota?.usage, quotaReceivedAt, quotaNow, usageTrack);
   const cost = connectionStatus === "connected" && quota
     ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota)
     : undefined;
@@ -370,8 +450,8 @@ export function V5Studio() {
 
   const toggleRandomCharacter = () => {
     if (!randomCharacterEnabled && !randomCharacterCount) {
-      showNotice("Prombot 북마크를 먼저 가져오시와요.", 2200);
-      setPrombot("character");
+      showNotice("내 도감과 랜덤 범위를 확인해 주세요.", 2200);
+      setFinderRandom(true); setFinderAdd(false); setLibraryOpen(true);
       return;
     }
     const next = !randomCharacterEnabled;
@@ -421,10 +501,10 @@ export function V5Studio() {
     }
   };
 
-  const copyViewedPrompt = async () => {
-    if (!viewed) return;
+  const copyImagePrompt = async (image: GenerationImage | undefined) => {
+    if (!image) return;
     try {
-      await navigator.clipboard.writeText(viewed.positivePrompt);
+      await navigator.clipboard.writeText(image.positivePrompt);
       showNotice("프롬프트를 복사했습니다");
     } catch {
       showNotice("복사하지 못했습니다");
@@ -460,30 +540,21 @@ export function V5Studio() {
     });
   };
 
-  const insertIntoCharacter = (text: string) => {
-    if (!activeCharacter) return;
-    const clean = text.trim();
-    if (!clean) return;
-    checkpointCharacter();
-    const prompt = activeCharacter.prompt.trim()
-      ? `${activeCharacter.prompt.trim().replace(/,\s*$/, "")}, ${clean}`
-      : clean;
-    updateCharacter(activeCharacter.id, { prompt });
-  };
-
-  const selectFromLibrary = (entry: CharacterLibraryEntry) => {
-    if (!activeCharacter) return;
-    checkpointCharacter();
-    updateCharacter(activeCharacter.id, {
-      name: entry.display,
-      prompt: chooseCharacterTag(activeCharacter.prompt, activeCharacter.name, entry.display),
-    });
+  const selectFromLibrary = ({ row, mode, removed, add }: FinderSelection) => {
+    let target: CharacterPrompt | undefined = activeCharacter;
+    if (add || !target) {
+      addCharacter();
+      target = useGenerationStore.getState().characters.at(-1);
+    } else checkpointCharacter();
+    if (!target) return;
+    updateCharacter(target.id, insertCharacter(target, row, mode, removed));
+    setCharacterId(target.id);
     setLibraryOpen(false);
   };
 
   const openDictionary = () => {
     if (section) setQuickCopy(section);
-    else setLibraryOpen(true);
+    else { setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true); }
   };
 
   const copySection = async () => {
@@ -515,15 +586,13 @@ export function V5Studio() {
     ? "연결 안 됨"
     : quotaStatus === "loading" && !quota
       ? "확인 중…"
-      : cost === 0
-        ? "무료 생성"
-        : overLimit
-          ? "한도 초과"
+      : overLimit
+        ? "한도 초과"
+        : usageLabel
+          ? usageLabel.replace("사용 ", "")
           : anlasText ?? "Anlas —";
-  const statusSecondary = [
-    usageLabel && !overLimit ? usageLabel.replace("사용 ", "") : null,
-    statusPrimary !== anlasText ? anlasText : null,
-  ].filter(Boolean).join(" · ");
+  // The pill shows only the usage percentage and the remaining Anlas (user, 2026-09-27).
+  const statusSecondary = statusPrimary !== anlasText ? anlasText ?? "" : "";
   const statusTone = connectionStatus !== "connected" ? "off" : cost === 0 ? "free" : overLimit ? "warn" : "paid";
   const costLine = busy || cost === undefined ? null : cost === 0 ? "무료 · 한도 내" : formatAnlasCost(cost);
 
@@ -547,13 +616,12 @@ export function V5Studio() {
     });
   };
 
-  const upscaleViewed = async () => {
-    if (viewerIndex === null) return;
+  const upscaleImage = async (index: number, openViewer: boolean) => {
     const before = useGenerationStore.getState().images.length;
-    await upscale(viewerIndex);
+    await upscale(index);
     const after = useGenerationStore.getState().images;
-    // Show the new upscaled copy in the viewer (it also becomes the current image, as before).
-    if (after.length > before && after[after.length - 1].kind === "upscale") setViewerIndex(after.length - 1);
+    // The upscaled copy becomes current in the store; the full-screen viewer also follows it.
+    if (openViewer && after.length > before && after[after.length - 1].kind === "upscale") setViewerIndex(after.length - 1);
   };
 
   const setViewer = (open: boolean) => setViewerIndex(open ? active : null);
@@ -638,9 +706,7 @@ export function V5Studio() {
           className="b2-character-add"
           aria-label="캐릭터 추가"
           onClick={() => {
-            addCharacter();
-            const next = useGenerationStore.getState().characters;
-            setCharacterId(next[next.length - 1]?.id ?? null);
+            setFinderAdd(true); setFinderRandom(false); setLibraryOpen(true);
           }}
         >
           <Icon name="plus" />
@@ -655,7 +721,7 @@ export function V5Studio() {
         <Icon name="dice" />랜덤{randomCharacterEnabled ? ` · ${randomCharacterCount}명` : ""}
       </button>
       <button type="button" className="b2-character-settings" onClick={() => setCharacterSheet(true)}>
-        <Icon name="sliders" />설정
+        <Icon name="sliders" />캐릭터 관리
       </button>
     </div>
   );
@@ -663,32 +729,10 @@ export function V5Studio() {
   const boardHeader = (
     <>
       {characterRow}
-      {tab === "character" && (randomCharacterEnabled || selectedPick) && (
-        <div className="b2-random-pick" aria-live="polite">
-          <span className="b2-random-pick-icon" aria-hidden="true"><Icon name="dice" /></span>
-          {selectedPick && selectedPickLabel ? (
-            <span className="b2-random-pick-text">
-              <small>{randomCharacterEnabled ? "지금 이미지 캐릭터" : "이 이미지는 🎲로 뽑은 캐릭터"}</small>
-              <strong>{selectedPickLabel.name}</strong>
-              {selectedPickLabel.series && <em>{selectedPickLabel.series}</em>}
-            </span>
-          ) : (
-            <span className="b2-random-pick-text">
-              <small>랜덤 캐릭터</small>
-              <strong>생성하면 뽑아서 여기 보여드려요</strong>
-            </span>
-          )}
-          {selectedPick && selectedPickLabel && (
-            <button type="button" onClick={() => void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정 · 랜덤 OFF`, 1800))}>
-              이 캐릭터로 고정
-            </button>
-          )}
-        </div>
-      )}
       {showHints && tab === "character" && randomCharacterEnabled && (
         <p className="b2-random-note">
-          🎲 생성할 때마다 첫 캐릭터의 캐릭터 태그만 북마크 {randomCharacterCount}명 중 하나로 바뀝니다 · 다시 뽑으려면 생성
-          {prombotImportSummary ? <><br />마지막 가져오기: {prombotImportSummary}</> : null}
+          🎲 생성할 때마다 첫 캐릭터를 도감 {randomCharacterCount}명 중 하나로 바뀝니다 · 다시 뽑으려면 생성
+          <button type="button" onClick={() => { setFinderRandom(true); setFinderAdd(false); setLibraryOpen(true); }}>범위 바꾸기</button>
         </p>
       )}
       {tab === "fixed" && (
@@ -720,33 +764,32 @@ export function V5Studio() {
     </>
   );
 
+  const [copyLabel, rawLabel, clearLabel] = promptMenuLabels();
   const promptMenuItems: MenuItem[] = [
-    { label: "Prombot", hint: `${sectionTitle}에 넣기`, onSelect: () => setPrombot(section ?? "character") },
-    { label: "전체 복사", hint: sectionTitle, disabled: !sectionValue, onSelect: () => void copySection() },
-    { label: "텍스트로 편집", hint: "쉼표·줄바꿈·부분 가중치까지 그대로", onSelect: () => setRawEditor(true) },
-    { label: loader.loading ? "읽는 중…" : "불러오기", hint: "이미지의 프롬프트·설정 적용", disabled: loader.loading, onSelect: loader.pick },
-    ...(tab === "character" ? [{ label: "캐릭터 설정", hint: "위치 · 사용 · 캐릭터 제외 · 삭제", onSelect: () => setCharacterSheet(true) }] : []),
-    { label: "전체 지우기", hint: `${sectionTitle} · 되돌리기로 복구`, danger: true, disabled: !sectionValue, onSelect: clearSection },
+    { label: copyLabel, hint: sectionTitle, disabled: !sectionValue, onSelect: () => void copySection() },
+    { label: rawLabel, hint: "쉼표·줄바꿈·부분 가중치까지 그대로", onSelect: () => setRawEditor(true) },
+    { label: clearLabel, hint: `${sectionTitle} · 되돌리기로 복구`, danger: true, disabled: !sectionValue, onSelect: clearSection },
   ];
 
-  const viewerMenuItems: MenuItem[] = [
-    { label: "프롬프트 복사", hint: "이 이미지의 기본 프롬프트", onSelect: () => void copyViewedPrompt() },
+  const imageMenuTarget = viewed ?? selected;
+  const [copyImageLabel, loadSettingsLabel, fileLoadLabel, finishMenuLabel] = imageMenuLabels();
+  const imageMenuItems: MenuItem[] = [
+    { label: copyImageLabel, hint: "이 이미지의 기본 프롬프트", disabled: !imageMenuTarget, onSelect: () => void copyImagePrompt(imageMenuTarget) },
     {
-      label: "이 설정 불러오기",
+      label: loadSettingsLabel,
       hint: "이 이미지의 프롬프트·캐릭터·설정 적용",
-      disabled: !viewed || loader.loading,
-      onSelect: () => { if (viewed) void loader.loadBytes(() => readImageBytes(viewed.src)); },
+      disabled: !imageMenuTarget || loader.loading,
+      onSelect: () => { if (imageMenuTarget) void loader.loadBytes(() => readImageBytes(imageMenuTarget.src)); },
     },
-    { label: "마무리 조절", hint: "프리셋 · 세부 조절", onSelect: () => setFinishOpen(true) },
+    { label: fileLoadLabel, hint: "다른 이미지 파일의 프롬프트·설정", disabled: loader.loading, onSelect: loader.pick },
+    { label: finishMenuLabel, hint: "프리셋 · 세부 조절", onSelect: () => setFinishOpen(true) },
   ];
 
   // Android Back closes the topmost of these (see app/backStack.ts).
   useBackLayer(menu !== null, () => setMenu(null));
   useBackLayer(settingsScope !== null, () => setSettingsScope(null));
   useBackLayer(quickCopy !== null, () => setQuickCopy(null));
-  useBackLayer(prombot !== null, () => setPrombot(null));
   useBackLayer(characterSheet, () => setCharacterSheet(false));
-  useBackLayer(libraryOpen, () => setLibraryOpen(false));
   useBackLayer(rawEditor, () => setRawEditor(false));
   useBackLayer(placementId !== null, () => setPlacementId(null));
   useBackLayer(finishOpen, () => setFinishOpen(false));
@@ -755,8 +798,15 @@ export function V5Studio() {
   useBackLayer(expanded, () => setExpanded(false));
 
   const finishHold = useHold(() => setFinishEnabled(!finishEnabled), () => setFinishOpen(true));
-  const seedFixed = !!viewed && viewed.seed !== null && settings.seed === viewed.seed;
-  const upscaleBlocked = !viewed || viewed.width * viewed.height > 1024 * 1024 || busy;
+  const seedFixedFor = (image: GenerationImage | undefined) => !!image && image.seed !== null && settings.seed === image.seed;
+  const upscaleBlockedFor = (image: GenerationImage | undefined) => !image || image.width * image.height > 1024 * 1024 || busy;
+
+  const toggleSeed = (image: GenerationImage | undefined) => {
+    if (!image || image.seed === null) return;
+    const fixed = seedFixedFor(image);
+    useSeed(fixed ? null : image.seed);
+    showNotice(fixed ? "Seed 랜덤으로 돌아갑니다" : `Seed ${image.seed} 고정`);
+  };
 
   const viewedPick = viewed?.randomCharacter ? randomPickLabel(viewed.randomCharacter) : null;
   const viewerMeta = viewed && (
@@ -771,53 +821,48 @@ export function V5Studio() {
     </>
   );
 
-  const viewerActions = viewed && (
-    <>
-      <button type="button" className={`viewer-save save-button ${saveState}`} disabled={saving} aria-live="polite" onClick={() => void saveImage(viewed)}>
-        {saveLabel}
-      </button>
-      <button type="button" className={`viewer-finish ${finishEnabled ? "active" : ""}`} aria-pressed={finishEnabled} {...finishHold}>
-        {finishPending ? <span className="finish-busy" aria-hidden="true" /> : <Icon name="sparkle" />}
-        마무리{finishEnabled ? (finishError ? " !" : " ON") : ""}
-      </button>
-      <button
-        type="button"
-        className={seedFixed ? "active" : ""}
-        aria-pressed={seedFixed}
-        disabled={viewed.seed === null}
-        onClick={() => {
-          if (seedFixed) {
-            useSeed(null);
-            showNotice("Seed 랜덤으로 돌아갑니다");
-          } else {
-            useSeed(viewed.seed);
-            showNotice(`Seed ${viewed.seed} 고정`);
-          }
-        }}
-      >
-        <Icon name="seed" />{seedFixed ? "Seed 고정됨" : "Seed"}
-      </button>
-      <button type="button" disabled={upscaleBlocked} onClick={() => void upscaleViewed()}>
-        <Icon name="upscale" />{status === "upscaling" ? "업스케일 중…" : "업스케일"} <small>{formatAnlasCost(UPSCALE_ANLAS)}</small>
-      </button>
-      <button type="button" className="viewer-more" aria-label="더 보기" onClick={() => setMenu("viewer")}><Icon name="more" /></button>
-    </>
-  );
+  const imageActionButtons = (image: GenerationImage | undefined, variant: "side" | "viewer") => {
+    const seedFixed = seedFixedFor(image);
+    const upscaleBlocked = upscaleBlockedFor(image);
+    const actionClass = variant === "viewer" ? "" : "b2-image-action";
+    const menuClass = variant === "viewer" ? "viewer-more" : "b2-image-menu";
+    return (
+      <>
+        <button type="button" className={`${variant === "viewer" ? "viewer-save" : "b2-save"} save-button ${saveState}`} disabled={!image || saving} aria-live="polite" onClick={() => void saveImage(image)}>
+          {saveLabel}
+        </button>
+        <button type="button" className={`${actionClass} ${variant === "viewer" ? "viewer-finish" : ""} ${finishEnabled ? "active" : ""}`} disabled={!image} aria-pressed={finishEnabled} {...finishHold}>
+          {finishPending ? <span className="finish-busy" aria-hidden="true" /> : <Icon name="sparkle" />}
+          마무리{finishEnabled ? (finishError ? " !" : " ON") : ""}
+        </button>
+        <button type="button" className={`${actionClass} ${seedFixed ? "active" : ""}`} aria-pressed={seedFixed} disabled={!image || image.seed === null} onClick={() => toggleSeed(image)}>
+          <Icon name="seed" />{seedFixed ? "Seed 고정됨" : "Seed"}
+        </button>
+        <button type="button" className={actionClass} disabled={upscaleBlocked} onClick={() => image && void upscaleImage(image === viewed ? (viewerIndex ?? active) : active, variant === "viewer")}>
+          <Icon name="upscale" />{status === "upscaling" ? "업스케일 중…" : "업스케일"} <small>{formatAnlasCost(UPSCALE_ANLAS)}</small>
+        </button>
+        <button type="button" className={`${actionClass} ${menuClass}`} aria-label="이미지 메뉴" disabled={!image} onClick={() => setMenu("image")}>
+          <Icon name="more" />{variant === "side" ? "이미지 메뉴" : null}
+        </button>
+      </>
+    );
+  };
 
-  const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
+  const viewerActions = viewed && imageActionButtons(viewed, "viewer");
 
   const generateLabel = status === "generating" ? "생성 중…" : status === "upscaling" ? "업스케일 중…" : "생성";
+  const dictionaryLabel = tab === "character" ? "캐릭터 찾기" : "태그사전";
+  const sectionMenuLabel = `${sectionTitle} 메뉴`;
 
-  // Typing mode: one row above the keyboard. Normal mode: the image-side button grid
-  // (rendered into the top band through a portal, so 번역 still reaches the board)
-  // and a bottom row with undo/redo + 생성.
+  // The generation dock stays below the board. Undo/redo belong to the shared prompt toolbar.
   const bottomRow = (tools: TagBoardTools) => (
     <div className="b2-bottom">
-      <button type="button" className="b2-history" aria-label="되돌리기" disabled={!tools.canUndo} onClick={tools.undo}>
-        <Icon name="undo" />
-      </button>
-      <button type="button" className="b2-history" aria-label="다시 실행" disabled={!tools.canRedo} onClick={tools.redo}>
-        <Icon name="redo" />
+      <button type="button" className="b2-gen-settings" onClick={() => setSettingsScope("generation")}>
+        <Icon name="sliders" />
+        <span>
+          <strong>생성 설정</strong>
+          <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}{settings.seed !== null ? " · Seed 고정" : ""}</small>
+        </span>
       </button>
       <button type="button" className="b2-generate" disabled={busy} onClick={() => generateNow(tools)}>
         <strong>{generateLabel}</strong>
@@ -826,72 +871,32 @@ export function V5Studio() {
     </div>
   );
 
-  const renderTools = (tools: TagBoardTools) => typing ? (
-    <div className="b2-tools compact">
-      <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(-0.1)}>−0.1</button>
-      <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(0.1)}>+0.1</button>
-      {/* No keepFocus: opening the dictionary commits the typed tag and ends editing,
-          so the keyboard never stays up over the sheet typing into a hidden input. */}
-      <button type="button" onClick={openDictionary}>
-        <Icon name="book" />사전
-      </button>
-      <button type="button" data-keeps-selection disabled={!tools.canTranslate || tools.translating} onPointerDown={keepFocus} onClick={tools.translate}>
-        <Icon name="translate" />{tools.translating ? "번역 중…" : "번역"}
-      </button>
-      <button type="button" className="icon-only" aria-label="되돌리기" disabled={!tools.canUndo} onPointerDown={keepFocus} onClick={tools.undo}>
-        <Icon name="undo" />
-      </button>
-      <button type="button" className="icon-only" aria-label="다시 실행" disabled={!tools.canRedo} onPointerDown={keepFocus} onClick={tools.redo}>
-        <Icon name="redo" />
-      </button>
-      <span className="b2-tools-spacer" />
-      <button type="button" className="b2-generate-mini" disabled={busy} onPointerDown={keepFocus} onClick={() => generateNow(tools)}>
-        {generateLabel}
-      </button>
-    </div>
-  ) : expanded ? (
+  const renderTools = (tools: TagBoardTools) => (
     <>
-      <div className="b2-tools">
-        <button type="button" className="icon-only" aria-label="생성 설정" onClick={() => setSettingsScope("generation")}><Icon name="sliders" /></button>
-        <button type="button" onClick={openDictionary}><Icon name="book" />태그사전</button>
-        <button type="button" data-keeps-selection disabled={!tools.canTranslate || tools.translating} onClick={tools.translate}>
-          <Icon name="translate" />{tools.translating ? "번역 중…" : "번역"}
-        </button>
-        <button type="button" className="icon-only" aria-label="더 보기" onClick={() => setMenu("prompt")}><Icon name="more" /></button>
-        <span className="b2-tools-spacer" />
-        <button type="button" className={`b2-save b2-save-inline save-button ${saveState}`} disabled={!selected || saving} aria-live="polite" onClick={() => void saveImage(selected)}>
-          {saveLabel}
-        </button>
-      </div>
-      {bottomRow(tools)}
-    </>
-  ) : (
-    <>
-      {sideSlot && createPortal(
+      {!typing && sideSlot && createPortal(
         <div className="b2-side-grid">
-          <button type="button" className="b2-side-settings" onClick={() => setSettingsScope("generation")}>
-            <Icon name="sliders" />
-            <span>
-              <strong>생성 설정</strong>
-              <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}{settings.seed !== null ? " · Seed 고정" : ""}</small>
-            </span>
-          </button>
-          <button type="button" onClick={openDictionary}><Icon name="book" />태그사전</button>
-          <button type="button" data-keeps-selection disabled={!tools.canTranslate || tools.translating} onClick={tools.translate}>
-            <Icon name="translate" />{tools.translating ? "번역 중…" : "번역"}
-          </button>
-          <button type="button" className="b2-side-more" onClick={() => setMenu("prompt")}><Icon name="more" />더 보기</button>
-          <button type="button" className={`b2-save save-button ${saveState}`} disabled={!selected || saving} aria-live="polite" onClick={() => void saveImage(selected)}>
-            {saveLabel}
-          </button>
+          {imageActionButtons(selected, "side")}
         </div>,
         sideSlot,
       )}
-      {bottomRow(tools)}
+      <PromptToolbar
+        typing={typing}
+        dictionaryLabel={dictionaryLabel}
+        sectionMenuLabel={sectionMenuLabel}
+        tools={tools}
+        onDictionary={openDictionary}
+        onMenu={() => setMenu("prompt")}
+        onGenerate={() => generateNow(tools)}
+        generateLabel={generateLabel}
+        generateDisabled={busy}
+      />
+      {!typing && bottomRow(tools)}
     </>
   );
 
-  const boardConfig = section ? SECTION_CONFIG[section] : null;
+  const boardConfig = section
+    ? SECTION_CONFIG[section]
+    : { categories: CHARACTER_CATEGORIES, placeholder: "캐릭터 외형과 의상 태그", tagPrefix: undefined };
 
   return (
     <main
@@ -918,15 +923,16 @@ export function V5Studio() {
                   <strong>{statusPrimary}</strong>
                   {statusSecondary && <span>· {statusSecondary}</span>}
                 </span>
-                {usageHint && <small>{usageHint}</small>}
               </span>
             </button>
             <span className="b2-top-spacer" />
-            <button type="button" className={`b2-icon ${imagesHidden ? "active" : ""}`} aria-label={imagesHidden ? "이미지 표시" : "이미지 숨기기"} onClick={togglePrivacy}>
+            <button type="button" className={`b2-icon ${imagesHidden ? "active" : ""}`} aria-label={imagesHidden ? "보이기" : "가리기"} onClick={togglePrivacy}>
               <Icon name={imagesHidden ? "eyeoff" : "eye"} />
+              <span className="b2-icon-label">{imagesHidden ? "보이기" : "가리기"}</span>
             </button>
             <button type="button" className="b2-icon" aria-label="앱 설정" onClick={() => setSettingsScope("app")}>
               <Icon name="cog" />
+              <span className="b2-icon-label">앱 설정</span>
             </button>
           </div>
           <div className="b2-image-row">
@@ -940,6 +946,13 @@ export function V5Studio() {
                   </button>
                 ))}
               </div>
+              <RandomPickLine
+                pick={selectedPick}
+                onKeep={() => {
+                  if (!selectedPick || !selectedPickLabel) return;
+                  void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정 · 랜덤 OFF`, 1800));
+                }}
+              />
               <div className="b2-side-slot" ref={setSideSlot} />
             </div>
           </div>
@@ -1049,15 +1062,9 @@ export function V5Studio() {
           }}
         />
       )}
-      {libraryOpen && <CharacterLibrarySheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} />}
+      <CharacterCatalogPrefetch />
+      {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
       {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
-      {prombot && (
-        <PrombotSheet
-          destination={prombot}
-          onClose={() => setPrombot(null)}
-          onInsert={(value) => (prombot === "character" ? insertIntoCharacter(value) : appendPrompt(prombot, value))}
-        />
-      )}
       {rawEditor && (
         <RawPromptSheet
           title={sectionTitle}
@@ -1085,8 +1092,8 @@ export function V5Studio() {
         />
       )}
       {finishOpen && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
-      {menu === "prompt" && <MenuSheet title={`${sectionTitle} · 더 보기`} items={promptMenuItems} onClose={() => setMenu(null)} />}
-      {menu === "viewer" && <MenuSheet title="이미지 · 더 보기" items={viewerMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "prompt" && <MenuSheet title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "image" && <MenuSheet title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
     </main>
   );
 }

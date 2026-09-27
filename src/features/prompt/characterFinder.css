@@ -1,0 +1,88 @@
+.sheet.character-finder-sheet {
+  --finder-surface: var(--md-sys-color-surface-container-low);
+  --finder-card: var(--md-sys-color-surface-container);
+  --finder-muted: var(--md-sys-color-on-surface-variant);
+  top: auto; border-radius: 28px 28px 0 0; box-shadow: 0 -24px 0 0 #0008;
+  z-index: 360; height: calc(100dvh - env(safe-area-inset-top) - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+  display: flex; flex-direction: column; padding: 0 20px; overflow: hidden;
+  color: var(--md-sys-color-on-surface); background: var(--finder-surface);
+}
+.character-finder-sheet button, .character-finder-sheet select { color: inherit; background: var(--finder-card); border: 0; border-radius: 14px; min-height: 48px; padding: 10px 16px; touch-action: manipulation; }
+.character-finder-sheet button:disabled { opacity: .4; }
+.character-finder-sheet button[aria-pressed=true], .character-finder-sheet button[aria-selected=true] { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.finder-head { position: relative; flex: none; padding: 24px 0 16px; }
+.finder-head .drag-handle, .finder-detail .drag-handle { margin: 2px auto 14px; }
+.finder-heading { display: flex; align-items: center; gap: 12px; }
+.finder-heading > div { flex: 1; min-width: 0; }
+.finder-heading h2 { font-size: 21px; margin: 0 0 3px; overflow-wrap: anywhere; }
+.finder-heading small { color: var(--finder-muted); }
+.finder-heading > button { font-size: 26px; width: 48px; padding: 0; background: transparent; }
+.finder-segment { display: flex; flex: none; padding: 4px; border-radius: 16px; background: var(--finder-card); gap: 4px; }
+.finder-segment button { flex: 1; padding: 10px 6px; background: transparent; }
+.finder-segment small { color: var(--finder-muted); margin-left: 4px; }
+.finder-search { display: flex; flex: none; margin: 14px 0; background: var(--finder-card); border-radius: 16px; }
+.finder-search input { flex: 1; min-width: 0; min-height: 56px; padding: 12px 16px; border: 0; background: transparent; color: inherit; font-size: 16px; }
+.finder-search button { background: transparent; font-size: 22px; }
+.finder-filters { display: flex; gap: 8px; flex: none; margin-bottom: 8px; }
+.finder-filters select { margin-left: auto; }
+.finder-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 12px; }
+.character-finder-sheet h3 { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; font-size: 14px; font-weight: 600; }
+.character-finder-sheet h3 small { font-size: 12px; font-weight: 400; color: var(--finder-muted); }
+.character-finder-sheet h3 button { margin-left: auto; min-height: 44px; background: transparent; padding: 8px; color: var(--md-sys-color-primary); }
+.finder-series-row { width: 100%; display: flex; gap: 16px; align-items: center; text-align: left; background: var(--finder-card); border-radius: 16px; margin-bottom: 8px; padding: 12px 14px; min-height: 80px; }
+.finder-series-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.finder-series-row strong, .finder-series-row small { display: block; }
+.finder-series-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+.finder-series-row small { margin-top: 4px; color: var(--finder-muted); font-size: 12px; }
+.finder-covers { display: flex; width: 90px; height: 58px; flex: none; overflow: hidden; }
+.finder-covers .finder-thumbnail { width: 43px; min-width: 43px; height: 58px; border-radius: 8px; border: 1px solid var(--finder-surface); }
+.finder-covers .finder-thumbnail + .finder-thumbnail { margin-left: -20px; }
+.finder-covers .finder-thumbnail span { font-size: 8px; }
+.finder-covers .finder-retry { display: none; }
+.finder-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 10px; }
+.finder-tile { min-width: 0; }
+.finder-tile-art { position: relative; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-touch-callout: none; cursor: pointer; }
+.finder-thumbnail { position: relative; display: flex; align-items: center; justify-content: center; flex-direction: column; width: 100%; height: 100%; background: #e3e2e7; color: #666371; overflow: hidden; }
+.finder-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.finder-thumbnail.loading, .finder-thumbnail.failed { background: var(--md-sys-color-surface-container-highest); color: var(--finder-muted); }
+.finder-thumbnail span { padding: 4px; text-align: center; font-size: 13px; }
+.character-finder-sheet .finder-retry { margin-top: 8px; padding: 8px; font-size: 12px; }
+.character-finder-sheet .finder-star { position: absolute; right: 4px; top: 4px; width: 48px; height: 48px; padding: 0; border-radius: 50%; font-size: 25px; background: #22242bb3; color: white; }
+.character-finder-sheet .finder-star.active { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.finder-new { position: absolute; left: 8px; top: 12px; border-radius: 6px; padding: 4px 6px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+.finder-tile > strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; margin-top: 8px; line-height: 1.35; overflow-wrap: anywhere; }
+.finder-tile > small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--finder-muted); font-size: 11px; margin-top: 3px; }
+.finder-folders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.finder-folders > button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; overflow: hidden; }
+.finder-folders .finder-covers { width: 100%; height: 86px; }
+.finder-folders .finder-thumbnail { width: 33.33%; height: 86px; margin: 0; }
+.finder-folders strong { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.finder-folders small { color: var(--finder-muted); }
+.finder-all { width: 100%; margin: 10px 0; min-height: 64px !important; }
+.finder-empty { padding: 32px 12px; text-align: center; color: var(--finder-muted); }
+.finder-footer { flex: none; position: relative; padding: 14px 0 calc(14px + env(safe-area-inset-bottom)); font-size: 12px; color: var(--finder-muted); }
+.finder-footer progress { width: 100%; height: 3px; display: block; margin-top: 8px; accent-color: var(--md-sys-color-primary); }
+.character-finder-sheet .finder-primary { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); font-weight: 700; min-height: 56px; }
+.finder-footer > button { width: 100%; }
+.character-finder-sheet .finder-switch { width: 64px; height: 48px; flex: none; padding: 10px 8px; background: transparent; }
+.finder-switch span { display: block; position: relative; height: 28px; border-radius: 20px; background: var(--md-sys-color-outline); }
+.finder-switch span::after { content: ''; position: absolute; left: 4px; top: 4px; width: 20px; height: 20px; border-radius: 50%; background: var(--md-sys-color-surface); }
+.finder-switch[aria-checked=true] span { background: var(--md-sys-color-primary); }
+.finder-switch[aria-checked=true] span::after { left: 24px; }
+.finder-overlay { position: fixed; inset: 0; background: #0009; display: flex; align-items: flex-end; justify-content: center; z-index: 380; }
+.finder-detail { position: relative; width: min(100%, 860px); max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--finder-surface); border-radius: 28px 28px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); }
+.finder-detail-top { display: flex; gap: 20px; align-items: center; }
+.finder-detail-top > .finder-thumbnail { width: 160px; height: 214px; border-radius: 16px; flex: none; }
+.finder-detail-top h2 { overflow-wrap: anywhere; font-size: 24px; margin: 0; }
+.finder-detail-top p { color: var(--finder-muted); }
+.finder-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.finder-chips button.dropped { text-decoration: line-through; opacity: .5; border: 1px dashed var(--md-sys-color-outline); background: transparent; }
+.finder-preview { padding: 16px; line-height: 1.6; background: var(--finder-card); border-radius: 16px; overflow-wrap: anywhere; font-size: 14px; }
+.finder-actions { display: flex; gap: 10px; }
+.finder-actions button:first-child { flex: 1; }
+.finder-actions button:last-child { flex: 3; }
+.character-finder-sheet .character-library-move-panel { background: var(--finder-surface); color: inherit; }
+
+.finder-download { flex: none; margin: 2px 0 12px; color: var(--finder-muted); font-size: 11px; text-align: right; }
+.finder-download progress { display: block; height: 3px; width: 100%; margin-top: 8px; accent-color: var(--md-sys-color-primary); }
+.finder-detail-top .finder-hide-thumbnail { display: block; min-height: 44px; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--finder-muted); font-size: 14px; text-decoration: underline; }

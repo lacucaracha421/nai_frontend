@@ -1,5 +1,6 @@
 /** Stroke icons shared by the main screen and viewer (paths from the B2 prototype). */
 const PATHS = {
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L21 21" /></>,
   save: <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14" />,
   seed: <path d="M12 20v-7M12 13c0-4 3-6.5 7-6.5 0 4-3 6.5-7 6.5zM12 15c0-3-2.3-5-5.5-5 0 3 2.3 5 5.5 5z" />,
   upscale: <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" />,

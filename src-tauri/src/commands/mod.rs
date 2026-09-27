@@ -1,6 +1,5 @@
 use crate::{
     novelai::{self, GeneratedImage, ImageCacheState, NovelAiQuota, NovelAiState},
-    prombot::{self, FavoriteCatalog, PrombotState},
     save,
     tagdb::{self, LocalTagResult, TagDbState},
     translation::{self, TranslationConfig, TranslationKeyStatus, TranslationProvider},
@@ -114,21 +113,6 @@ pub fn favorite_local_tags(
     categories: Option<Vec<String>>,
 ) -> Result<Vec<LocalTagResult>, String> {
     tagdb::favorites(&state, &keys, categories.as_deref())
-}
-
-#[tauri::command]
-pub async fn open_prombot_webview(app: AppHandle) -> Result<(), String> {
-    prombot::open(app)
-}
-
-#[tauri::command]
-pub fn prombot_favorites(state: State<'_, PrombotState>) -> Result<Vec<String>, String> {
-    prombot::favorites(state)
-}
-
-#[tauri::command]
-pub async fn prombot_favorite_catalog(keys: Vec<String>) -> Result<FavoriteCatalog, String> {
-    prombot::favorite_catalog(keys).await
 }
 
 /// Android IPC is JSON-only; decode the explicit base64 payload before saving.

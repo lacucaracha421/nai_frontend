@@ -7,15 +7,37 @@ export type CharacterLibraryEntry = {
   display: string;
   series: string;
   addedAt: number;
-  prombotFavorite?: boolean;
-  prombotManaged?: boolean;
 };
 
-type State = {
+export type InsertMode = "name" | "features" | "attire";
+export type FinderPreferences = {
+  insertMode: InsertMode;
+  randomScope: "all" | "series";
+  randomSeries: string[];
+  randomInsertMode: "name" | "features";
+  finderTab: "find" | "library";
+  finderSeries: string | null;
+};
+const finderDefaults: FinderPreferences = { insertMode: "name", randomScope: "all", randomSeries: [], randomInsertMode: "name", finderTab: "find", finderSeries: null };
+
+/** Copy known bookmark fields, retaining order and custom folders without filtering. */
+export function migrateCharacterLibrary(persisted: unknown) {
+  const old = persisted as { entries?: CharacterLibraryEntry[]; legacyFavoritesMigrated?: boolean } | null;
+  return {
+    ...finderDefaults,
+    legacyFavoritesMigrated: old?.legacyFavoritesMigrated ?? false,
+    hiddenThumbnails: [] as string[],
+    entries: (old?.entries ?? []).map(({ raw, display, series, addedAt }) => ({ raw, display, series, addedAt })),
+  };
+}
+
+type State = FinderPreferences & {
   entries: CharacterLibraryEntry[];
   legacyFavoritesMigrated: boolean;
-  /** Breakdown of the last Prombot bookmark import (raw → kept, excluded). */
-  prombotImportSummary: string | null;
+  /** Catalog names whose thumbnail shows a different character; kept on this device only. */
+  hiddenThumbnails: string[];
+  toggleHiddenThumbnail: (raw: string) => void;
+  setFinderPreferences: (patch: Partial<FinderPreferences>) => void;
   addTag: (tag: Pick<LocalTag, "raw" | "display">, series?: string) => void;
   addMany: (tags: Array<Pick<LocalTag, "raw" | "display">>) => void;
   toggleTag: (tag: Pick<LocalTag, "raw" | "display">) => void;
@@ -63,7 +85,14 @@ export const useCharacterLibraryStore = create<State>()(
     (set, get) => ({
       entries: [],
       legacyFavoritesMigrated: false,
-      prombotImportSummary: null,
+      hiddenThumbnails: [],
+      ...finderDefaults,
+      toggleHiddenThumbnail: (raw) => set((state) => ({
+        hiddenThumbnails: state.hiddenThumbnails.includes(raw)
+          ? state.hiddenThumbnails.filter((name) => name !== raw)
+          : [...state.hiddenThumbnails, raw],
+      })),
+      setFinderPreferences: (patch) => set(patch),
       addTag: (tag, series) => set((state) => {
         if (state.entries.some((entry) => entry.raw === tag.raw)) return state;
         return { entries: [makeEntry(tag, series), ...state.entries] };
@@ -93,6 +122,6 @@ export const useCharacterLibraryStore = create<State>()(
       isSaved: (raw) => get().entries.some((entry) => entry.raw === raw),
       finishLegacyMigration: () => set({ legacyFavoritesMigrated: true }),
     }),
-    { name: "nai-v5-character-library-v1", version: 1 },
+    { name: "nai-v5-character-library-v1", version: 2, migrate: migrateCharacterLibrary },
   ),
 );

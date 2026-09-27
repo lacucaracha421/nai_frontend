@@ -65,7 +65,7 @@
 }
 .b2-top-spacer { flex: 1; }
 .b2-status {
-  min-height: 44px;
+  min-height: 48px;
   max-width: calc(100% - 112px);
   display: inline-flex;
   align-items: center;
@@ -93,16 +93,20 @@
 .b2-status-line span { font-size: 13px; color: var(--md-sys-color-on-surface-variant); overflow: hidden; text-overflow: ellipsis; }
 .b2-status-text small { font-size: 11px; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .b2-icon {
-  width: 48px;
+  min-width: 48px;
   height: 48px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
   border: 0;
   border-radius: var(--md-shape-full);
   background: transparent;
   color: var(--md-sys-color-on-surface-variant);
 }
 .b2-icon .ui-icon { width: 22px; height: 22px; }
+.b2-icon-label { font-size: 14px; white-space: nowrap; }
 .b2-icon:active { background: var(--md-sys-color-surface-container-highest); }
 .b2-icon.active { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
 
@@ -285,13 +289,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
+  min-height: 48px;
   margin-bottom: 6px;
   color: var(--md-sys-color-on-surface-variant);
   font-size: 13px;
 }
 .b2-diff-chip {
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--md-shape-md);
@@ -495,42 +499,32 @@
 }
 .b2-character-add { width: 48px; justify-content: center; padding: 0 !important; }
 .b2-random.active { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
-.b2-random-pick {
+.b2-image-pick {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  border-radius: var(--md-shape-md);
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 4px 0 2px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
 }
-.b2-random-pick-icon { flex: none; display: inline-grid; place-items: center; font-size: 22px; }
-.b2-random-pick-text {
-  flex: 1;
+.b2-image-pick > span {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.b2-random-pick-text small { font-size: 12px; opacity: .75; }
-.b2-random-pick-text strong,
-.b2-random-pick-text em {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.b2-random-pick-text strong { font-size: 18px; font-weight: 700; }
-.b2-random-pick-text em { font-size: 13px; font-style: normal; opacity: .8; }
-.b2-random-pick button {
+.b2-image-pick b { color: var(--md-sys-color-on-surface); font-weight: 600; }
+.b2-image-pick button {
   flex: none;
   min-height: 48px;
-  padding: 0 14px;
-  border: 0;
+  padding: 0 12px;
   border-radius: var(--md-shape-md);
+  border: 0;
   background: var(--md-sys-color-surface-container-high);
   color: var(--md-sys-color-on-surface);
-  font-size: 14px;
+  font-size: 13px;
 }
 .b2-random-note {
   margin: 0 0 10px;
@@ -547,7 +541,7 @@
   background: var(--md-sys-color-surface-container);
 }
 .b2-fixed-switch button {
-  min-height: 44px;
+  min-height: 48px;
   min-width: 96px;
   padding: 0 18px;
   border: 0;
@@ -582,6 +576,7 @@
 .b2-tools button.icon-only { width: 52px; padding: 0; }
 .b2-tools button.num { min-width: 60px; padding: 0 12px; font-variant-numeric: tabular-nums; }
 .b2-tools button:disabled { opacity: .38; }
+.b2-tools-divider { width: 1px; height: 28px; margin: 0 2px; background: var(--md-sys-color-outline-variant); }
 .b2-tools-spacer { flex: 1; }
 .b2-generate-mini {
   min-width: 96px;
@@ -941,7 +936,7 @@
 .help-toggle input { width: 28px; height: 28px; accent-color: var(--md-sys-color-primary); }
 
 /* 0.6.0 feedback 2: the column beside the image holds the session row and the
-   main buttons; the bottom row is only undo/redo + 생성. */
+   image actions; the bottom row is 생성 설정 + 생성. */
 .b2-image-side { gap: 10px; }
 .b2-image-side .b2-session {
   flex: none;
@@ -958,12 +953,12 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: min-content;
-  align-content: start;
+  /* Image actions sit at the image's bottom edge, under the thumbnails and pick line. */
+  align-content: end;
   gap: 8px;
 }
 .b2-side-grid > button {
-  min-height: 52px;
+  min-height: 64px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -976,18 +971,6 @@
   font-size: 15px;
 }
 .b2-side-grid > button:disabled { opacity: .38; }
-.b2-side-grid .b2-side-settings {
-  grid-column: 1 / -1;
-  min-height: 60px;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 0 16px;
-  text-align: left;
-}
-.b2-side-settings > span { display: flex; flex-direction: column; gap: 2px; }
-.b2-side-settings strong { font-size: 15px; font-weight: 600; }
-.b2-side-settings small { font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
-.b2-side-grid .b2-side-more { grid-column: 1 / -1; }
 .b2-side-grid .b2-save {
   grid-column: 1 / -1;
   width: 100%;
@@ -1000,20 +983,7 @@
 .b2-side-grid .b2-save.success { background: #173125; color: #d9ffe9; }
 .b2-side-grid .b2-save.error { background: #331d24; color: #ffdbe5; }
 .b2-side-grid .b2-save:disabled:not(.saving) { opacity: .38; }
-.b2-bottom .b2-history {
-  flex: none;
-  width: 56px;
-  min-height: 72px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--md-shape-lg);
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
-}
-.b2-bottom .b2-history:disabled { opacity: .38; }
-.b2-side-grid { grid-template-rows: auto auto auto 1fr; grid-auto-rows: auto; }
-.b2-side-grid .b2-save { align-self: end; }
+.b2-side-grid { grid-template-rows: auto repeat(2, minmax(52px, auto)); }
 
 /* Round 5: user-controlled editor size. The handle bar tops the editor panel. */
 .b2-handle {
@@ -1022,7 +992,7 @@
   position: relative;
   z-index: 1;
   width: 160px;
-  height: 44px;
+  height: 48px;
   margin-bottom: -14px;
   display: grid;
   place-items: center;
@@ -1038,3 +1008,21 @@
 }
 .b2-shell.expanded .b2-handle span { background: var(--md-sys-color-primary); }
 .b2-save.b2-save-inline { height: 52px; min-width: 110px; }
+
+/* Character management keeps the existing sheet structure while honoring the tablet touch target. */
+.character-sheet .icon-button,
+.character-sheet .position-mode button,
+.character-sheet .manual-position-box button,
+.character-sheet .character-tabs button,
+.character-sheet .danger-ghost {
+  min-height: 48px;
+}
+.character-sheet .icon-button { width: 48px; height: 48px; }
+.character-sheet .position-mode button,
+.character-sheet .character-tabs button { height: 48px; }
+.character-management-note {
+  margin: 14px 0 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+  line-height: 1.5;
+}

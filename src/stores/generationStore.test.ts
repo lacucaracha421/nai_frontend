@@ -17,8 +17,8 @@ beforeEach(() => {
   useGenerationStore.setState(useGenerationStore.getInitialState(), true);
   useCharacterLibraryStore.setState({ entries: [
     { raw: "manual", display: "manual", series: "folder", addedAt: 1 },
-    { raw: "a", display: "A", series: "series", addedAt: 2, prombotFavorite: true },
-    { raw: "b", display: "B", series: "series", addedAt: 3, prombotFavorite: true },
+    { raw: "a", display: "A", series: "series", addedAt: 2 },
+    { raw: "b", display: "B", series: "series", addedAt: 3 },
   ] });
   vi.mocked(generateNovelAiImage).mockResolvedValue([
     { path: "fixture.png", index: 0, seed: 1, width: 832, height: 1216 },
@@ -41,7 +41,7 @@ describe("random character requests", () => {
     await saved.generate();
     const requests = vi.mocked(generateNovelAiImage).mock.calls.map(([request]) => request);
     expect(requests).toHaveLength(2);
-    for (const [index, name] of ["A", "B"].entries()) {
+    for (const [index, name] of ["manual", "B"].entries()) {
       const expected = structuredClone(baseline);
       expected.parameters.v4_prompt.caption.char_captions[0].char_caption = `${name}, red dress`;
       expect(requests[index]).toEqual(expected);
@@ -53,7 +53,7 @@ describe("random character requests", () => {
     expect(buildNovelAiRequest(current)).toEqual(baseline);
     expect(current.lastRandomCharacter).toEqual({ display: "B", series: "series" });
     // Each image remembers its own pick so the viewer and the 캐릭터 tab can name it.
-    expect(current.images.map((image) => image.randomCharacter?.display)).toEqual(["A", "B"]);
+    expect(current.images.map((image) => image.randomCharacter?.display)).toEqual(["manual", "B"]);
   });
 
   it("keeps a drawn character in the first character's prompt and turns 🎲 off", async () => {
@@ -89,7 +89,7 @@ describe("random character requests", () => {
     useCharacterLibraryStore.setState({ entries: [] });
     await useGenerationStore.getState().generate();
     expect(generateNovelAiImage).not.toHaveBeenCalled();
-    expect(useGenerationStore.getState().errorMessage).toContain("Prombot");
+    expect(useGenerationStore.getState().errorMessage).toContain("내 도감");
   });
 });
 
@@ -105,4 +105,13 @@ describe("upscale from the viewer", () => {
     expect(state.images.at(-1)).toMatchObject({ filePath: "up.png", kind: "upscale", positivePrompt: "old.png" });
     expect(state.activeImage).toBe(2);
   });
+});
+
+it("uses selected folders for the generation request as well as the displayed pool", async () => {
+  useCharacterLibraryStore.setState({ randomScope: "series", randomSeries: ["series"] });
+  useGenerationStore.setState({ randomCharacterEnabled: true });
+  vi.spyOn(Math, "random").mockReturnValue(0);
+  await useGenerationStore.getState().generate();
+  expect(useGenerationStore.getState().lastRandomCharacter?.display).toBe("A");
+  useCharacterLibraryStore.setState({ randomScope: "all", randomSeries: [] });
 });

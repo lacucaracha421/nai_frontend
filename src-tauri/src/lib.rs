@@ -1,6 +1,6 @@
+mod character_catalog;
 mod commands;
 mod novelai;
-mod prombot;
 mod save;
 mod tagdb;
 mod translation;
@@ -15,7 +15,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(NovelAiState::default())
-        .manage(prombot::PrombotState::default())
         .setup(|app| {
             let tag_db = tagdb::prepare(app).map_err(std::io::Error::other)?;
             let image_cache = novelai::prepare_image_cache(app).map_err(std::io::Error::other)?;
@@ -39,9 +38,8 @@ pub fn run() {
             commands::translate_selection,
             commands::search_local_tags,
             commands::favorite_local_tags,
-            commands::open_prombot_webview,
-            commands::prombot_favorites,
-            commands::prombot_favorite_catalog,
+            character_catalog::character_catalog,
+            character_catalog::character_thumbnail,
             commands::save_image
         ])
         .run(tauri::generate_context!())

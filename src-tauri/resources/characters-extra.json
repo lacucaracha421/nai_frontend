@@ -1,0 +1,621 @@
+{
+"source": "wd-eva02-tagger-2026-canary selected_tags.csv (Danbooru 2026-05-18), characters missing from Prombot characters.csv (2026-09-26)",
+"characters": [
+{
+"character": "sakayori_iroha",
+"series": "cho_kaguya-hime!",
+"posts": 6528
+},
+{
+"character": "gojo_satoru",
+"series": "jujutsu_kaisen",
+"posts": 5218
+},
+{
+"character": "kaguya_(cho_kaguya-hime!)",
+"series": "cho_kaguya-hime!",
+"posts": 4864
+},
+{
+"character": "cyrene_(demiurge)_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 4706
+},
+{
+"character": "runami_yachiyo",
+"series": "cho_kaguya-hime!",
+"posts": 4318
+},
+{
+"character": "itadori_yuji",
+"series": "jujutsu_kaisen",
+"posts": 3941
+},
+{
+"character": "saotome_ranma_(female)",
+"series": "female",
+"posts": 3885
+},
+{
+"character": "hex_maniac_(pokemon_xy)",
+"series": "pokemon_xy",
+"posts": 3353
+},
+{
+"character": "cyrene_(philia093)_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 3330
+},
+{
+"character": "kei_(new_body)_(blue_archive)",
+"series": "blue_archive",
+"posts": 2850
+},
+{
+"character": "sunna_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 2822
+},
+{
+"character": "saotome_ranma_(male)",
+"series": "male",
+"posts": 2818
+},
+{
+"character": "takamaki_ann",
+"series": "persona_5",
+"posts": 2712
+},
+{
+"character": "geto_suguru",
+"series": "jujutsu_kaisen",
+"posts": 2467
+},
+{
+"character": "canari_(pokemon)",
+"series": "pokemon",
+"posts": 2319
+},
+{
+"character": "aemeath_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 2312
+},
+{
+"character": "hino_akane_(precure)",
+"series": "precure",
+"posts": 2216
+},
+{
+"character": "aria_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 2098
+},
+{
+"character": "haru_haru_(koikoko)",
+"series": "koikoko",
+"posts": 1992
+},
+{
+"character": "nangong_yu",
+"series": "zenless_zone_zero",
+"posts": 1974
+},
+{
+"character": "ye_shunguang",
+"series": "zenless_zone_zero",
+"posts": 1969
+},
+{
+"character": "spider-man_(original_suit)",
+"series": "original_suit",
+"posts": 1880
+},
+{
+"character": "scathach-skadi_(fate)",
+"series": "fate",
+"posts": 1821
+},
+{
+"character": "moria_luluka",
+"series": "",
+"posts": 1796
+},
+{
+"character": "manhattan_cafe_(creeping_shadow)_(umamusume)",
+"series": "umamusume",
+"posts": 1789
+},
+{
+"character": "astolfo_(rider)_(fate)",
+"series": "fate",
+"posts": 1787
+},
+{
+"character": "classic_d.va",
+"series": "overwatch",
+"posts": 1782
+},
+{
+"character": "durin_(genshin_impact)",
+"series": "genshin_impact",
+"posts": 1675
+},
+{
+"character": "aria_(human)_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 1618
+},
+{
+"character": "gwynn_(pokemon)",
+"series": "pokemon",
+"posts": 1594
+},
+{
+"character": "akechi_goro",
+"series": "persona_5",
+"posts": 1520
+},
+{
+"character": "lynae_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 1511
+},
+{
+"character": "rossi_(arknights)",
+"series": "arknights",
+"posts": 1495
+},
+{
+"character": "medusa_(fate/stay_night)",
+"series": "fate/stay_night",
+"posts": 1487
+},
+{
+"character": "scathach_(lancer)_(fate)",
+"series": "fate",
+"posts": 1423
+},
+{
+"character": "saijo_claudine",
+"series": "shoujo_kageki_revue_starlight",
+"posts": 1404
+},
+{
+"character": "tendo_maya",
+"series": "shoujo_kageki_revue_starlight",
+"posts": 1395
+},
+{
+"character": "cure_arcana_shadow",
+"series": "precure",
+"posts": 1367
+},
+{
+"character": "kitasan_black_(gilded_shrine_to_glory)_(umamusume)",
+"series": "umamusume",
+"posts": 1331
+},
+{
+"character": "sparxie_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 1303
+},
+{
+"character": "rio_(armed)_(blue_archive)",
+"series": "blue_archive",
+"posts": 1273
+},
+{
+"character": "mornye_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 1272
+},
+{
+"character": "kei_(aris)_(blue_archive)",
+"series": "blue_archive",
+"posts": 1216
+},
+{
+"character": "fushiguro_toji",
+"series": "jujutsu_kaisen",
+"posts": 1207
+},
+{
+"character": "izumi_yuki",
+"series": "",
+"posts": 1186
+},
+{
+"character": "hitohira_kazane",
+"series": "",
+"posts": 1183
+},
+{
+"character": "cissia_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 1166
+},
+{
+"character": "jacinthe_(pokemon)",
+"series": "pokemon",
+"posts": 1159
+},
+{
+"character": "florence_nightingale_(berserker)_(fate)",
+"series": "fate",
+"posts": 1157
+},
+{
+"character": "neuro-sama_(1st_costume)",
+"series": "1st_costume",
+"posts": 1106
+},
+{
+"character": "shigure_ui_(1st_costume)_(vtuber)",
+"series": "vtuber",
+"posts": 1081
+},
+{
+"character": "yidhari_murphy",
+"series": "zenless_zone_zero",
+"posts": 1060
+},
+{
+"character": "hebi_nyoubou_(fate)",
+"series": "fate",
+"posts": 1017
+},
+{
+"character": "lohen_(genshin_impact)",
+"series": "genshin_impact",
+"posts": 1012
+},
+{
+"character": "okkotsu_yuta",
+"series": "jujutsu_kaisen",
+"posts": 1004
+},
+{
+"character": "aijo_karen",
+"series": "shoujo_kageki_revue_starlight",
+"posts": 975
+},
+{
+"character": "hiyuki_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 952
+},
+{
+"character": "nice_nature_(run_&_win)_(umamusume)",
+"series": "umamusume",
+"posts": 945
+},
+{
+"character": "sayama_saho",
+"series": "",
+"posts": 909
+},
+{
+"character": "evanescia_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 889
+},
+{
+"character": "tamamo_cross_(fast_as_lightning)_(umamusume)",
+"series": "umamusume",
+"posts": 884
+},
+{
+"character": "label_(nikke)",
+"series": "nikke",
+"posts": 883
+},
+{
+"character": "p-chan_(ranma_1/2)",
+"series": "ranma_1/2",
+"posts": 860
+},
+{
+"character": "seiren_(precure)",
+"series": "precure",
+"posts": 860
+},
+{
+"character": "dialyn_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 850
+},
+{
+"character": "ibaraki_douji_(berserker)_(fate)",
+"series": "fate",
+"posts": 843
+},
+{
+"character": "tyrant_(stella_sora)",
+"series": "stella_sora",
+"posts": 842
+},
+{
+"character": "nitocris_(caster)_(fate)",
+"series": "fate",
+"posts": 841
+},
+{
+"character": "demon_king_of_salvation",
+"series": "",
+"posts": 840
+},
+{
+"character": "shigure_ui_(young)_(vtuber)",
+"series": "vtuber",
+"posts": 838
+},
+{
+"character": "chalky_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 814
+},
+{
+"character": "acheron_(slashed_dream)_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 805
+},
+{
+"character": "futaba_mikana",
+"series": "",
+"posts": 796
+},
+{
+"character": "reisa_(magical)_(blue_archive)",
+"series": "blue_archive",
+"posts": 787
+},
+{
+"character": "laevatain_(arknights)",
+"series": "arknights",
+"posts": 777
+},
+{
+"character": "denia_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 774
+},
+{
+"character": "sunny_(shadow_slave)",
+"series": "shadow_slave",
+"posts": 773
+},
+{
+"character": "dantsu_flame_(center_spotlight)_(umamusume)",
+"series": "umamusume",
+"posts": 772
+},
+{
+"character": "francesca_prelati_(fate)",
+"series": "fate",
+"posts": 770
+},
+{
+"character": "regina_(precure)",
+"series": "precure",
+"posts": 765
+},
+{
+"character": "female_tyrant_(stella_sora)",
+"series": "stella_sora",
+"posts": 762
+},
+{
+"character": "almond_eye_(the_changer)_(umamusume)",
+"series": "umamusume",
+"posts": 755
+},
+{
+"character": "wuxian_(the_legend_of_luo_xiaohei)",
+"series": "the_legend_of_luo_xiaohei",
+"posts": 754
+},
+{
+"character": "rice_shower_(vampire_makeover!)_(umamusume)",
+"series": "umamusume",
+"posts": 749
+},
+{
+"character": "varka_(genshin_impact)",
+"series": "genshin_impact",
+"posts": 743
+},
+{
+"character": "matikanetannhauser_(clippety-tippety-clop)_(umamusume)",
+"series": "umamusume",
+"posts": 733
+},
+{
+"character": "meisho_doto_(turbulent_blue)_(umamusume)",
+"series": "umamusume",
+"posts": 732
+},
+{
+"character": "evil_neuro-sama_(1st_costume)",
+"series": "1st_costume",
+"posts": 731
+},
+{
+"character": "remielle_dan",
+"series": "",
+"posts": 722
+},
+{
+"character": "lebanne_(pokemon)",
+"series": "pokemon",
+"posts": 721
+},
+{
+"character": "aria_(robot)_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 719
+},
+{
+"character": "todo_aoi_(jujutsu_kaisen)",
+"series": "jujutsu_kaisen",
+"posts": 718
+},
+{
+"character": "medusa_(casual_wear)_(fate)",
+"series": "fate",
+"posts": 716
+},
+{
+"character": "sigrika_(wuthering_waves)",
+"series": "wuthering_waves",
+"posts": 703
+},
+{
+"character": "symphony_miku",
+"series": "vocaloid",
+"posts": 702
+},
+{
+"character": "zhuang_fangyi_(arknights)",
+"series": "arknights",
+"posts": 688
+},
+{
+"character": "admire_vega_(starry_nocturne)_(umamusume)",
+"series": "umamusume",
+"posts": 685
+},
+{
+"character": "soul_(utdr)",
+"series": "utdr",
+"posts": 683
+},
+{
+"character": "scathach-skadi_(first_ascension)_(fate)",
+"series": "fate",
+"posts": 679
+},
+{
+"character": "kasugano_urara_(precure)",
+"series": "precure",
+"posts": 672
+},
+{
+"character": "promeia_(zenless_zone_zero)",
+"series": "zenless_zone_zero",
+"posts": 670
+},
+{
+"character": "tomoe_rena",
+"series": "",
+"posts": 661
+},
+{
+"character": "eas_(precure)",
+"series": "precure",
+"posts": 660
+},
+{
+"character": "howl_(howl_no_ugoku_shiro)",
+"series": "howl_no_ugoku_shiro",
+"posts": 646
+},
+{
+"character": "luna_(honkai_impact)",
+"series": "honkai_impact",
+"posts": 639
+},
+{
+"character": "saber_alter_(fate/stay_night)",
+"series": "fate/stay_night",
+"posts": 639
+},
+{
+"character": "fushi_(cho_kaguya-hime!)",
+"series": "cho_kaguya-hime!",
+"posts": 638
+},
+{
+"character": "helena_blavatsky_(caster)_(fate)",
+"series": "fate",
+"posts": 633
+},
+{
+"character": "silver_wolf_(lv.999)_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 631
+},
+{
+"character": "saber_(swimsuit_archer)_(first_ascension)_(fate)",
+"series": "fate",
+"posts": 630
+},
+{
+"character": "zen'in_maki_(post_shibuya)",
+"series": "post_shibuya",
+"posts": 630
+},
+{
+"character": "red_soul_(utdr)",
+"series": "utdr",
+"posts": 629
+},
+{
+"character": "katsuragi_ace_(dragon_rising_to_the_top)_(umamusume)",
+"series": "umamusume",
+"posts": 622
+},
+{
+"character": "sakamoto_ryuji",
+"series": "persona_5",
+"posts": 619
+},
+{
+"character": "male_endministrator_(arknights)",
+"series": "arknights",
+"posts": 613
+},
+{
+"character": "sameko_saba_(1st_costume)",
+"series": "1st_costume",
+"posts": 609
+},
+{
+"character": "kitagawa_yusuke",
+"series": "persona_5",
+"posts": 608
+},
+{
+"character": "bao_the_whale",
+"series": "",
+"posts": 606
+},
+{
+"character": "debitto_(makaino_ririmu)",
+"series": "makaino_ririmu",
+"posts": 604
+},
+{
+"character": "ashveil_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 602
+},
+{
+"character": "limealicious",
+"series": "",
+"posts": 602
+},
+{
+"character": "pombon",
+"series": "",
+"posts": 601
+},
+{
+"character": "yao_guang_(honkai:_star_rail)",
+"series": "honkai:_star_rail",
+"posts": 600
+}
+],
+"note": "series filled from the name qualifier; 20 well-known characters mapped by hand; empty = unknown"
+}

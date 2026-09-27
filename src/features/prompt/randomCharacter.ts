@@ -1,40 +1,29 @@
-import { chooseCharacterTag, detectCharacterTagFromPrompt } from "./characterTag";
+import { detectCharacterTagFromPrompt } from "./characterTag";
 import type { GenerationDraft } from "../../adapters/novelai/types";
 import { UNCATEGORIZED_SERIES, type CharacterLibraryEntry } from "../../stores/characterLibraryStore";
 
-/** One key per character, whatever spelling the entry arrived with (Prombot CSV quoting,
- * escaped brackets, underscores or spaces, letter case). */
-export function characterIdentity(entry: Pick<CharacterLibraryEntry, "raw">) {
-  let raw = entry.raw.trim();
-  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) raw = raw.slice(1, -1).replace(/""/g, '"');
-  return raw
-    .replace(/\\+([(){}\[\]])/g, "$1")
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
+import { characterKey, insertCharacter } from "./characterCatalog";
+import { loadCharacterCatalog } from "./characterCatalogClient";
+import type { FinderPreferences } from "../../stores/characterLibraryStore";
 
-/**
- * The characters the 🎲 draws from: Prombot bookmarks, one entry per character.
- * The on-screen count must use this too, so the number shown is the number drawn from.
- */
-export function randomCharacterPool(entries: CharacterLibraryEntry[]) {
+export function characterIdentity(entry: Pick<CharacterLibraryEntry, "raw">) { return characterKey(entry.raw); }
+
+export function randomCharacterPool(entries: CharacterLibraryEntry[], preferences?: Pick<FinderPreferences, "randomScope" | "randomSeries">) {
   const seen = new Set<string>();
-  return entries.filter((entry) => {
-    if (entry.prombotFavorite !== true) return false;
+  return entries.filter(entry => {
+    if (preferences?.randomScope === "series" && !preferences.randomSeries.includes(entry.series)) return false;
     const key = characterIdentity(entry);
     if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    seen.add(key); return true;
   });
 }
 
 export function pickRandomCharacter(
   entries: CharacterLibraryEntry[],
   random: () => number = Math.random,
+  preferences?: Pick<FinderPreferences, "randomScope" | "randomSeries">,
 ) {
-  const pool = randomCharacterPool(entries);
+  const pool = randomCharacterPool(entries, preferences);
   if (!pool.length) return null;
   const index = Math.min(pool.length - 1, Math.floor(Math.max(0, random()) * pool.length));
   return pool[index];
@@ -66,16 +55,21 @@ export function randomPickLabel(pick: RandomCharacterPick) {
 
 export async function applyRandomCharacter(
   draft: GenerationDraft,
-  entry: Pick<CharacterLibraryEntry, "display">,
+  entry: Pick<CharacterLibraryEntry, "display"> & { raw?: string },
+  mode: "name" | "features" = "name",
 ): Promise<GenerationDraft> {
   const template = draft.characters.find((character) => character.enabled) ?? draft.characters[0];
   const position = template?.position ?? { x: 0.5, y: 0.5 };
   // Resolve from the actual prompt, not the UI's debounced name label.
   const detected = template?.prompt ? await detectCharacterTagFromPrompt(template.prompt) : null;
+  const base = { prompt: template?.prompt ?? "", name: detected?.display ?? template?.name ?? "", finderTags: template?.finderTags };
+  const catalog = mode === "features" ? await loadCharacterCatalog() : [];
+  const row = catalog.find(row => characterKey(row.raw) === characterKey(entry.raw ?? entry.display))
+    ?? { raw: entry.raw ?? entry.display, display: entry.display, series: "", features: [], attire: [], isNew: false, posts: 0 };
+  const insertion = insertCharacter(base, row, mode);
   const replacement = {
     id: template?.id ?? "random-character",
-    name: entry.display,
-    prompt: chooseCharacterTag(template?.prompt ?? "", detected?.display ?? template?.name ?? "", entry.display),
+    ...insertion,
     negative: template?.negative ?? "",
     enabled: true,
     position: { ...position },

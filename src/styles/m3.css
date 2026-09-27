@@ -420,7 +420,6 @@ button:disabled {
 }
 
 .character-editor,
-.prombot-control-card,
 .backup-preview {
   border: 0;
   border-radius: var(--md-shape-lg);
@@ -474,7 +473,6 @@ button:disabled {
   background: var(--md-sys-color-surface);
 }
 
-.prombot-control-actions button:last-child,
 .backup-preview-actions .restore {
   border: 0;
   background: var(--md-sys-color-primary);
@@ -857,10 +855,6 @@ button:disabled {
   opacity: 0.8;
 }
 
-/* NAI-005 multi-line import summary */
-.prombot-message {
-  white-space: pre-line;
-}
 
 /* Constrain the grid track before fitting intrinsic (including upscaled) images. */
 .image-viewer {
