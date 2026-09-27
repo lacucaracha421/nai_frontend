@@ -29,3 +29,20 @@ it("runs version 1 hydration through persist and writes version 2 without droppi
   expect(value).not.toContain(prefix);
   vi.unstubAllGlobals();
 });
+
+it("hides suspect thumbnails by default and lets the user show or hide either kind", async () => {
+  const { isThumbnailHidden, useCharacterLibraryStore } = await import("./characterLibraryStore");
+  const store = useCharacterLibraryStore;
+  store.setState({ hiddenThumbnails: [], shownThumbnails: [] });
+  const hidden = (raw: string, suspect: boolean) => isThumbnailHidden(store.getState(), raw, suspect);
+  expect(hidden("rotom", false)).toBe(false);
+  expect(hidden("morpeko", true)).toBe(true);
+  store.getState().toggleHiddenThumbnail("morpeko", true);
+  expect(hidden("morpeko", true)).toBe(false);
+  store.getState().toggleHiddenThumbnail("morpeko", true);
+  expect(hidden("morpeko", true)).toBe(true);
+  store.getState().toggleHiddenThumbnail("rotom", false);
+  expect(hidden("rotom", false)).toBe(true);
+  store.getState().toggleHiddenThumbnail("rotom", false);
+  expect(store.getState()).toMatchObject({ hiddenThumbnails: [], shownThumbnails: [] });
+});

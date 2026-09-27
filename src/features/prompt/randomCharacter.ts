@@ -5,6 +5,7 @@ import { UNCATEGORIZED_SERIES, type CharacterLibraryEntry } from "../../stores/c
 import { characterKey, insertCharacter } from "./characterCatalog";
 import { loadCharacterCatalog } from "./characterCatalogClient";
 import type { FinderPreferences } from "../../stores/characterLibraryStore";
+import { isThumbnailSuspect } from "./thumbnailSuspects";
 
 export function characterIdentity(entry: Pick<CharacterLibraryEntry, "raw">) { return characterKey(entry.raw); }
 
@@ -66,7 +67,7 @@ export async function applyRandomCharacter(
   const catalog = mode === "features" ? await loadCharacterCatalog() : [];
   const row = catalog.find(row => characterKey(row.raw) === characterKey(entry.raw ?? entry.display))
     ?? { raw: entry.raw ?? entry.display, display: entry.display, series: "", features: [], attire: [], isNew: false, posts: 0 };
-  const insertion = insertCharacter(base, row, mode);
+  const insertion = insertCharacter(base, row, isThumbnailSuspect(row.raw) ? "name" : mode);
   const replacement = {
     id: template?.id ?? "random-character",
     ...insertion,

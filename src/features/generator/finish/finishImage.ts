@@ -4,7 +4,7 @@
  */
 import { readImageBytes } from "../../../adapters/novelai/client";
 import type { GenerationImage } from "../../../types/generation";
-import { type FinishParams, type RgbaImage } from "./finishFilter";
+import { FINISH_PRESETS, type FinishParams, type RgbaImage } from "./finishFilter";
 import { createFinishRunner, type FinishWorkerLike } from "./finishProtocol";
 import { copyPngMetadata } from "./pngMetadata";
 
@@ -81,6 +81,34 @@ export function finishPreviewSource(image: GenerationImage) {
     while (sourceCache.size > SOURCE_CACHE_LIMIT) sourceCache.delete(sourceCache.keys().next().value!);
   }
   return pending;
+}
+
+/** Runs `task` when the WebView is idle (Android WebView has requestIdleCallback; timer fallback). */
+function whenIdle(task: () => void) {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(task, { timeout: 3000 });
+  else window.setTimeout(task, 1500);
+}
+
+let warmed = false;
+/**
+ * Starts the filter worker and runs one tiny job while idle, so the first 마무리 ON does not pay for
+ * the worker's module load. Safe to call repeatedly; failures are ignored (the real job retries).
+ */
+export function prewarmFinish() {
+  if (warmed) return;
+  warmed = true;
+  whenIdle(() => {
+    const size = 128;
+    const image: RgbaImage = { data: new Uint8ClampedArray(size * size * 4).fill(128), width: size, height: size };
+    finishRunner.run(image, FINISH_PRESETS.anime, { lane: "warm" }).catch(() => {});
+  });
+}
+
+/** Decodes and downsizes this image's preview source while idle, so turning 마무리 on for it is quick. */
+export function prepareFinishSourceWhenIdle(image: GenerationImage) {
+  whenIdle(() => {
+    finishPreviewSource(image).catch(() => {});
+  });
 }
 
 /** Full-resolution filtered pixels of the original; alpha is copied unchanged. */

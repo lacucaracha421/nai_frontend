@@ -27,6 +27,7 @@ export function migrateCharacterLibrary(persisted: unknown) {
     ...finderDefaults,
     legacyFavoritesMigrated: old?.legacyFavoritesMigrated ?? false,
     hiddenThumbnails: [] as string[],
+    shownThumbnails: [] as string[],
     entries: (old?.entries ?? []).map(({ raw, display, series, addedAt }) => ({ raw, display, series, addedAt })),
   };
 }
@@ -36,7 +37,9 @@ type State = FinderPreferences & {
   legacyFavoritesMigrated: boolean;
   /** Catalog names whose thumbnail shows a different character; kept on this device only. */
   hiddenThumbnails: string[];
-  toggleHiddenThumbnail: (raw: string) => void;
+  /** Suspect thumbnails (hidden by default) that the user chose to show again. */
+  shownThumbnails: string[];
+  toggleHiddenThumbnail: (raw: string, suspect: boolean) => void;
   setFinderPreferences: (patch: Partial<FinderPreferences>) => void;
   addTag: (tag: Pick<LocalTag, "raw" | "display">, series?: string) => void;
   addMany: (tags: Array<Pick<LocalTag, "raw" | "display">>) => void;
@@ -46,6 +49,13 @@ type State = FinderPreferences & {
   isSaved: (raw: string) => boolean;
   finishLegacyMigration: () => void;
 };
+
+/** A thumbnail is hidden when the user hid it, or it is a suspect the user has not shown again. */
+export function isThumbnailHidden(
+  state: { hiddenThumbnails: string[]; shownThumbnails: string[] }, raw: string, suspect: boolean,
+) {
+  return state.hiddenThumbnails.includes(raw) || (suspect && !state.shownThumbnails.includes(raw));
+}
 
 export const UNCATEGORIZED_SERIES = "미분류";
 
@@ -87,11 +97,14 @@ export const useCharacterLibraryStore = create<State>()(
       legacyFavoritesMigrated: false,
       hiddenThumbnails: [],
       ...finderDefaults,
-      toggleHiddenThumbnail: (raw) => set((state) => ({
-        hiddenThumbnails: state.hiddenThumbnails.includes(raw)
-          ? state.hiddenThumbnails.filter((name) => name !== raw)
-          : [...state.hiddenThumbnails, raw],
-      })),
+      shownThumbnails: [],
+      toggleHiddenThumbnail: (raw, suspect) => set((state) => {
+        const without = (list: string[]) => list.filter((name) => name !== raw);
+        if (isThumbnailHidden(state, raw, suspect)) {
+          return { hiddenThumbnails: without(state.hiddenThumbnails), shownThumbnails: suspect ? [...without(state.shownThumbnails), raw] : state.shownThumbnails };
+        }
+        return suspect ? { shownThumbnails: without(state.shownThumbnails) } : { hiddenThumbnails: [...state.hiddenThumbnails, raw] };
+      }),
       setFinderPreferences: (patch) => set(patch),
       addTag: (tag, series) => set((state) => {
         if (state.entries.some((entry) => entry.raw === tag.raw)) return state;

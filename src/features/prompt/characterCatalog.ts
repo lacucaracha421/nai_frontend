@@ -3,6 +3,14 @@ import { chooseCharacterTag, normalizedCharacterTag } from "./characterTag";
 import { UNCATEGORIZED_SERIES, type CharacterLibraryEntry, type InsertMode } from "../../stores/characterLibraryStore";
 
 export type CatalogCharacter = { raw: string; display: string; series: string; features: string[]; attire: string[]; isNew: boolean; posts: number };
+import seriesKo from "./seriesKo.json";
+import characterKo from "./characterKo.json";
+
+/**
+ * Korean series names shown instead of Danbooru copyright tags. `seriesKo.json` covers every
+ * catalog series (drafted 2026-09-27: official Korean titles where known, else fan names or
+ * transliterations; the top 130 were reviewed). The hand-picked labels below win over it.
+ */
 export const SERIES_LABELS: Record<string, string> = {
   wuthering_waves: "명조", zenless_zone_zero: "젠레스 존 제로", blue_archive: "블루 아카이브",
   "reverse:1999": "리버스:1999", chainsaw_man: "체인소맨", girls_band_cry: "걸즈 밴드 크라이",
@@ -19,9 +27,17 @@ export function characterKey(raw: string) {
   return normalizedCharacterTag(value);
 }
 const seriesAliases = Object.entries(SERIES_LABELS).map(([key, label]) => ({ key: characterKey(key), label }));
-const labels = new Map(seriesAliases.map(({ key, label }) => [key, label]));
+const labels = new Map([
+  ...Object.entries(seriesKo as Record<string, string>).map(([key, label]) => [characterKey(key), label] as const),
+  ...seriesAliases.map(({ key, label }) => [key, label] as const),
+]);
 export function seriesLabel(series: string) {
   return labels.get(characterKey(series)) ?? series.replaceAll("_", " ");
+}
+const characterLabels = new Map(Object.entries(characterKo as Record<string, string>).map(([key, label]) => [characterKey(key), label]));
+/** Korean name for a character (drafted 2026-09-27 for the user's 도감, reviewed), if known. */
+export function characterLabel(raw: string) {
+  return characterLabels.get(characterKey(raw));
 }
 export function matchesSeries(series: string, query: string) {
   const q = characterKey(query);
@@ -33,7 +49,7 @@ export function matchesCharacter(row: CatalogCharacter, query: string) {
   if (!text) {
     const name = characterKey(row.raw);
     const aliases = seriesAliases.filter(({ key }) => name.includes(key)).map(({ label }) => label).join(" ");
-    text = characterKey(`${row.raw} ${row.display} ${row.series} ${seriesLabel(row.series)} ${aliases}`);
+    text = characterKey(`${row.raw} ${row.display} ${characterLabel(row.raw) ?? ""} ${row.series} ${seriesLabel(row.series)} ${aliases}`);
     searchText.set(row, text);
   }
   return text.includes(characterKey(query));

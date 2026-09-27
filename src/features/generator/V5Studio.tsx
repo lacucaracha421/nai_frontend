@@ -32,7 +32,7 @@ import {
   formatUsageLabel,
 } from "../../adapters/novelai/anlas";
 import { FinishSupersededError } from "./finish/finishProtocol";
-import { finishPreviewSource, finishRunner, imageObjectUrl } from "./finish/finishImage";
+import { finishPreviewSource, finishRunner, imageObjectUrl, prepareFinishSourceWhenIdle, prewarmFinish } from "./finish/finishImage";
 import { formatFileSize, prepareSave } from "./save/prepareSave";
 import { browserSaveDeps } from "./save/saveDeps";
 import { FinishSheet } from "./finish/FinishSheet";
@@ -403,6 +403,12 @@ export function V5Studio() {
     ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota)
     : undefined;
   const anlasText = quota?.anlas !== null && quota?.anlas !== undefined ? `Anlas ${quota.anlas.toLocaleString()}` : null;
+
+  useEffect(() => { prewarmFinish(); }, []);
+  // Prepare the shown image's preview source ahead of time; the cache keeps the latest four.
+  useEffect(() => {
+    if (previewTarget && !imagesHidden) prepareFinishSourceWhenIdle(previewTarget);
+  }, [previewTarget, imagesHidden]);
 
   // Live stage preview: a downscaled copy filtered in the worker; stale slider jobs are dropped.
   useEffect(() => {

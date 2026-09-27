@@ -86,3 +86,4 @@
 .finder-download { flex: none; margin: 2px 0 12px; color: var(--finder-muted); font-size: 11px; text-align: right; }
 .finder-download progress { display: block; height: 3px; width: 100%; margin-top: 8px; accent-color: var(--md-sys-color-primary); }
 .finder-detail-top .finder-hide-thumbnail { display: block; min-height: 44px; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--finder-muted); font-size: 14px; text-decoration: underline; }
+.finder-detail-top .finder-suspect-note { display: block; color: var(--finder-muted); font-size: 13px; }

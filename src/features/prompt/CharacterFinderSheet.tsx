@@ -1,11 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useBackLayer } from "../../app/backStack";
-import { useCharacterLibraryStore, UNCATEGORIZED_SERIES, type CharacterLibraryEntry, type InsertMode } from "../../stores/characterLibraryStore";
+import { isThumbnailHidden, useCharacterLibraryStore, UNCATEGORIZED_SERIES, type CharacterLibraryEntry, type InsertMode } from "../../stores/characterLibraryStore";
 import type { CharacterPrompt } from "../../types/generation";
-import { characterKey, groupCatalog, insertCharacter, libraryCharacter, matchesCharacter, matchesSeries, seriesLabel, type CatalogCharacter } from "./characterCatalog";
+import { characterKey, characterLabel, groupCatalog, insertCharacter, libraryCharacter, matchesCharacter, matchesSeries, seriesLabel, type CatalogCharacter } from "./characterCatalog";
 import { loadCharacterCatalog } from "./characterCatalogClient";
 import { prefetchThumbnails, useThumbnail, useThumbnailProgress } from "./characterThumbnails";
 import { randomCharacterPool } from "./randomCharacter";
+import { isThumbnailSuspect } from "./thumbnailSuspects";
 import "./characterLibrary.css";
 import "./characterFinder.css";
 
@@ -28,7 +29,7 @@ function CharacterTile({ row, saved, thumbnail, onPick, onStar, onMove }: {
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
   useEffect(() => cancel, []);
   return <div className="finder-tile">
-    <div className="finder-tile-art" role="button" tabIndex={0} aria-label={`${row.display} 선택`}
+    <div className="finder-tile-art" role="button" tabIndex={0} aria-label={`${characterLabel(row.raw) ?? row.display} 선택`}
       onContextMenu={event => event.preventDefault()}
       onPointerDown={event => {
         if ((event.target as HTMLElement).closest("button")) return;
@@ -43,7 +44,7 @@ function CharacterTile({ row, saved, thumbnail, onPick, onStar, onMove }: {
       {row.isNew && <small className="finder-new">신규</small>}
       <button type="button" className={`finder-star ${saved ? "active" : ""}`} aria-label={`${row.display} ${saved ? "도감에서 삭제" : "도감에 저장"}`} aria-pressed={saved} onClick={event => { event.stopPropagation(); onStar(); }}>{saved ? "★" : "☆"}</button>
     </div>
-    <strong>{row.display}</strong><small>{seriesLabel(row.series)}</small>
+    <strong>{characterLabel(row.raw) ?? row.display}</strong>{characterLabel(row.raw) && <small className="finder-tag-name">{row.display}</small>}<small>{seriesLabel(row.series)}</small>
   </div>;
 }
 
@@ -62,6 +63,8 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
   const [sort, setSort] = useState<"popular" | "saved" | "new" | "name">("popular");
   const [allSeries, setAllSeries] = useState(false);
   const [picked, setPicked] = useState<CatalogCharacter | null>(null);
+  // A suspect's 외형/의상 tags likely describe another character: name only unless chosen here.
+  const [modeChosen, setModeChosen] = useState(false);
   const [removed, setRemoved] = useState<string[]>([]);
   const [add, setAdd] = useState(initialAdd);
   const [randomOpen, setRandomOpen] = useState(initialRandom);
@@ -81,8 +84,8 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
   useEffect(reload, []);
   useEffect(() => { library.setFinderPreferences({ finderTab: tab, finderSeries: series }); }, [tab, series, library.setFinderPreferences]);
   const byKey = useMemo(() => new Map(catalog.map(row => [characterKey(row.raw), row])), [catalog]);
-  const hiddenThumbnails = useMemo(() => new Set(library.hiddenThumbnails), [library.hiddenThumbnails]);
-  const thumbnailOf = (row: CatalogCharacter) => byKey.has(characterKey(row.raw)) && !row.isNew && !hiddenThumbnails.has(row.raw) ? row.raw : null;
+  const thumbnailHidden = (raw: string) => isThumbnailHidden(library, raw, isThumbnailSuspect(raw));
+  const thumbnailOf = (row: CatalogCharacter) => byKey.has(characterKey(row.raw)) && !row.isNew && !thumbnailHidden(row.raw) ? row.raw : null;
   const savedByKey = useMemo(() => new Map(library.entries.map(entry => [characterKey(entry.raw), entry])), [library.entries]);
   const groups = useMemo(() => groupCatalog(catalog, library.entries), [catalog, library.entries]);
   const folders = useMemo(() => {
@@ -121,13 +124,13 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
     if (existing) library.removeTag(existing.raw); else library.addTag(row, row.series || UNCATEGORIZED_SERIES);
   };
   const select = (row: CatalogCharacter) => {
-    if (tab === "library") onSelect({ row, mode: library.insertMode, removed: [], add: initialAdd });
-    else { setPicked(row); setRemoved([]); setAdd(initialAdd); }
+    if (tab === "library") onSelect({ row, mode: isThumbnailSuspect(row.raw) ? "name" : library.insertMode, removed: [], add: initialAdd });
+    else { setPicked(row); setRemoved([]); setAdd(initialAdd); setModeChosen(false); }
   };
   const changeTab = (next: "find" | "library") => { setTab(next); setSeries(null); setQuery(""); setFilter("all"); setSort("popular"); };
   const covers = (rows: CatalogCharacter[]) => <span className="finder-covers">{rows.slice(0, 3).map(row => <Thumbnail key={row.raw} raw={thumbnailOf(row)} />)}</span>;
   const seriesRow = (group: typeof groups[number]) => <button type="button" className="finder-series-row" key={group.series} onClick={() => { setSeries(group.series); setQuery(""); }}>{covers(group.rows)}<span><strong>{seriesLabel(group.series)}</strong><small>{group.rows.length}명 {group.saved > 0 && `· 도감 ${group.saved}`} {group.newCount > 0 && `· 신규 ${group.newCount}`}</small></span><span>›</span></button>;
-  const effectiveMode = picked && !picked.features.length && !picked.attire.length ? "name" : library.insertMode;
+  const effectiveMode = picked && (!picked.features.length && !picked.attire.length || isThumbnailSuspect(picked.raw) && !modeChosen) ? "name" : library.insertMode;
   const preview = picked ? insertCharacter(add || !current ? { prompt: "", name: "" } : current, picked, effectiveMode, removed).prompt : "";
   const move = (target: string) => { if (moving) library.moveTag(moving.raw, target); setMoving(null); setNewSeries(""); };
   const showGrid = !!series || !!query || filter !== "all";
@@ -185,9 +188,9 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
     </div>
     <footer className="finder-footer">{randomOpen ? <button type="button" className="finder-primary" onClick={() => setRandomOpen(false)}>완료 · {randomCount}명</button> : <><span>{progress.pending ? `썸네일 받는 중 · ${progress.pending}개` : "오프라인 준비"} · 도감 {savedNames.length}명 중 {progress.saved}명 저장됨{progress.failed > 0 && ` · 실패 ${progress.failed}`}</span>{progress.pending > 0 && <progress aria-label="도감 썸네일 저장" max={Math.max(savedNames.length, 1)} value={progress.saved} />}</>}</footer>
     {picked && <div className="finder-overlay" onClick={() => setPicked(null)}><section className="finder-detail" role="dialog" aria-modal="true" aria-label="캐릭터 넣기" onClick={event => event.stopPropagation()}>
-      <div className="drag-handle" /><div className="finder-detail-top"><Thumbnail raw={thumbnailOf(picked)} /><div><h2>{picked.display}</h2><p>{seriesLabel(picked.series)}</p><button type="button" aria-pressed={savedByKey.has(characterKey(picked.raw))} onClick={() => toggle(picked)}>{savedByKey.has(characterKey(picked.raw)) ? "★ 도감에 있음" : "☆ 도감에 저장"}</button>{!picked.isNew && <button type="button" className="finder-hide-thumbnail" onClick={() => library.toggleHiddenThumbnail(picked.raw)}>{hiddenThumbnails.has(picked.raw) ? "썸네일 다시 보기" : "다른 캐릭터 그림이면 썸네일 숨기기"}</button>}</div></div>
+      <div className="drag-handle" /><div className="finder-detail-top"><Thumbnail raw={thumbnailOf(picked)} /><div><h2>{characterLabel(picked.raw) ?? picked.display}</h2><p>{characterLabel(picked.raw) ? `${picked.display} · ` : ""}{seriesLabel(picked.series)}</p><button type="button" aria-pressed={savedByKey.has(characterKey(picked.raw))} onClick={() => toggle(picked)}>{savedByKey.has(characterKey(picked.raw)) ? "★ 도감에 있음" : "☆ 도감에 저장"}</button>{!picked.isNew && <button type="button" className="finder-hide-thumbnail" onClick={() => library.toggleHiddenThumbnail(picked.raw, isThumbnailSuspect(picked.raw))}>{thumbnailHidden(picked.raw) ? "썸네일 다시 보기" : "다른 캐릭터 그림이면 썸네일 숨기기"}</button>}{!picked.isNew && isThumbnailSuspect(picked.raw) && thumbnailHidden(picked.raw) && <small className="finder-suspect-note">다른 캐릭터 그림으로 추정돼 숨겼어요</small>}</div></div>
       {([['외형', picked.features], ['의상', picked.attire]] as const).map(([label, tags]) => <div key={label}><h3>{label} <small>눌러서 빼기</small></h3><div className="finder-chips">{tags.map(tag => <button type="button" key={tag} aria-pressed={!removed.includes(tag)} className={removed.includes(tag) ? "dropped" : ""} onClick={() => setRemoved(old => old.includes(tag) ? old.filter(value => value !== tag) : [...old, tag])}>{tag}</button>)}{!tags.length && <small>자료 없음</small>}</div></div>)}
-      <h3>넣을 내용</h3><div className="finder-segment">{MODES.map(([key, label]) => <button type="button" key={key} aria-pressed={effectiveMode === key} disabled={key !== "name" && !picked.features.length && !picked.attire.length} onClick={() => library.setFinderPreferences({ insertMode: key })}>{label}</button>)}</div>
+      <h3>넣을 내용</h3><div className="finder-segment">{MODES.map(([key, label]) => <button type="button" key={key} aria-pressed={effectiveMode === key} disabled={key !== "name" && !picked.features.length && !picked.attire.length} onClick={() => { setModeChosen(true); library.setFinderPreferences({ insertMode: key }); }}>{label}</button>)}</div>
       <h3>넣을 자리</h3><div className="finder-segment"><button type="button" disabled={!current} aria-pressed={!add} onClick={() => setAdd(false)}>캐릭터 {currentIndex + 1} 바꾸기</button><button type="button" aria-pressed={add} onClick={() => setAdd(true)}>새 캐릭터로 추가</button></div>
       <p className="finder-preview" aria-label="삽입할 프롬프트 미리보기">{preview}</p><div className="finder-actions"><button type="button" onClick={() => setPicked(null)}>닫기</button><button type="button" className="finder-primary" onClick={() => onSelect({ row: picked, mode: effectiveMode, removed, add: add || !current })}>{add || !current ? "새 캐릭터로 추가" : `캐릭터 ${currentIndex + 1}에 넣기`}</button></div>
     </section></div>}
