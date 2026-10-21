@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type TranslationProvider = "ollama" | "openrouter";
+export type TranslationProvider = "ollama" | "openrouter" | "neuralwatt";
 
 export type TranslationConfig = {
   provider: TranslationProvider;
@@ -11,6 +11,7 @@ export type TranslationConfig = {
 export type TranslationKeyStatus = {
   ollama: boolean;
   openrouter: boolean;
+  neuralwatt: boolean;
 };
 
 function isTauriRuntime() {
@@ -27,7 +28,7 @@ export async function clearTranslationApiKey(provider: TranslationProvider) {
 }
 
 export async function getTranslationKeyStatus() {
-  if (!isTauriRuntime()) return { ollama: false, openrouter: false };
+  if (!isTauriRuntime()) return { ollama: false, openrouter: false, neuralwatt: false };
   return invoke<TranslationKeyStatus>("translation_key_status");
 }
 

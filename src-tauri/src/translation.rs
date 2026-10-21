@@ -5,8 +5,10 @@ use serde_json::{json, Value};
 const TOKEN_SERVICE: &str = "local.nai.v5studio";
 const OLLAMA_ACCOUNT: &str = "translation-ollama-api-key";
 const OPENROUTER_ACCOUNT: &str = "translation-openrouter-api-key";
+const NEURALWATT_ACCOUNT: &str = "translation-neuralwatt-api-key";
 const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const NEURALWATT_URL: &str = "https://api.neuralwatt.com/v1/chat/completions";
 
 const TRANSLATION_SYSTEM_PROMPT: &str = r#"Translate the selected Korean text into English for a NovelAI image prompt.
 Preserve the original writing style: natural-language prose stays natural-language, while tag-like fragments stay concise and tag-like.
@@ -19,12 +21,14 @@ Return only the translated text."#;
 pub enum TranslationProvider {
     Ollama,
     Openrouter,
+    Neuralwatt,
 }
 impl TranslationProvider {
     pub fn parse(value: &str) -> Result<Self, String> {
         match value.trim().to_ascii_lowercase().as_str() {
             "ollama" => Ok(Self::Ollama),
             "openrouter" => Ok(Self::Openrouter),
+            "neuralwatt" => Ok(Self::Neuralwatt),
             _ => Err("지원하지 않는 번역 provider랍니다.".to_string()),
         }
     }
@@ -33,6 +37,7 @@ impl TranslationProvider {
         match self {
             Self::Ollama => OLLAMA_ACCOUNT,
             Self::Openrouter => OPENROUTER_ACCOUNT,
+            Self::Neuralwatt => NEURALWATT_ACCOUNT,
         }
     }
 }
@@ -49,6 +54,7 @@ pub struct TranslationConfig {
 pub struct TranslationKeyStatus {
     pub ollama: bool,
     pub openrouter: bool,
+    pub neuralwatt: bool,
 }
 
 fn ensure_credential_store() -> Result<(), String> {
@@ -113,6 +119,7 @@ pub fn key_status() -> Result<TranslationKeyStatus, String> {
     Ok(TranslationKeyStatus {
         ollama: load_api_key(&TranslationProvider::Ollama)?.is_some(),
         openrouter: load_api_key(&TranslationProvider::Openrouter)?.is_some(),
+        neuralwatt: load_api_key(&TranslationProvider::Neuralwatt)?.is_some(),
     })
 }
 
@@ -145,7 +152,10 @@ async fn response_json(response: reqwest::Response, provider: &str) -> Result<Va
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(format!("{provider} API error ({status}): {}", compact_error(&body)));
+        return Err(format!(
+            "{provider} API error ({status}): {}",
+            compact_error(&body)
+        ));
     }
     serde_json::from_str(&body)
         .map_err(|error| format!("{provider} returned invalid JSON: {error}"))
@@ -224,10 +234,29 @@ async fn translate_ollama(config: &TranslationConfig, text: &str) -> Result<Stri
 }
 
 async fn translate_openrouter(config: &TranslationConfig, text: &str) -> Result<String, String> {
-    let model = model(config)?;
-    let api_key = load_api_key(&TranslationProvider::Openrouter)?
-        .ok_or_else(|| "OpenRouter API key를 먼저 저장하시와요.".to_string())?;
-    let payload = json!({
+    translate_chat(
+        config,
+        text,
+        &TranslationProvider::Openrouter,
+        OPENROUTER_URL,
+        "OpenRouter",
+    )
+    .await
+}
+
+async fn translate_neuralwatt(config: &TranslationConfig, text: &str) -> Result<String, String> {
+    translate_chat(
+        config,
+        text,
+        &TranslationProvider::Neuralwatt,
+        NEURALWATT_URL,
+        "Neuralwatt",
+    )
+    .await
+}
+
+fn chat_payload(model: &str, text: &str, provider: &TranslationProvider) -> Value {
+    let mut payload = json!({
         "model": model,
         "messages": [
             {"role": "system", "content": TRANSLATION_SYSTEM_PROMPT},
@@ -235,15 +264,32 @@ async fn translate_openrouter(config: &TranslationConfig, text: &str) -> Result<
         ],
         "stream": false
     });
+    if matches!(provider, TranslationProvider::Neuralwatt) {
+        payload["reasoning_effort"] = json!("none");
+    }
+    payload
+}
+
+async fn translate_chat(
+    config: &TranslationConfig,
+    text: &str,
+    provider: &TranslationProvider,
+    url: &str,
+    label: &str,
+) -> Result<String, String> {
+    let model = model(config)?;
+    let api_key =
+        load_api_key(provider)?.ok_or_else(|| format!("{label} API key를 먼저 저장하시와요."))?;
+    let payload = chat_payload(model, text, provider);
     let response = client()?
-        .post(OPENROUTER_URL)
+        .post(url)
         .header(AUTHORIZATION, format!("Bearer {api_key}"))
         .header(CONTENT_TYPE, "application/json")
         .json(&payload)
         .send()
         .await
-        .map_err(|error| format!("OpenRouter request failed: {error}"))?;
-    let value = response_json(response, "OpenRouter").await?;
+        .map_err(|error| format!("{label} request failed: {error}"))?;
+    let value = response_json(response, label).await?;
     let content = value
         .get("choices")
         .and_then(Value::as_array)
@@ -251,7 +297,7 @@ async fn translate_openrouter(config: &TranslationConfig, text: &str) -> Result<
         .and_then(|choice| choice.get("message"))
         .and_then(|message| message.get("content"))
         .and_then(content_text)
-        .ok_or_else(|| "OpenRouter 응답에 번역 텍스트가 없사와요.".to_string())?;
+        .ok_or_else(|| format!("{label} 응답에 번역 텍스트가 없사와요."))?;
     clean_translation(content)
 }
 
@@ -262,9 +308,45 @@ pub async fn translate(config: &TranslationConfig, text: &str) -> Result<String,
     match config.provider {
         TranslationProvider::Ollama => translate_ollama(config, text).await,
         TranslationProvider::Openrouter => translate_openrouter(config, text).await,
+        TranslationProvider::Neuralwatt => translate_neuralwatt(config, text).await,
     }
 }
 
 pub async fn test(config: &TranslationConfig) -> Result<String, String> {
     translate(config, "테스트").await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neuralwatt_provider_has_its_own_credentials() {
+        let provider = TranslationProvider::parse(" Neuralwatt ").unwrap();
+        assert!(matches!(provider, TranslationProvider::Neuralwatt));
+        assert_eq!(provider.account(), "translation-neuralwatt-api-key");
+        assert!(matches!(
+            serde_json::from_str::<TranslationProvider>("\"neuralwatt\"").unwrap(),
+            TranslationProvider::Neuralwatt
+        ));
+    }
+
+    #[test]
+    fn neuralwatt_disables_reasoning_without_changing_openrouter_payload() {
+        let openrouter = chat_payload("test-model", "테스트", &TranslationProvider::Openrouter);
+        let mut neuralwatt = chat_payload("test-model", "테스트", &TranslationProvider::Neuralwatt);
+        assert_eq!(
+            neuralwatt
+                .as_object_mut()
+                .unwrap()
+                .remove("reasoning_effort"),
+            Some(json!("none"))
+        );
+        assert_eq!(neuralwatt, openrouter);
+        assert_eq!(
+            openrouter["messages"][0]["content"],
+            TRANSLATION_SYSTEM_PROMPT
+        );
+        assert_eq!(openrouter["stream"], false);
+    }
 }

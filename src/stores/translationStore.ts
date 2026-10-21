@@ -14,6 +14,7 @@ import {
 type Status = "idle" | "saving" | "testing" | "ready" | "error";
 
 export const DEFAULT_OPENROUTER_TRANSLATION_MODEL = "google/gemini-3.5-flash-lite";
+export const DEFAULT_NEURALWATT_TRANSLATION_MODEL = "deepseek-v4-flash";
 const LEGACY_OPENROUTER_TRANSLATION_MODEL = "google/gemini-2.5-flash-lite";
 
 export function migrateTranslationSettings(persistedState: unknown, version: number) {
@@ -25,6 +26,9 @@ export function migrateTranslationSettings(persistedState: unknown, version: num
   if (version < 1 && (!model || model === LEGACY_OPENROUTER_TRANSLATION_MODEL)) {
     state.openRouterModel = DEFAULT_OPENROUTER_TRANSLATION_MODEL;
   }
+  if (version < 2 && (typeof state.neuralwattModel !== "string" || !state.neuralwattModel.trim())) {
+    state.neuralwattModel = DEFAULT_NEURALWATT_TRANSLATION_MODEL;
+  }
 
   return state;
 }
@@ -34,8 +38,10 @@ type State = {
   ollamaBaseUrl: string;
   ollamaModel: string;
   openRouterModel: string;
+  neuralwattModel: string;
   ollamaKeyInput: string;
   openRouterKeyInput: string;
+  neuralwattKeyInput: string;
   keyStatus: TranslationKeyStatus;
   status: Status;
   message: string;
@@ -44,6 +50,7 @@ type State = {
   setOllamaBaseUrl: (value: string) => void;
   setOllamaModel: (value: string) => void;
   setOpenRouterModel: (value: string) => void;
+  setNeuralwattModel: (value: string) => void;
   setKeyInput: (provider: TranslationProvider, value: string) => void;
   refreshKeyStatus: () => Promise<void>;
   saveKey: (provider: TranslationProvider) => Promise<void>;
@@ -52,7 +59,7 @@ type State = {
   translate: (text: string) => Promise<string>;
 };
 
-function configFrom(state: Pick<State, "provider" | "ollamaBaseUrl" | "ollamaModel" | "openRouterModel">): TranslationConfig {
+function configFrom(state: Pick<State, "provider" | "ollamaBaseUrl" | "ollamaModel" | "openRouterModel" | "neuralwattModel">): TranslationConfig {
   if (state.provider === "ollama") {
     return {
       provider: "ollama",
@@ -61,8 +68,8 @@ function configFrom(state: Pick<State, "provider" | "ollamaBaseUrl" | "ollamaMod
     };
   }
   return {
-    provider: "openrouter",
-    model: state.openRouterModel.trim(),
+    provider: state.provider,
+    model: (state.provider === "neuralwatt" ? state.neuralwattModel : state.openRouterModel).trim(),
   };
 }
 
@@ -77,9 +84,11 @@ export const useTranslationStore = create<State>()(
       ollamaBaseUrl: "http://localhost:11434",
       ollamaModel: "",
       openRouterModel: DEFAULT_OPENROUTER_TRANSLATION_MODEL,
+      neuralwattModel: DEFAULT_NEURALWATT_TRANSLATION_MODEL,
       ollamaKeyInput: "",
       openRouterKeyInput: "",
-      keyStatus: { ollama: false, openrouter: false },
+      neuralwattKeyInput: "",
+      keyStatus: { ollama: false, openrouter: false, neuralwatt: false },
       status: "idle",
       message: "",
       translating: false,
@@ -87,7 +96,10 @@ export const useTranslationStore = create<State>()(
       setOllamaBaseUrl: (ollamaBaseUrl) => set({ ollamaBaseUrl }),
       setOllamaModel: (ollamaModel) => set({ ollamaModel }),
       setOpenRouterModel: (openRouterModel) => set({ openRouterModel }),
-      setKeyInput: (provider, value) => set(provider === "ollama" ? { ollamaKeyInput: value } : { openRouterKeyInput: value }),
+      setNeuralwattModel: (neuralwattModel) => set({ neuralwattModel }),
+      setKeyInput: (provider, value) => set(provider === "ollama"
+        ? { ollamaKeyInput: value }
+        : provider === "neuralwatt" ? { neuralwattKeyInput: value } : { openRouterKeyInput: value }),
 
       refreshKeyStatus: async () => {
         try {
@@ -99,7 +111,8 @@ export const useTranslationStore = create<State>()(
       },
 
       saveKey: async (provider) => {
-        const input = provider === "ollama" ? get().ollamaKeyInput : get().openRouterKeyInput;
+        const input = provider === "ollama" ? get().ollamaKeyInput
+          : provider === "neuralwatt" ? get().neuralwattKeyInput : get().openRouterKeyInput;
         if (!input.trim()) {
           set({ status: "error", message: "API key를 입력하시와요." });
           return;
@@ -109,6 +122,8 @@ export const useTranslationStore = create<State>()(
           await setTranslationApiKey(provider, input.trim());
           set(provider === "ollama"
             ? { ollamaKeyInput: "", status: "ready", message: "Ollama API key를 저장했사와요." }
+            : provider === "neuralwatt"
+            ? { neuralwattKeyInput: "", status: "ready", message: "Neuralwatt API key를 저장했사와요." }
             : { openRouterKeyInput: "", status: "ready", message: "OpenRouter API key를 저장했사와요." });
           await get().refreshKeyStatus();
         } catch (error) {
@@ -152,13 +167,14 @@ export const useTranslationStore = create<State>()(
     }),
     {
       name: "nai-v5-translation-settings-v0.1",
-      version: 1,
+      version: 2,
       migrate: migrateTranslationSettings,
       partialize: (state) => ({
         provider: state.provider,
         ollamaBaseUrl: state.ollamaBaseUrl,
         ollamaModel: state.ollamaModel,
         openRouterModel: state.openRouterModel,
+        neuralwattModel: state.neuralwattModel,
       }),
     },
   ),
