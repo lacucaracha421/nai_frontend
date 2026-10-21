@@ -120,7 +120,7 @@ export function FinishSheet({ image, busy, onClose }: { image: GenerationImage |
         >
           <span>{enabled ? "켜짐" : "꺼짐"}</span>
         </button>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="마무리 필터 닫기">↓</button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="마무리 필터 닫기"><span className="mobile-panel-close">↓</span><span className="desktop-panel-close">×</span></button>
       </div>
 
       <div className="finish-sheet-body">

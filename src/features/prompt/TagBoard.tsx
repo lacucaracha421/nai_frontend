@@ -1,3 +1,4 @@
+import { useDesktopLayout, nativeTextTarget } from "../../app/desktopLayout";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { searchLocalTags, type LocalTag, type TagCategory } from "../tags/localTagIndex";
@@ -151,6 +152,7 @@ export function TagBoard({
   onEditingChange,
   startEditing,
 }: Props) {
+  const desktop = useDesktopLayout();
   const tags = useMemo(() => splitTags(value), [value]);
   const [selected, setSelected] = useState<number | null>(null);
   const [draft, setDraftState] = useState<Draft | null>(() => initialDraft(startEditing, value));
@@ -271,7 +273,7 @@ export function TagBoard({
       setSelected(commitDraft(true)(index));
       return;
     }
-    if (selected === index) startEdit(index);
+    if (!desktop && selected === index) startEdit(index);
     else setSelected(index);
   };
 
@@ -365,10 +367,12 @@ export function TagBoard({
     const panel = bubbleRef.current;
     if (!chip || !content) return;
     const width = panel?.offsetWidth ?? 360;
-    const center = chip.offsetLeft + chip.offsetWidth / 2;
+    const chipBox = chip.getBoundingClientRect();
+    const contentBox = content.getBoundingClientRect();
+    const center = desktop ? chipBox.left - contentBox.left + chipBox.width / 2 : chip.offsetLeft + chip.offsetWidth / 2;
     const left = Math.max(0, Math.min(center - width / 2, content.clientWidth - width));
-    setBubble({ top: chip.offsetTop + chip.offsetHeight + 10, left, arrow: center - left });
-  }, [selected, value]);
+    setBubble({ top: desktop ? chipBox.bottom - contentBox.top + 10 : chip.offsetTop + chip.offsetHeight + 10, left, arrow: center - left });
+  }, [selected, value, desktop]);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -485,6 +489,17 @@ export function TagBoard({
     else setDraft({ mode: "new", at: Math.min(pending.mode === "new" ? pending.at : pending.index, count), text: pending.text });
   };
 
+  useEffect(() => {
+    if (!desktop) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" || nativeTextTarget(event.target) || selected === null) return;
+      event.preventDefault();
+      bubbleAction("delete");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const editingInput = (
     <span className="tag-input-wrap" key="tag-input">
       <input
@@ -548,7 +563,7 @@ export function TagBoard({
       return;
     }
     const { weight: tagWeightValue, content, weighted } = tagWeight(tag);
-    chips.push(
+    const chip = (
       <button
         type="button"
         key={`${index}:${tag}`}
@@ -557,13 +572,29 @@ export function TagBoard({
         aria-pressed={selected === index}
         onPointerDown={chipPointerDown}
         onClick={() => tapChip(index)}
+        onDoubleClick={desktop ? () => startEdit(index) : undefined}
       >
         <span className="tag-chip-text">{content || tag}</span>
         {weighted && <small className="tag-chip-weight">{tagWeightValue.toFixed(1)}</small>}
-      </button>,
+      </button>
     );
+    chips.push(desktop ? (
+      <span className="tag-chip-wrap" key={`${index}:${tag}`}>
+        {chip}
+        <button type="button" className="chip-x" aria-label={`${content || tag} 삭제`} onPointerDown={keepFocus} onClick={() => { apply(removeTagAt(valueRef.current, index), index); setSelected(null); }}>×</button>
+      </span>
+    ) : chip);
   });
   chipRefs.current.length = tags.length;
+  const previousTagCount = useRef(tags.length);
+  useLayoutEffect(() => {
+    if (desktop && tags.length > previousTagCount.current && !draftRef.current) {
+      // Dictionary/finder insertions stay visible while their panel remains open.
+      const scroller = scrollRef.current;
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    }
+    previousTagCount.current = tags.length;
+  }, [desktop, tags.length]);
   const inputAtEnd = draft?.mode === "new" && draft.at >= tags.length;
   if (inputAtEnd) chips.push(editingInput);
   else {

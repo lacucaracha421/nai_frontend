@@ -38,9 +38,11 @@ import { browserSaveDeps } from "./save/saveDeps";
 import { FinishSheet } from "./finish/FinishSheet";
 import { useQuotaClock } from "./useQuotaClock";
 import { useImageLoader } from "./load/ImageLoadButton";
-import { useBackLayer } from "../../app/backStack";
+import { useDesktopLayout, nativeTextTarget } from "../../app/desktopLayout";
+import { backStack, useBackLayer } from "../../app/backStack";
 import { classifyEditorSwipe } from "./editorSwipe";
 import { useSettledFlag, useVisualViewport } from "./useVisualViewport";
+import { StageImage } from "./StageImage";
 
 function imageFilename(createdAt: number, seed: number | null, kind: "generation" | "upscale") {
   const date = new Date(createdAt);
@@ -131,6 +133,7 @@ export function promptMenuLabels() {
 
 type PromptToolbarProps = {
   typing: boolean;
+  desktop?: boolean;
   dictionaryLabel: string;
   sectionMenuLabel: string;
   tools: TagBoardTools;
@@ -143,6 +146,7 @@ type PromptToolbarProps = {
 
 export function PromptToolbar({
   typing,
+  desktop = false,
   dictionaryLabel,
   sectionMenuLabel,
   tools,
@@ -155,10 +159,10 @@ export function PromptToolbar({
   const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault();
   return (
     <div className={`b2-tools ${typing ? "compact" : ""}`}>
-      {typing && (
+      {(typing || desktop) && (
         <>
-          <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(-0.1)}>−0.1</button>
-          <button type="button" className="num" disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(0.1)}>+0.1</button>
+          <button type="button" className="num" data-keeps-selection={desktop ? true : undefined} disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(-0.1)}>−0.1</button>
+          <button type="button" className="num" data-keeps-selection={desktop ? true : undefined} disabled={!tools.canWeight} onPointerDown={keepFocus} onClick={() => tools.weight(0.1)}>+0.1</button>
           <span className="b2-tools-divider" aria-hidden="true" />
         </>
       )}
@@ -206,10 +210,10 @@ function PrivacyGlyph() {
   );
 }
 
-function MenuSheet({ title, items, onClose }: { title: string; items: MenuItem[]; onClose: () => void }) {
+function MenuSheet({ title, items, onClose, anchor }: { title: string; items: MenuItem[]; onClose: () => void; anchor?: CSSProperties }) {
   return (
     <div className="b2-menu-scrim" onClick={onClose}>
-      <div className="b2-menu" role="menu" aria-label={title} onClick={(event) => event.stopPropagation()}>
+      <div className="b2-menu" style={anchor} role="menu" aria-label={title} onClick={(event) => event.stopPropagation()}>
         <div className="b2-menu-title">{title}</div>
         {items.map((item) => (
           <button
@@ -233,6 +237,7 @@ function MenuSheet({ title, items, onClose }: { title: string; items: MenuItem[]
 }
 
 export function V5Studio() {
+  const desktop = useDesktopLayout();
   const artist = useGenerationStore((s) => s.artistPrompt);
   const other = useGenerationStore((s) => s.otherPrompt);
   const quality = useGenerationStore((s) => s.qualityPrompt);
@@ -282,6 +287,7 @@ export function V5Studio() {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const viewer = viewerIndex !== null;
   const [menu, setMenu] = useState<"prompt" | "image" | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<CSSProperties>({ left: 16, bottom: 100 });
   const [diffOpen, setDiffOpen] = useState(false);
   const [placementId, setPlacementId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -302,7 +308,8 @@ export function V5Studio() {
   // the board (the tool row rides on the keyboard, or sits at the bottom after Back hid it).
   // Leaving waits for the tap to end so the layout never moves under a finger.
   const [boardEditing, setBoardEditing] = useState(false);
-  const typing = useSettledFlag(boardEditing);
+  const settledTyping = useSettledFlag(boardEditing);
+  const typing = !desktop && settledTyping;
   // Section switch with the keyboard up keeps editing: the tab's pointerdown keeps focus in
   // the input (no blur, so the IME stays), the click commits the typed tag, switches and
   // mounts the next board with its input focused — all in the same tap. `carryEditing` is
@@ -330,7 +337,7 @@ export function V5Studio() {
   };
   // User-chosen editor size (session only): swipe up/down on the editor or its handle.
   const [expanded, setExpanded] = useState(false);
-  const compactHeader = typing || expanded;
+  const compactHeader = !desktop && (typing || expanded);
   const swipeStart = useRef<{ x: number; y: number; onHandle: boolean; listAtTop: boolean } | null>(null);
 
   const showNotice = (text: string, duration = 1800) => {
@@ -657,7 +664,7 @@ export function V5Studio() {
       onClick={() => { if (selected && !imagesHidden) setViewer(true); }}
     >
       {/* Nothing is drawn over the image; progress shows on 생성, upscale state in the viewer. */}
-      {selected && !imagesHidden && thumbSrc && <img src={thumbSrc} alt="" />}
+      {selected && !imagesHidden && thumbSrc && (desktop ? <StageImage src={thumbSrc} /> : <img src={thumbSrc} alt="" />)}
       {selected && imagesHidden && <PrivacyGlyph />}
       {!selected && <span className={`b2-thumb-empty ${status === "generating" ? "pulse" : ""}`} aria-hidden="true">🖼️</span>}
     </button>
@@ -791,6 +798,23 @@ export function V5Studio() {
     { label: finishMenuLabel, hint: "프리셋 · 세부 조절", onSelect: () => setFinishOpen(true) },
   ];
 
+  // PC has one panel slot. Opening another panel replaces the previous panel before paint.
+  const previousPanels = useRef<boolean[]>([]);
+  useLayoutEffect(() => {
+    const panels = [settingsScope !== null, quickCopy !== null, characterSheet, libraryOpen, rawEditor, finishOpen, placementId !== null];
+    let opened = -1;
+    panels.forEach((open, index) => { if (open && !previousPanels.current[index]) opened = index; });
+    previousPanels.current = panels;
+    if (!desktop || opened < 0) return;
+    if (opened !== 0) setSettingsScope(null);
+    if (opened !== 1) setQuickCopy(null);
+    if (opened !== 2) setCharacterSheet(false);
+    if (opened !== 3) setLibraryOpen(false);
+    if (opened !== 4) setRawEditor(false);
+    if (opened !== 5) setFinishOpen(false);
+    if (opened !== 6) setPlacementId(null);
+  }, [desktop, settingsScope, quickCopy, characterSheet, libraryOpen, rawEditor, finishOpen, placementId]);
+
   // Android Back closes the topmost of these (see app/backStack.ts).
   useBackLayer(menu !== null, () => setMenu(null));
   useBackLayer(settingsScope !== null, () => setSettingsScope(null));
@@ -801,7 +825,7 @@ export function V5Studio() {
   useBackLayer(finishOpen, () => setFinishOpen(false));
   useBackLayer(diffOpen, () => setDiffOpen(false));
   useBackLayer(viewer && !imagesHidden, () => setViewer(false));
-  useBackLayer(expanded, () => setExpanded(false));
+  useBackLayer(!desktop && expanded, () => setExpanded(false));
 
   const finishHold = useHold(() => setFinishEnabled(!finishEnabled), () => setFinishOpen(true));
   const seedFixedFor = (image: GenerationImage | undefined) => !!image && image.seed !== null && settings.seed === image.seed;
@@ -879,7 +903,7 @@ export function V5Studio() {
 
   const renderTools = (tools: TagBoardTools) => (
     <>
-      {!typing && sideSlot && createPortal(
+      {!desktop && !typing && sideSlot && createPortal(
         <div className="b2-side-grid">
           {imageActionButtons(selected, "side")}
         </div>,
@@ -887,6 +911,7 @@ export function V5Studio() {
       )}
       <PromptToolbar
         typing={typing}
+        desktop={desktop}
         dictionaryLabel={dictionaryLabel}
         sectionMenuLabel={sectionMenuLabel}
         tools={tools}
@@ -900,14 +925,48 @@ export function V5Studio() {
     </>
   );
 
+  useEffect(() => {
+    if (!desktop) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      if (event.key === "Escape") {
+        if (backStack.handleBack()) { event.preventDefault(); event.stopPropagation(); }
+        return;
+      }
+      if (event.ctrlKey && event.key === "Enter") {
+        event.preventDefault(); event.stopPropagation();
+        if (!busy) generateNow(boardTools.current ?? undefined);
+        return;
+      }
+      if (nativeTextTarget(event.target)) return;
+      if (!event.ctrlKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "s") { event.preventDefault(); void saveImage(selected); }
+      if (key === "z") { event.preventDefault(); boardTools.current?.undo(); }
+      if (key === "y") { event.preventDefault(); boardTools.current?.redo(); }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault(); boardTools.current?.weight(event.key === "ArrowUp" ? 0.1 : -0.1);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   const boardConfig = section
     ? SECTION_CONFIG[section]
     : { categories: CHARACTER_CATEGORIES, placeholder: "캐릭터 외형과 의상 태그", tagPrefix: undefined };
 
   return (
     <main
-      className={`b2-shell ${typing ? "compact" : ""} ${expanded && !typing ? "expanded" : ""} ${viewport.keyboard ? "keyboard" : ""}`}
-      style={viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } as CSSProperties : undefined}
+      onClickCapture={(event) => {
+        if (!desktop) return;
+        const button = (event.target as Element).closest(".b2-section-menu, .b2-image-menu, .viewer-more");
+        if (!button) return;
+        const rect = button.getBoundingClientRect();
+        setMenuAnchor({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 292)), bottom: Math.max(12, window.innerHeight - rect.top + 6) });
+      }}
+      className={`b2-shell ${typing ? "compact" : ""} ${!desktop && expanded && !typing ? "expanded" : ""} ${!desktop && viewport.keyboard ? "keyboard" : ""}`}
+      style={!desktop && viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } as CSSProperties : undefined}
     >
       {compactHeader ? (
         <header className="b2-top compact">
@@ -972,7 +1031,7 @@ export function V5Studio() {
           const touch = event.touches[0];
           const target = event.target as HTMLElement;
           // Typing, multi-touch and text fields keep their own gestures.
-          if (typing || event.touches.length > 1 || !touch || target.closest("input, textarea")) {
+          if (desktop || typing || event.touches.length > 1 || !touch || target.closest("input, textarea")) {
             swipeStart.current = null;
             return;
           }
@@ -1034,53 +1093,80 @@ export function V5Studio() {
       </section>
 
 
+      {desktop && (
+        <>
+          <section className="pc-stage-col" aria-label="현재 이미지">
+            <div className="pc-stage">{currentThumb(false)}</div>
+            <RandomPickLine pick={selectedPick} onKeep={() => { if (selectedPick) void keepRandomCharacter(selectedPick); }} />
+            <div className="pc-stage-bar">
+              <div className="pc-meta">{notice ? <span className="pc-notice" role="status">{notice}</span> : selected && <><span>Seed <b>{selected.seed ?? "랜덤"}</b></span><span>{selected.width}×{selected.height}</span><span>{active + 1}/{images.length}</span></>}</div>
+              {imageActionButtons(selected, "side")}
+            </div>
+          </section>
+          <aside className="pc-history" aria-label="이번 세션 이미지">
+            <div className="pc-history-head"><b>세션</b><span>{images.length}</span></div>
+            <div className="pc-history-list">
+              {images.map((image, index) => ({ image, index })).reverse().map(({ image, index }) => (
+                <button type="button" key={`${image.createdAt}-${index}`} className={index === active ? "current" : ""} aria-pressed={index === active} aria-label={`세션 이미지 ${index + 1}`} onClick={() => { if (!imagesHidden) useGenerationStore.getState().setActiveImage(index); }} onDoubleClick={() => { if (!imagesHidden) setViewerIndex(index); }}>
+                  {imagesHidden ? <PrivacyGlyph /> : <img src={image.src} alt="" />}
+                  {image.kind === "upscale" && <span className="b2-up-badge">UP</span>}
+                </button>
+              ))}
+            </div>
+          </aside>
+        </>
+      )}
+
       {error && <div className="error-toast b2-toast"><span>{error}</span><button onClick={clearError} aria-label="닫기">×</button></div>}
-      {notice && <div className="success-toast b2-toast"><span>{notice}</span></div>}
+      {notice && !desktop && <div className="success-toast b2-toast"><span>{notice}</span></div>}
       {loader.element}
 
-      {placementId && (
-        <div className="b2-placement">
-          <div
-            className="image-render-surface positioning"
-            style={{
-              aspectRatio: aspect,
-              "--hw": selected ? selected.height / selected.width : settings.height / settings.width,
-            } as CSSProperties}
-          >
-            {selected && !imagesHidden ? <img src={selected.src} alt="" /> : <div className="b2-placement-blank" />}
-            <CharacterStageOverlay
-              characters={chars}
-              selectedId={placementId}
-              onSelect={setPlacementId}
-              onMove={(id, x, y) => updateCharacter(id, { position: { x, y } })}
-              onDone={() => setPlacementId(null)}
-            />
+      <div className="b2-panels">
+        {placementId && (
+          <div className="b2-placement">
+            <div
+              className="image-render-surface positioning"
+              style={{
+                aspectRatio: aspect,
+                "--hw": selected ? selected.height / selected.width : settings.height / settings.width,
+              } as CSSProperties}
+            >
+              {selected && !imagesHidden ? <img src={selected.src} alt="" /> : <div className="b2-placement-blank" />}
+              <CharacterStageOverlay
+                characters={chars}
+                selectedId={placementId}
+                onSelect={setPlacementId}
+                onMove={(id, x, y) => updateCharacter(id, { position: { x, y } })}
+                onDone={() => setPlacementId(null)}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {characterSheet && (
-        <CharacterSheet
-          onClose={() => setCharacterSheet(false)}
-          onPlaceOnImage={(id) => {
-            setCharacterSheet(false);
-            setPlacementId(id);
-          }}
-        />
-      )}
-      <CharacterCatalogPrefetch />
-      {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
-      {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
-      {rawEditor && (
-        <RawPromptSheet
-          title={sectionTitle}
-          value={sectionValue}
-          historyKey={historyKey}
-          onChange={setSectionValue}
-          onClose={() => setRawEditor(false)}
-        />
-      )}
-      {settingsScope && <SettingsSheet scope={settingsScope} onClose={() => setSettingsScope(null)} />}
+        {characterSheet && (
+          <CharacterSheet
+            onClose={() => setCharacterSheet(false)}
+            onPlaceOnImage={(id) => {
+              setCharacterSheet(false);
+              setPlacementId(id);
+            }}
+          />
+        )}
+        <CharacterCatalogPrefetch />
+        {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
+        {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
+        {rawEditor && (
+          <RawPromptSheet
+            title={sectionTitle}
+            value={sectionValue}
+            historyKey={historyKey}
+            onChange={setSectionValue}
+            onClose={() => setRawEditor(false)}
+          />
+        )}
+        {settingsScope && <SettingsSheet scope={settingsScope} onClose={() => setSettingsScope(null)} />}
+        {finishOpen && !viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
+      </div>
       {viewer && !imagesHidden && (
         <ImageViewer
           images={images}
@@ -1097,9 +1183,9 @@ export function V5Studio() {
           actions={viewerActions}
         />
       )}
-      {finishOpen && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
-      {menu === "prompt" && <MenuSheet title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
-      {menu === "image" && <MenuSheet title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
+      {finishOpen && viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
+      {menu === "prompt" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "image" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
     </main>
   );
 }

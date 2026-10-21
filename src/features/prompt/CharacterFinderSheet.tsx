@@ -1,3 +1,4 @@
+import { useDesktopLayout } from "../../app/desktopLayout";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useBackLayer } from "../../app/backStack";
 import { isThumbnailHidden, useCharacterLibraryStore, UNCATEGORIZED_SERIES, type CharacterLibraryEntry, type InsertMode } from "../../stores/characterLibraryStore";
@@ -52,6 +53,7 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
   onClose: () => void; onSelect: (selection: FinderSelection) => void;
   current?: CharacterPrompt; currentIndex: number; initialAdd?: boolean; initialRandom?: boolean;
 }) {
+  const desktop = useDesktopLayout();
   const library = useCharacterLibraryStore();
   const [catalog, setCatalog] = useState<CatalogCharacter[]>([]);
   const [error, setError] = useState("");
@@ -136,7 +138,7 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
   const showGrid = !!series || !!query || filter !== "all";
   return <div ref={dialog} onKeyDown={event => {
     if (event.key === "Escape") { event.stopPropagation(); if (moving) setMoving(null); else if (picked) setPicked(null); else if (randomOpen) setRandomOpen(false); else if (series) setSeries(null); else onClose(); }
-    if (event.key !== "Tab") return;
+    if (desktop || event.key !== "Tab") return;
     const nested = dialog.current?.querySelectorAll<HTMLElement>('[role="dialog"]');
     const scope = nested?.length ? nested[nested.length - 1] : dialog.current;
     const focusable = scope?.querySelectorAll<HTMLElement>('button:not(:disabled), input, select, [tabindex="0"]');
@@ -144,11 +146,11 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
     const first = focusable[0], last = focusable[focusable.length - 1];
     if (event.shiftKey && (document.activeElement === first || !scope?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && (document.activeElement === last || !scope?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
-  }} className="sheet character-finder-sheet" role="dialog" aria-modal="true" aria-label="캐릭터 찾기">
+  }} className="sheet character-finder-sheet" role="dialog" aria-modal={desktop ? undefined : true} aria-label="캐릭터 찾기">
     <header className="finder-head"><div className="drag-handle" /><div className="finder-heading">
       {(series || randomOpen) && <button type="button" aria-label="뒤로" onClick={() => { if (randomOpen) setRandomOpen(false); else { setSeries(null); setQuery(""); } }}>‹</button>}
       <div><h2>{randomOpen ? "🎲 랜덤 범위" : series ? seriesLabel(series) : "캐릭터 찾기"}</h2><small>{randomOpen ? `생성할 때마다 ${randomCount}명 중 한 명을 뽑음` : initialAdd || !current ? "새 캐릭터로 추가" : `캐릭터 ${currentIndex + 1}${current.name ? ` · ${current.name}` : ""} 자리에 넣음`}</small></div>
-      <button type="button" aria-label="캐릭터 찾기 닫기" onClick={onClose}>⌄</button></div>
+      <button type="button" aria-label="캐릭터 찾기 닫기" onClick={onClose}><span className="mobile-panel-close">⌄</span><span className="desktop-panel-close">×</span></button></div>
     </header>
     {!randomOpen && <>
       {!series && <div className="finder-segment" role="tablist"><button role="tab" aria-selected={tab === "find"} onClick={() => changeTab("find")}>찾기 <small>{catalog.length.toLocaleString()}</small></button><button role="tab" aria-selected={tab === "library"} onClick={() => changeTab("library")}>내 도감 <small>{library.entries.length}</small></button></div>}
@@ -187,7 +189,7 @@ export function CharacterFinderSheet({ onClose, onSelect, current, currentIndex,
       </>}
     </div>
     <footer className="finder-footer">{randomOpen ? <button type="button" className="finder-primary" onClick={() => setRandomOpen(false)}>완료 · {randomCount}명</button> : <><span>{progress.pending ? `썸네일 받는 중 · ${progress.pending}개` : "오프라인 준비"} · 도감 {savedNames.length}명 중 {progress.saved}명 저장됨{progress.failed > 0 && ` · 실패 ${progress.failed}`}</span>{progress.pending > 0 && <progress aria-label="도감 썸네일 저장" max={Math.max(savedNames.length, 1)} value={progress.saved} />}</>}</footer>
-    {picked && <div className="finder-overlay" onClick={() => setPicked(null)}><section className="finder-detail" role="dialog" aria-modal="true" aria-label="캐릭터 넣기" onClick={event => event.stopPropagation()}>
+    {picked && <div className="finder-overlay" onClick={() => setPicked(null)}><section className="finder-detail" role="dialog" aria-modal={desktop ? undefined : true} aria-label="캐릭터 넣기" onClick={event => event.stopPropagation()}>
       <div className="drag-handle" /><div className="finder-detail-top"><Thumbnail raw={thumbnailOf(picked)} /><div><h2>{characterLabel(picked.raw) ?? picked.display}</h2><p>{characterLabel(picked.raw) ? `${picked.display} · ` : ""}{seriesLabel(picked.series)}</p><button type="button" aria-pressed={savedByKey.has(characterKey(picked.raw))} onClick={() => toggle(picked)}>{savedByKey.has(characterKey(picked.raw)) ? "★ 도감에 있음" : "☆ 도감에 저장"}</button>{!picked.isNew && <button type="button" className="finder-hide-thumbnail" onClick={() => library.toggleHiddenThumbnail(picked.raw, isThumbnailSuspect(picked.raw))}>{thumbnailHidden(picked.raw) ? "썸네일 다시 보기" : "다른 캐릭터 그림이면 썸네일 숨기기"}</button>}{!picked.isNew && isThumbnailSuspect(picked.raw) && thumbnailHidden(picked.raw) && <small className="finder-suspect-note">다른 캐릭터 그림으로 추정돼 숨겼어요</small>}</div></div>
       {([['외형', picked.features], ['의상', picked.attire]] as const).map(([label, tags]) => <div key={label}><h3>{label} <small>눌러서 빼기</small></h3><div className="finder-chips">{tags.map(tag => <button type="button" key={tag} aria-pressed={!removed.includes(tag)} className={removed.includes(tag) ? "dropped" : ""} onClick={() => setRemoved(old => old.includes(tag) ? old.filter(value => value !== tag) : [...old, tag])}>{tag}</button>)}{!tags.length && <small>자료 없음</small>}</div></div>)}
       <h3>넣을 내용</h3><div className="finder-segment">{MODES.map(([key, label]) => <button type="button" key={key} aria-pressed={effectiveMode === key} disabled={key !== "name" && !picked.features.length && !picked.attire.length} onClick={() => { setModeChosen(true); library.setFinderPreferences({ insertMode: key }); }}>{label}</button>)}</div>

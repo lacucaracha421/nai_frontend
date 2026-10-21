@@ -1,4 +1,17 @@
 {
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "NAI V5 Studio",
+        "width": 820,
+        "height": 1180,
+        "minWidth": 420,
+        "minHeight": 680,
+        "resizable": true
+      }
+    ]
+  },
   "bundle": {
     "resources": []
   }

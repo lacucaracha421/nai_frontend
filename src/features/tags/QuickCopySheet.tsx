@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PromptSectionKey } from "../../types/generation";
 import { SexTagDictionary } from "./SexTagDictionary";
+import { isDesktopLayout } from "../../app/desktopLayout";
 import { searchLocalTags } from "./localTagIndex";
 import {
   exactArtistTag,
@@ -67,7 +68,7 @@ export function QuickCopySheet({
         <div className="quickcopy-hostbar-tabs">
           <button type="button" className={view === "classic" ? "active" : ""} onClick={() => setView("classic")}>기존 사전</button>
           <button type="button" className={view === "sex" ? "active" : ""} onClick={() => setView("sex")}>Sex</button>
-          <button className="icon-button" onClick={onClose} aria-label="태그사전 닫기">↓</button>
+          <button className="icon-button" onClick={onClose} aria-label="태그사전 닫기"><span className="mobile-panel-close">↓</span><span className="desktop-panel-close">×</span></button>
         </div>
       </div>
       {view === "classic" ? (
@@ -75,7 +76,21 @@ export function QuickCopySheet({
           ref={frameRef}
           className="quickcopy-frame"
           src="/quickcopy/index.html"
-          onLoad={(event) => openDestinationTab(event.currentTarget, destination)}
+          onLoad={(event) => {
+            const frame = event.currentTarget;
+            openDestinationTab(frame, destination);
+            // Keyboard events inside the same-origin dictionary do not bubble to the app.
+            frame.contentDocument?.addEventListener("keydown", (key) => {
+              if (!isDesktopLayout() || key.isComposing) return;
+              const target = key.target as Element | null;
+              const editing = !!target?.closest("input, textarea, select, [contenteditable]");
+              if (key.key !== "Escape" && !(key.ctrlKey && (key.key === "Enter" || !editing))) return;
+              if (key.key !== "Escape" && !["Enter", "s", "z", "y", "ArrowUp", "ArrowDown"].includes(key.key)) return;
+              key.preventDefault();
+              key.stopPropagation();
+              window.dispatchEvent(new KeyboardEvent("keydown", { key: key.key, ctrlKey: key.ctrlKey }));
+            }, true);
+          }}
           title="Artist / Tag Quick Copy v7"
         />
       ) : (

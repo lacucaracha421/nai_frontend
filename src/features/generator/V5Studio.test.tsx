@@ -34,6 +34,17 @@ const tools = {
 };
 
 describe("prompt toolbar layout", () => {
+  it("keeps desktop weight actions available without entering compact mode", () => {
+    const html = renderToStaticMarkup(
+      <PromptToolbar desktop typing={false} dictionaryLabel="태그사전" sectionMenuLabel="장면 메뉴" tools={{ ...tools, canWeight: true }} onDictionary={() => {}} onMenu={() => {}} onGenerate={() => {}} generateLabel="생성" />,
+    );
+    expect(html).toContain("−0.1");
+    expect(html).toContain("+0.1");
+    expect(html).toContain("data-keeps-selection");
+    expect(html).not.toContain("b2-generate-mini");
+    expect(html).not.toContain("b2-tools compact");
+  });
+
   it("keeps the same core order in normal, expanded, and typing states", () => {
     const normal = promptToolbarLabels(false, "캐릭터 찾기", "캐릭터 메뉴");
     const expanded = promptToolbarLabels(false, "캐릭터 찾기", "캐릭터 메뉴");

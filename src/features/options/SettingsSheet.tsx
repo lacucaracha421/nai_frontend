@@ -43,7 +43,7 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
       <div className="sheet-head">
         <div className="drag-handle" />
         <div><h2>{generation ? "생성 설정" : "앱 설정"}</h2></div>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="설정 닫기">↓</button>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="설정 닫기"><span className="mobile-panel-close">↓</span><span className="desktop-panel-close">×</span></button>
       </div>
 
       <div className="settings-body">
