@@ -1,0 +1,1801 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NAI V5 Studio — Galaxy Tab S11 Portrait Prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-page: #07070a;
+      --surface-lowest: #0b0b0f;
+      --surface: #121217;
+      --surface-low: #18181f;
+      --surface-mid: #1f1f27;
+      --surface-high: #272732;
+      --surface-highest: #31313e;
+      --line: #343442;
+      --line-soft: #262632;
+      --text: #eceaf2;
+      --text-dim: #a6a3b5;
+      --text-muted: #767385;
+      --accent: #8b80d8;
+      --accent-soft: #2e2a4a;
+      --accent-text: #e3deff;
+      --rose: #e8a4b8;
+      --mint: #7ec8a5;
+      --amber: #e6be7a;
+      --danger: #f28b82;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --stage-ratio: 58%;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: radial-gradient(circle at 50% 0%, #151422 0%, var(--bg-page) 65%);
+      color: var(--text);
+      font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 16px 20px;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    /* Outer simulator bar */
+    .sim-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px 14px;
+      padding: 8px 14px;
+      border-radius: 14px;
+      background: rgba(24, 24, 31, 0.9);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--text-dim);
+      z-index: 10;
+    }
+    .sim-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sim-group b {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+    .sim-pill {
+      border: 1px solid var(--line);
+      background: var(--surface-mid);
+      color: var(--text-dim);
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: 120ms ease;
+    }
+    .sim-pill:hover { color: var(--text); border-color: #4f4e63; }
+    .sim-pill.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      font-weight: 600;
+    }
+
+    /* Scaled S11 portrait bezel (800 x 1280 logical dp) */
+    .tablet-stage-wrap {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tablet-bezel {
+      position: relative;
+      width: 800px;
+      height: 1280px;
+      border-radius: 30px;
+      padding: 10px;
+      background: #1c1c24;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      transform-origin: center center;
+    }
+    .tablet-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 22px;
+      overflow: hidden;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 1. Slim top bar (44px) */
+    .top-bar {
+      flex: none;
+      height: 46px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-lowest);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--surface-mid);
+      border: 1px solid var(--line-soft);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 8px rgba(126, 200, 165, 0.6);
+    }
+    .status-pill span.dim { color: var(--text-dim); }
+    .top-spacer { flex: 1; }
+    .top-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .top-btn:hover { background: var(--surface-mid); color: var(--text); }
+    .top-btn.active { background: var(--accent-soft); color: var(--accent-text); }
+
+    /* Main split area above keyboard */
+    .workspace {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 2. Canvas Stage (large latest image + right session rail + 1-line action bar) */
+    .canvas-zone {
+      flex: 0 0 var(--stage-ratio);
+      min-height: 210px;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface-lowest);
+      transition: flex-basis 180ms cubic-bezier(.2, 0, 0, 1);
+      overflow: hidden;
+    }
+    .tablet-screen.kb-open .canvas-zone {
+      flex-basis: 330px;
+      min-height: 240px;
+    }
+    .tablet-screen.kb-open .image-actions,
+    .tablet-screen.kb-open .divider-bar,
+    .tablet-screen.kb-open .bottom-dock {
+      display: none;
+    }
+    .tablet-screen.kb-open .workbench {
+      padding: 8px 12px 8px;
+      gap: 6px;
+    }
+
+    .stage-main {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 74px;
+      gap: 8px;
+      padding: 10px 10px 6px 12px;
+    }
+    .hero-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: #07070a;
+      overflow: hidden;
+      cursor: zoom-in;
+    }
+    .hero-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      transition: filter 180ms ease;
+    }
+    .hero-wrap.finish-on img {
+      filter: contrast(1.04) saturate(1.08) brightness(1.02);
+    }
+    .hero-hidden {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Right vertical session filmstrip */
+    .session-rail {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      overflow-y: auto;
+      padding: 2px 2px 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+    .rail-count {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding-bottom: 2px;
+    }
+    .rail-item {
+      position: relative;
+      flex: none;
+      width: 100%;
+      aspect-ratio: 832 / 1216;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 9px;
+      overflow: hidden;
+      background: var(--surface-mid);
+      opacity: 0.72;
+      cursor: pointer;
+      transition: 120ms ease;
+    }
+    .rail-item:hover { opacity: 0.95; }
+    .rail-item.active {
+      opacity: 1;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(139, 128, 216, 0.4);
+    }
+    .rail-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .rail-badge {
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: rgba(11, 11, 15, 0.82);
+      color: var(--accent-text);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    /* 1-line image action strip right below the image */
+    .image-actions {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 12px 8px;
+    }
+    .img-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-right: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .img-meta b { color: var(--text-dim); font-weight: 600; }
+    .act-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      background: var(--surface-low);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }
+    .act-btn:hover { background: var(--surface-mid); }
+    .act-btn.primary {
+      background: var(--text);
+      color: #141418;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .act-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      box-shadow: inset 0 0 0 1px rgba(139, 128, 216, 0.35);
+    }
+    .act-btn .state-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      opacity: 0.45;
+      transition: 120ms ease;
+    }
+    .act-btn.active .state-dot {
+      background: var(--accent);
+      opacity: 1;
+      box-shadow: 0 0 7px var(--accent);
+    }
+    .act-btn small { opacity: 0.75; font-size: 11px; }
+
+    /* Snap divider handle */
+    .divider-bar {
+      flex: none;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      border-top: 1px solid var(--line-soft);
+      cursor: ns-resize;
+    }
+    .divider-pill {
+      width: 44px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--line);
+    }
+
+    /* 3. Bottom Workbench */
+    .workbench {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      padding: 0 12px 10px;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    /* 5 First-class Tabs */
+    .wb-tabs {
+      flex: none;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--surface-low);
+      border: 1px solid var(--line-soft);
+    }
+    .wb-tab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 38px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .wb-tab.active {
+      background: var(--surface-high);
+      color: var(--text);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    .wb-tab small {
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 11.5px;
+      color: var(--text-dim);
+    }
+    .wb-tab.active small {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex: none;
+    }
+    .dot.artist { background: #e8a4b8; }
+    .dot.character { background: #7ec8a5; }
+    .dot.general { background: #8cb4f8; }
+    .dot.ref { background: #e6be7a; }
+
+    /* Fixed 1-line Chip Edit Bar (ZERO-JUMP!) */
+    .chip-bar {
+      flex: none;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 10px;
+      background: var(--surface-low);
+      border: 1px solid var(--line-soft);
+      overflow-x: auto;
+    }
+    .chip-bar.selected-mode {
+      border-color: rgba(139, 128, 216, 0.55);
+      background: rgba(46, 42, 74, 0.42);
+    }
+    .cb-btn {
+      flex: none;
+      height: 32px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-mid);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .cb-btn:hover { background: var(--surface-high); }
+    .cb-btn:disabled {
+      opacity: 0.32;
+      cursor: default;
+    }
+    .cb-btn:disabled:hover { background: var(--surface-mid); }
+    .cb-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .cb-btn.danger { color: var(--danger); }
+    .cb-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-right: auto;
+      padding-left: 4px;
+    }
+    .cb-label b { color: var(--accent-text); }
+
+    /* Workbench Scrollable Body */
+    .wb-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--surface-low);
+      border: 1px solid var(--line-soft);
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+
+    /* Tag chips */
+    .chips-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 6px 13px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface-mid);
+      color: var(--text);
+      font-size: 15px;
+      cursor: pointer;
+      user-select: none;
+      transition: 100ms ease;
+    }
+    .tag-chip:hover { border-color: #54536b; }
+    .tag-chip.selected {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .tag-chip .w {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--amber);
+      font-variant-numeric: tabular-nums;
+    }
+    .inline-add-bar {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 4px 4px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface-lowest);
+    }
+    .inline-add-bar:focus-within {
+      border-color: var(--accent);
+    }
+    .inline-input {
+      flex: 1;
+      min-width: 0;
+      height: 34px;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 14.5px;
+      outline: none;
+    }
+    .inline-bar-btn {
+      flex: none;
+      height: 32px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-mid);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .inline-bar-btn.translate {
+      background: var(--accent-soft);
+      border-color: rgba(139, 128, 216, 0.55);
+      color: var(--accent-text);
+    }
+    .inline-bar-btn.gen-mini {
+      display: none;
+      background: linear-gradient(135deg, #8f84e0 0%, #6d62bd 100%);
+      border-color: transparent;
+      color: #fff;
+      padding: 0 14px;
+    }
+    .tablet-screen.kb-open .inline-bar-btn.gen-mini {
+      display: inline-flex;
+      align-items: center;
+    }
+    .inline-bar-btn:hover { filter: brightness(1.1); }
+
+    /* Keyboard-docked autocomplete + input wrapper (pinned at bottom of workbench) */
+    .kb-input-dock {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .kb-input-dock .inline-add-bar {
+      margin-top: 0;
+    }
+    .kb-input-dock .suggest-row {
+      margin-top: 0;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .kb-input-dock .suggest-row:empty {
+      display: none;
+    }
+    .kb-input-dock .suggest-pill {
+      flex: none;
+    }
+
+    /* Unified Inline Tag Dictionary (replaces old iframe sheet, keeps top image visible!) */
+    .dict-pane {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .dict-head {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dict-cats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 3px;
+      flex: 1;
+      border-radius: 10px;
+      background: var(--surface-low);
+      border: 1px solid var(--line-soft);
+    }
+    .dict-cat-btn {
+      height: 34px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dict-cat-btn.active {
+      background: var(--surface-high);
+      color: var(--text);
+    }
+    .dict-search-row {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dict-search {
+      flex: 0 0 230px;
+      height: 36px;
+      padding: 0 11px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--surface-lowest);
+      color: var(--text);
+      font-size: 13.5px;
+      outline: none;
+    }
+    .dict-search:focus { border-color: var(--accent); }
+    .dict-sub-pills {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      gap: 5px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .dict-sub-pill {
+      flex: none;
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-low);
+      color: var(--text-dim);
+      font-size: 12.5px;
+      cursor: pointer;
+    }
+    .dict-sub-pill.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+      font-weight: 600;
+    }
+    .dict-grid {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-content: start;
+      gap: 7px;
+      padding: 2px 2px 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--line) transparent;
+    }
+    .dict-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      padding: 10px 30px 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-low);
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transition: background 100ms ease, border-color 100ms ease;
+    }
+    .dict-card:hover { background: var(--surface-mid); }
+    .dict-card.added {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .dict-card strong {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .dict-card.added strong { color: var(--accent-text); }
+    .dict-card small {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .dict-star {
+      position: absolute;
+      right: 6px;
+      top: 6px;
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 14px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .dict-star.fav { color: var(--amber); }
+    .suggest-row {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .suggest-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-high);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .suggest-pill small { color: var(--text-muted); font-size: 11px; }
+
+    /* Fixed Quality/Negative switcher */
+    .sub-switch {
+      display: inline-flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 9px;
+      background: var(--surface-lowest);
+    }
+    .sub-switch button {
+      height: 28px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sub-switch button.active {
+      background: var(--surface-high);
+      color: var(--text);
+    }
+
+    /* Reference 2-column grid (800dp shines here!) */
+    .ref-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .ref-card {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: var(--surface-mid);
+      border: 1px solid var(--line);
+    }
+    .ref-card.off { opacity: 0.5; }
+    .ref-thumb {
+      width: 76px;
+      aspect-ratio: 3 / 4;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #07070a;
+    }
+    .ref-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ref-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      min-width: 0;
+    }
+    .ref-select {
+      width: 100%;
+      height: 32px;
+      padding: 0 8px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--surface-low);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .ref-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .ref-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .ref-slider-row input { flex: 1; accent-color: var(--accent); }
+    .ref-slider-row strong { color: var(--text); min-width: 28px; text-align: right; }
+    .ref-foot {
+      display: flex;
+      gap: 6px;
+      margin-top: auto;
+    }
+    .ref-foot button {
+      flex: 1;
+      height: 28px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--surface-low);
+      color: var(--text-dim);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .ref-foot button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+    .ref-foot button.del { color: var(--danger); }
+
+    /* 4. Bottom Thumb Dock (56px) */
+    .bottom-dock {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 2px;
+    }
+    .dock-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 52px;
+      padding: 0 13px;
+      border-radius: 12px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-mid);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .dock-btn:hover { background: var(--surface-high); }
+    .dock-btn.icon { width: 46px; padding: 0; }
+    .dock-settings {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      height: 52px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line-soft);
+      background: var(--surface-mid);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+    .dock-settings strong { font-size: 13.5px; }
+    .dock-settings small { font-size: 12px; color: var(--text-dim); }
+    .dock-generate {
+      flex: 0 0 186px;
+      height: 52px;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #8f84e0 0%, #6d62bd 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(109, 98, 189, 0.35);
+      transition: transform 80ms ease;
+    }
+    .dock-generate:active { transform: scale(0.98); }
+    .dock-generate strong { font-size: 16px; letter-spacing: 0.02em; }
+    .dock-generate small { font-size: 11.5px; opacity: 0.88; }
+
+    /* Simulated Samsung Portrait Keyboard (390px) */
+    .fake-keyboard {
+      flex: none;
+      height: 0;
+      overflow: hidden;
+      background: #17171d;
+      border-top: 1px solid var(--line);
+      transition: height 180ms cubic-bezier(.2, 0, 0, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 0 14px;
+    }
+    .tablet-screen.kb-open .fake-keyboard {
+      height: 360px;
+      padding: 12px 14px 18px;
+    }
+    .kb-row {
+      display: flex;
+      gap: 7px;
+      justify-content: center;
+    }
+    .kb-key {
+      flex: 1;
+      height: 54px;
+      border-radius: 9px;
+      background: #272733;
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      font-weight: 500;
+      user-select: none;
+    }
+    .kb-key.wide { flex: 1.7; background: #20202b; font-size: 14px; color: var(--text-dim); }
+    .kb-key.space { flex: 4.5; }
+    .kb-key.done { flex: 1.8; background: var(--accent-soft); color: var(--accent-text); font-size: 14px; font-weight: 700; cursor: pointer; }
+
+    /* Toast */
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 58px;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(20, 20, 28, 0.94);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 150ms ease;
+      z-index: 30;
+    }
+    .toast.show { opacity: 1; }
+
+    /* Fullscreen Viewer Overlay */
+    .viewer-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 6, 9, 0.97);
+      display: none;
+      flex-direction: column;
+      z-index: 40;
+    }
+    .viewer-overlay.open { display: flex; }
+    .viewer-top {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    .viewer-img {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      cursor: zoom-out;
+    }
+    .viewer-img img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="sim-bar">
+    <div class="sim-group">
+      <b>S11 세로 (800×1280)</b>
+      <button class="sim-pill active" data-ratio="58%">이미지 크게 58% (추천)</button>
+      <button class="sim-pill" data-ratio="46%">균형 46%</button>
+      <button class="sim-pill" data-ratio="24%">집중 편집 24%</button>
+    </div>
+    <div class="sim-group">
+      <b>키보드 시뮬레이션</b>
+      <button class="sim-pill" id="kbToggle">가상 키보드 열기</button>
+    </div>
+  </div>
+
+  <div class="tablet-stage-wrap">
+    <div class="tablet-bezel" id="bezel">
+      <div class="tablet-screen" id="screen">
+        <!-- 1. Slim Top Bar -->
+        <header class="top-bar">
+          <button class="status-pill" id="refreshBtn">
+            <span class="status-dot"></span>
+            <strong>한도 72%</strong>
+            <span class="dim">· Anlas 9,898</span>
+          </button>
+          <span class="top-spacer"></span>
+          <button class="top-btn" id="privacyBtn">👁 가리기</button>
+          <button class="top-btn" id="appSettingsBtn">⚙ 앱 설정</button>
+        </header>
+
+        <div class="workspace">
+          <!-- 2. Large Latest Image Stage + Right Session Rail -->
+          <section class="canvas-zone">
+            <div class="stage-main">
+              <div class="hero-wrap" id="heroWrap" title="탭하면 전체화면 보기">
+                <img id="heroImg" alt="생성된 이미지" />
+              </div>
+              <aside class="session-rail" id="sessionRail"></aside>
+            </div>
+            <div class="image-actions">
+              <button class="act-btn primary" id="saveBtn">💾 저장</button>
+              <button class="act-btn" id="finishBtn"><span class="state-dot"></span>✨ 마무리</button>
+              <button class="act-btn" id="seedBtn"><span class="state-dot"></span>🌱 Seed</button>
+              <button class="act-btn" id="upscaleBtn">⤢ 업스케일</button>
+              <button class="act-btn" id="toRefBtn">🖼 레퍼런스+</button>
+            </div>
+          </section>
+
+          <div class="divider-bar" id="dividerBar" title="탭해서 이미지 크기 전환">
+            <div class="divider-pill"></div>
+          </div>
+
+          <!-- 3. Bottom Workbench -->
+          <section class="workbench" id="workbench">
+            <div class="wb-tabs" id="wbTabs"></div>
+            <div class="chip-bar" id="chipBar"></div>
+            <div class="wb-body" id="wbBody"></div>
+            <div class="kb-input-dock" id="kbInputDock"></div>
+
+            <!-- 4. Bottom Thumb Dock -->
+            <footer class="bottom-dock">
+              <button class="dock-btn" id="dictBtn">📖 태그사전</button>
+              <button class="dock-btn icon" id="undoBtn" title="되돌리기">↶</button>
+              <button class="dock-btn icon" id="redoBtn" title="다시 실행">↷</button>
+              <button class="dock-settings" id="genSettingsBtn">
+                <strong>생성 설정</strong>
+                <small id="genSettingsText">832×1216 · 28 · CFG 5</small>
+              </button>
+              <button class="dock-generate" id="generateBtn">
+                <strong>생성</strong>
+              </button>
+            </footer>
+          </section>
+        </div>
+
+        <!-- Simulated Samsung Portrait Keyboard -->
+        <div class="fake-keyboard" id="fakeKb">
+          <div class="kb-row">
+            <div class="kb-key">q</div><div class="kb-key">w</div><div class="kb-key">e</div><div class="kb-key">r</div><div class="kb-key">t</div><div class="kb-key">y</div><div class="kb-key">u</div><div class="kb-key">i</div><div class="kb-key">o</div><div class="kb-key">p</div>
+          </div>
+          <div class="kb-row">
+            <div class="kb-key">a</div><div class="kb-key">s</div><div class="kb-key">d</div><div class="kb-key">f</div><div class="kb-key">g</div><div class="kb-key">h</div><div class="kb-key">j</div><div class="kb-key">k</div><div class="kb-key">l</div>
+          </div>
+          <div class="kb-row">
+            <div class="kb-key wide">⇧</div><div class="kb-key">z</div><div class="kb-key">x</div><div class="kb-key">c</div><div class="kb-key">v</div><div class="kb-key">b</div><div class="kb-key">n</div><div class="kb-key">m</div><div class="kb-key wide">⌫</div>
+          </div>
+          <div class="kb-row">
+            <div class="kb-key wide">!#1</div><div class="kb-key">,</div><div class="kb-key space">Space</div><div class="kb-key">.</div><div class="kb-key done" id="kbCloseBtn">키보드 닫기</div>
+          </div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+
+        <!-- Fullscreen Viewer -->
+        <div class="viewer-overlay" id="viewerOverlay">
+          <div class="viewer-top">
+            <span id="viewerMeta"></span>
+            <button class="act-btn" id="viewerClose">닫기</button>
+          </div>
+          <div class="viewer-img" id="viewerImgWrap">
+            <img id="viewerImg" alt="전체화면" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Mock anime-toned 832x1216 SVG artworks so session switching feels real
+    function makeArtwork(c1, c2, c3, accent) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 832 1216">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="${c1}" />
+              <stop offset="55%" stop-color="${c2}" />
+              <stop offset="100%" stop-color="${c3}" />
+            </linearGradient>
+            <radialGradient id="glow" cx="50%" cy="34%" r="48%">
+              <stop offset="0%" stop-color="${accent}" stop-opacity="0.55" />
+              <stop offset="100%" stop-color="${accent}" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="832" height="1216" fill="url(#bg)" />
+          <rect width="832" height="1216" fill="url(#glow)" />
+          <circle cx="416" cy="400" r="145" fill="#fff5ee" opacity="0.92" />
+          <path d="M270 390 C280 210 552 210 562 390 C540 315 470 285 416 285 C362 285 292 315 270 390 Z" fill="${c3}" opacity="0.88" />
+          <path d="M250 1216 C265 820 330 610 416 610 C502 610 567 820 582 1216 Z" fill="${c3}" opacity="0.82" />
+          <circle cx="368" cy="412" r="14" fill="${c2}" />
+          <circle cx="464" cy="412" r="14" fill="${c2}" />
+          <path d="M396 462 Q416 478 436 462" stroke="${c3}" stroke-width="5" fill="none" stroke-linecap="round" />
+        </svg>`;
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }
+
+    const state = {
+      tab: "other",
+      fixedSub: "quality",
+      selectedChip: null,
+      privacy: false,
+      finishOn: false,
+      fixedSeed: null,
+      randomChar: false,
+      activeImage: 0,
+      images: [
+        { id: 4, seed: 3048043217, w: 832, h: 1216, src: makeArtwork("#231a3d", "#6d4c8f", "#1d1830", "#ffb899") },
+        { id: 3, seed: 1928374651, w: 832, h: 1216, src: makeArtwork("#111b36", "#2c4c7c", "#0f1526", "#9bd6ff") },
+        { id: 2, seed: 882104912, w: 832, h: 1216, src: makeArtwork("#162d2c", "#3a7068", "#101e1f", "#b6f2dc") },
+        { id: 1, seed: 551920311, w: 832, h: 1216, src: makeArtwork("#331e24", "#8a4d5c", "#1f1419", "#ffd6a5") },
+      ],
+      prompts: {
+        artist: ["artist:velzhe", "artist:ushio kiyoshi", "year 2026"],
+        character: ["syuen (nikke)", "school uniform", "smug", "looking at viewer"],
+        other: ["1girl", "solo", "sunset", "rooftop", "wind", "1.2::golden hour ::", "cinematic lighting", "depth of field"],
+        quality: ["best quality", "high complexity", "very aesthetic", "no text"],
+        negative: ["lowres", "bad anatomy", "bad hands", "watermark", "blurry"],
+      },
+      references: [
+        {
+          id: "ref-1",
+          src: makeArtwork("#2b2144", "#7b5ea8", "#1a1429", "#f2b8d4"),
+          mode: "character&style",
+          preferSameOutfit: true,
+          strength: 1.0,
+          enabled: true,
+        },
+      ],
+      suggestions: ["bokeh", "backlighting", "hair blowing in wind", "soft smile", "upper body", "dramatic shadows", "from below", "dutch angle", "depth of field"],
+      draftInput: "",
+      dictOpen: false,
+      dictCat: "actions",
+      dictSub: "전체",
+      dictQuery: "",
+      dictFavOnly: false,
+      dictFavs: new Set(["from below", "backlighting", "artist:velzhe"]),
+      dictData: {
+        artists: [
+          { ko: "벨제", tag: "artist:velzhe", sub: "화풍" },
+          { ko: "우시오 키요시", tag: "artist:ushio kiyoshi", sub: "화풍" },
+          { ko: "미카 피카조", tag: "artist:mika pikazo", sub: "색감" },
+          { ko: "아스케이", tag: "artist:ask (askzy)", sub: "화풍" },
+          { ko: "LM7", tag: "artist:lm7 (op-center)", sub: "분위기" },
+          { ko: "토마", tag: "artist:toma", sub: "선화" },
+          { ko: "모리쿠라 엔", tag: "artist:morikura en", sub: "색감" },
+          { ko: "요네야마 마이", tag: "artist:yoneyama mai", sub: "역동" },
+          { ko: "칸자키 히로", tag: "artist:kanzaki hiro", sub: "선화" },
+        ],
+        tags: [
+          { ko: "로우 앵글", tag: "from below", sub: "구도" },
+          { ko: "하이 앵글", tag: "from above", sub: "구도" },
+          { ko: "더치 앵글", tag: "dutch angle", sub: "구도" },
+          { ko: "역광", tag: "backlighting", sub: "조명" },
+          { ko: "림 라이트", tag: "rim lighting", sub: "조명" },
+          { ko: "시네마틱 조명", tag: "cinematic lighting", sub: "조명" },
+          { ko: "얕은 심도", tag: "depth of field", sub: "카메라" },
+          { ko: "클로즈업", tag: "close-up", sub: "카메라" },
+          { ko: "전신", tag: "full body", sub: "카메라" },
+        ],
+        actions: [
+          { ko: "뒤돌아보기", tag: "looking back", sub: "시선" },
+          { ko: "머리 쓸어넘기기", tag: "hand in own hair", sub: "손" },
+          { ko: "기대어 서기", tag: "leaning against wall", sub: "포즈" },
+          { ko: "바람에 날리는 머리", tag: "hair blowing in wind", sub: "연출" },
+          { ko: "턱 괴기", tag: "head rest", sub: "손" },
+          { ko: "살짝 미소", tag: "soft smile", sub: "표정" },
+          { ko: "윙크", tag: "one eye closed", sub: "표정" },
+          { ko: "앉아서 다리 꼬기", tag: "sitting, crossed legs", sub: "포즈" },
+          { ko: "손 내밀기", tag: "reaching towards viewer", sub: "손" },
+        ],
+        sex: [
+          { ko: "홍조", tag: "blush", sub: "표정" },
+          { ko: "땀", tag: "sweat", sub: "표현" },
+          { ko: "거친 숨", tag: "heavy breathing", sub: "표정" },
+          { ko: "젖은 피부", tag: "wet skin", sub: "표현" },
+          { ko: "흐트러진 옷", tag: "clothes lift", sub: "의상" },
+          { ko: "침대 위", tag: "on bed, lying", sub: "장소" },
+        ],
+      },
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function showToast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove("show"), 1700);
+    }
+
+    function currentTagListKey() {
+      return state.tab === "fixed" ? state.fixedSub : state.tab;
+    }
+
+    function parseWeight(tag) {
+      const m = tag.match(/^(-?\d+(?:\.\d+)?)::(.+?)\s*::$/);
+      if (m) return { weight: parseFloat(m[1]), text: m[2].trim() };
+      return { weight: 1, text: tag };
+    }
+
+    function formatWeight(text, weight) {
+      const w = Math.round(weight * 10) / 10;
+      if (w === 1) return text;
+      return `${w.toFixed(1)}::${text} ::`;
+    }
+
+    function renderStage() {
+      const img = state.images[state.activeImage];
+      const heroWrap = $("heroWrap");
+      heroWrap.classList.toggle("finish-on", state.finishOn);
+      if (state.privacy) {
+        heroWrap.innerHTML = `<div class="hero-hidden">👁</div>`;
+      } else {
+        heroWrap.innerHTML = `<img id="heroImg" src="${img.src}" alt="" />`;
+      }
+
+      $("finishBtn").classList.toggle("active", state.finishOn);
+      const seedPinned = state.fixedSeed === img.seed;
+      $("seedBtn").classList.toggle("active", seedPinned);
+      $("genSettingsText").textContent = `832×1216 · 28 · CFG 5${state.fixedSeed ? " · Seed 고정" : ""}`;
+
+      const rail = $("sessionRail");
+      rail.innerHTML = state.images.map((item, idx) => `
+        <button class="rail-item ${idx === state.activeImage ? "active" : ""}" data-idx="${idx}">
+          ${state.privacy ? "" : `<img src="${item.src}" alt="" />`}
+        </button>
+      `).join("");
+      rail.querySelectorAll(".rail-item").forEach((btn) => {
+        btn.onclick = () => {
+          state.activeImage = Number(btn.dataset.idx);
+          renderStage();
+        };
+      });
+    }
+
+    function renderTabs() {
+      const activeRefs = state.references.filter((r) => r.enabled).length;
+      const tabs = [
+        { key: "artist", label: "작가", dot: "artist", count: state.prompts.artist.length },
+        { key: "character", label: "캐릭터", dot: "character", count: state.prompts.character.length },
+        { key: "other", label: "장면", dot: "general", count: state.prompts.other.length },
+        { key: "reference", label: "레퍼런스", dot: "ref", count: activeRefs },
+        { key: "fixed", label: "품질·제외", dot: "", count: 0 },
+      ];
+      $("wbTabs").innerHTML = tabs.map((t) => `
+        <button class="wb-tab ${state.tab === t.key ? "active" : ""}" data-tab="${t.key}">
+          ${t.dot ? `<span class="dot ${t.dot}"></span>` : ""}
+          ${t.label}
+          ${t.count > 0 ? `<small>${t.count}</small>` : ""}
+        </button>
+      `).join("");
+      $("wbTabs").querySelectorAll(".wb-tab").forEach((btn) => {
+        btn.onclick = () => {
+          state.tab = btn.dataset.tab;
+          state.selectedChip = null;
+          renderWorkbench();
+        };
+      });
+      $("dictBtn").textContent = state.tab === "character" ? "🔍 캐릭터 찾기" : "📖 태그사전";
+    }
+
+    function renderChipBar() {
+      const bar = $("chipBar");
+      bar.classList.remove("selected-mode");
+
+      if (state.tab === "reference") {
+        bar.innerHTML = `
+          <button class="cb-btn active" id="refAddFile">＋ 이미지 추가</button>
+          <button class="cb-btn" id="refAddCurrent">🖼 현재 이미지 추가</button>
+        `;
+        $("refAddFile").onclick = () => {
+          state.references.push({
+            id: "ref-" + Date.now(),
+            src: makeArtwork("#1f2e3b", "#4c7a91", "#121b24", "#a8e6ff"),
+            mode: "outfit",
+            preferSameOutfit: true,
+            strength: 1.0,
+            enabled: true,
+          });
+          renderAll();
+        };
+        $("refAddCurrent").onclick = () => addCurrentToReference();
+        return;
+      }
+
+      const key = currentTagListKey();
+      const list = state.prompts[key];
+      const hasSel = state.selectedChip !== null && list[state.selectedChip] !== undefined;
+      const parsed = hasSel ? parseWeight(list[state.selectedChip]) : null;
+
+      if (hasSel) bar.classList.add("selected-mode");
+
+      let leftControls = "";
+      if (state.tab === "character" && !hasSel) {
+        leftControls = `
+          <button class="cb-btn active">1 · syuen</button>
+          <button class="cb-btn" id="addCharBtn">＋</button>
+          <button class="cb-btn ${state.randomChar ? "active" : ""}" id="randCharBtn">🎲 랜덤</button>
+          <span class="top-spacer"></span>
+        `;
+      } else if (state.tab === "fixed" && !hasSel) {
+        leftControls = `
+          <div class="sub-switch">
+            <button class="${state.fixedSub === "quality" ? "active" : ""}" id="subQuality">품질</button>
+            <button class="${state.fixedSub === "negative" ? "active" : ""}" id="subNegative">제외</button>
+          </div>
+          <span class="top-spacer"></span>
+        `;
+      } else {
+        leftControls = hasSel
+          ? `<span class="cb-label"><b>${parsed.text}</b></span>`
+          : `<span class="top-spacer"></span>`;
+      }
+
+      bar.innerHTML = `
+        ${leftControls}
+        <button class="cb-btn" id="wMinus" ${hasSel ? "" : "disabled"}>−0.1</button>
+        <button class="cb-btn" id="wPlus" ${hasSel ? "" : "disabled"}>+0.1</button>
+        <button class="cb-btn" id="mLeft" ${hasSel ? "" : "disabled"}>◀</button>
+        <button class="cb-btn" id="mRight" ${hasSel ? "" : "disabled"}>▶</button>
+        <button class="cb-btn" id="tChip" ${hasSel ? "" : "disabled"}>번역</button>
+        <button class="cb-btn danger" id="dChip" ${hasSel ? "" : "disabled"}>삭제</button>
+      `;
+
+      if ($("randCharBtn")) {
+        $("randCharBtn").onclick = () => { state.randomChar = !state.randomChar; renderWorkbench(); };
+      }
+      if ($("subQuality")) {
+        $("subQuality").onclick = () => { state.fixedSub = "quality"; state.selectedChip = null; renderWorkbench(); };
+        $("subNegative").onclick = () => { state.fixedSub = "negative"; state.selectedChip = null; renderWorkbench(); };
+      }
+      if (hasSel) {
+        $("wMinus").onclick = () => { list[state.selectedChip] = formatWeight(parsed.text, parsed.weight - 0.1); renderWorkbench(); };
+        $("wPlus").onclick = () => { list[state.selectedChip] = formatWeight(parsed.text, parsed.weight + 0.1); renderWorkbench(); };
+        $("mLeft").onclick = () => {
+          if (state.selectedChip > 0) {
+            [list[state.selectedChip - 1], list[state.selectedChip]] = [list[state.selectedChip], list[state.selectedChip - 1]];
+            state.selectedChip -= 1;
+            renderWorkbench();
+          }
+        };
+        $("mRight").onclick = () => {
+          if (state.selectedChip < list.length - 1) {
+            [list[state.selectedChip + 1], list[state.selectedChip]] = [list[state.selectedChip], list[state.selectedChip + 1]];
+            state.selectedChip += 1;
+            renderWorkbench();
+          }
+        };
+        $("tChip").onclick = () => showToast(`"${parsed.text}" 번역`);
+        $("dChip").onclick = () => { list.splice(state.selectedChip, 1); state.selectedChip = null; renderAll(); };
+      }
+    }
+
+    function renderInputDock() {
+      const dock = $("kbInputDock");
+      if (state.dictOpen || state.tab === "reference") {
+        dock.innerHTML = "";
+        return;
+      }
+      const key = currentTagListKey();
+      const list = state.prompts[key];
+      const q = state.draftInput.trim().toLowerCase();
+      const hits = q
+        ? state.suggestions.filter((s) => s.includes(q))
+        : ($("screen").classList.contains("kb-open") ? state.suggestions.slice(0, 6) : []);
+
+      dock.innerHTML = `
+        <div class="suggest-row" id="suggestRow">
+          ${hits.map((h) => `<button type="button" class="suggest-pill" data-s="${h}"><span class="dot general"></span>${h}</button>`).join("")}
+        </div>
+        <div class="inline-add-bar">
+          <input class="inline-input" id="tagInput" value="${state.draftInput.replace(/"/g, "&quot;")}" placeholder="태그 또는 문장 입력" />
+          <button type="button" class="inline-bar-btn translate" id="inlineTranslateBtn">🌐 번역</button>
+          <button type="button" class="inline-bar-btn" id="inlineAddBtn">추가</button>
+          <button type="button" class="inline-bar-btn gen-mini" id="kbGenBtn">생성</button>
+        </div>
+      `;
+
+      const input = $("tagInput");
+      const commitInput = (rawText) => {
+        const parts = rawText.split(",").map((s) => s.trim()).filter(Boolean);
+        if (!parts.length) return;
+        list.push(...parts);
+        state.draftInput = "";
+        renderAll();
+        $("tagInput")?.focus();
+      };
+      $("inlineAddBtn").onclick = () => commitInput(input.value);
+      $("kbGenBtn").onclick = () => {
+        if (input.value.trim()) commitInput(input.value);
+        $("generateBtn").click();
+      };
+      $("inlineTranslateBtn").onclick = () => {
+        const text = input.value.trim();
+        if (!text) return;
+        const translated = /[가-힣]/.test(text)
+          ? "girl smiling on a sunset rooftop, wind blowing through hair"
+          : text;
+        commitInput(translated);
+      };
+      dock.querySelectorAll(".suggest-pill").forEach((p) => {
+        p.onclick = () => commitInput(p.dataset.s);
+      });
+      input.oninput = () => {
+        state.draftInput = input.value;
+        const nextQ = state.draftInput.trim().toLowerCase();
+        const nextHits = nextQ
+          ? state.suggestions.filter((s) => s.includes(nextQ))
+          : ($("screen").classList.contains("kb-open") ? state.suggestions.slice(0, 6) : []);
+        const row = $("suggestRow");
+        row.innerHTML = nextHits.map((h) => `<button type="button" class="suggest-pill" data-s="${h}"><span class="dot general"></span>${h}</button>`).join("");
+        row.querySelectorAll(".suggest-pill").forEach((p) => {
+          p.onclick = () => commitInput(p.dataset.s);
+        });
+      };
+      input.onkeydown = (e) => {
+        if ((e.key === "Enter" || e.key === ",") && input.value.trim()) {
+          e.preventDefault();
+          commitInput(input.value);
+        }
+      };
+    }
+
+    function renderDictionary() {
+      const body = $("wbBody");
+      const items = state.dictData[state.dictCat] || [];
+      const subs = ["전체", ...Array.from(new Set(items.map((i) => i.sub)))];
+      if (!subs.includes(state.dictSub)) state.dictSub = "전체";
+
+      const targetKey = state.dictCat === "artists" ? "artist" : (state.tab === "reference" ? "other" : currentTagListKey());
+      const targetList = state.prompts[targetKey];
+      const q = state.dictQuery.trim().toLowerCase();
+      const filtered = items.filter((item) => {
+        if (state.dictFavOnly && !state.dictFavs.has(item.tag)) return false;
+        if (state.dictSub !== "전체" && item.sub !== state.dictSub) return false;
+        if (q && !item.ko.toLowerCase().includes(q) && !item.tag.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      body.style.padding = "10px";
+      body.innerHTML = `
+        <div class="dict-pane">
+          <div class="dict-head">
+            <div class="dict-cats">
+              ${[
+                { k: "artists", l: "작가" },
+                { k: "tags", l: "구도" },
+                { k: "actions", l: "행동" },
+                { k: "sex", l: "Sex" },
+              ].map((c) => `<button type="button" class="dict-cat-btn ${state.dictCat === c.k ? "active" : ""}" data-cat="${c.k}">${c.l}</button>`).join("")}
+            </div>
+            <button type="button" class="cb-btn ${state.dictFavOnly ? "active" : ""}" id="dictFavToggle">★</button>
+            <button type="button" class="cb-btn" id="dictCloseBtn">✕</button>
+          </div>
+          <div class="dict-search-row">
+            <input class="dict-search" id="dictSearch" value="${state.dictQuery.replace(/"/g, "&quot;")}" placeholder="한글 / 영문 검색" />
+            <div class="dict-sub-pills">
+              ${subs.map((s) => `<button type="button" class="dict-sub-pill ${state.dictSub === s ? "active" : ""}" data-sub="${s}">${s}</button>`).join("")}
+            </div>
+          </div>
+          <div class="dict-grid">
+            ${filtered.map((item) => {
+              const added = targetList.includes(item.tag);
+              const fav = state.dictFavs.has(item.tag);
+              return `
+                <div class="dict-card ${added ? "added" : ""}" data-tag="${item.tag}">
+                  <strong>${item.ko}</strong>
+                  <small>${item.tag}</small>
+                  <button type="button" class="dict-star ${fav ? "fav" : ""}" data-star="${item.tag}">${fav ? "★" : "☆"}</button>
+                </div>`;
+            }).join("")}
+          </div>
+        </div>
+      `;
+
+      body.querySelectorAll(".dict-cat-btn").forEach((b) => {
+        b.onclick = () => { state.dictCat = b.dataset.cat; state.dictSub = "전체"; renderDictionary(); };
+      });
+      body.querySelectorAll(".dict-sub-pill").forEach((b) => {
+        b.onclick = () => { state.dictSub = b.dataset.sub; renderDictionary(); };
+      });
+      $("dictFavToggle").onclick = () => { state.dictFavOnly = !state.dictFavOnly; renderDictionary(); };
+      $("dictCloseBtn").onclick = () => { state.dictOpen = false; renderWorkbench(); };
+      $("dictSearch").oninput = (e) => {
+        state.dictQuery = e.target.value;
+        renderDictionary();
+        const el = $("dictSearch");
+        if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      };
+      body.querySelectorAll(".dict-star").forEach((b) => {
+        b.onclick = (e) => {
+          e.stopPropagation();
+          const t = b.dataset.star;
+          if (state.dictFavs.has(t)) state.dictFavs.delete(t);
+          else state.dictFavs.add(t);
+          renderDictionary();
+        };
+      });
+      body.querySelectorAll(".dict-card").forEach((card) => {
+        card.onclick = () => {
+          const t = card.dataset.tag;
+          const idx = targetList.indexOf(t);
+          if (idx >= 0) targetList.splice(idx, 1);
+          else targetList.push(t);
+          renderTabs();
+          renderDictionary();
+        };
+      });
+    }
+
+    function renderBody() {
+      const body = $("wbBody");
+      $("wbTabs").style.display = state.dictOpen ? "none" : "";
+      $("chipBar").style.display = state.dictOpen ? "none" : "";
+      if (state.dictOpen) {
+        renderDictionary();
+        renderInputDock();
+        return;
+      }
+      if (state.tab === "reference") {
+        if (state.references.length === 0) {
+          body.innerHTML = "";
+          renderInputDock();
+          return;
+        }
+        body.innerHTML = `<div class="ref-grid">${state.references.map((ref, idx) => {
+          const showOutfit = ref.mode === "character&style" || ref.mode === "character";
+          return `
+            <div class="ref-card ${ref.enabled ? "" : "off"}" data-ref="${idx}">
+              <div class="ref-thumb"><img src="${ref.src}" alt="" /></div>
+              <div class="ref-controls">
+                <select class="ref-select" data-role="mode">
+                  <option value="character&style" ${ref.mode === "character&style" ? "selected" : ""}>Character &amp; Style</option>
+                  <option value="character" ${ref.mode === "character" ? "selected" : ""}>Character</option>
+                  <option value="style" ${ref.mode === "style" ? "selected" : ""}>Style</option>
+                  <option value="outfit" ${ref.mode === "outfit" ? "selected" : ""}>Outfit</option>
+                </select>
+                ${showOutfit ? `<label class="ref-check"><input type="checkbox" data-role="outfit" ${ref.preferSameOutfit ? "checked" : ""} /> Prefer same outfit</label>` : ""}
+                <div class="ref-slider-row">
+                  <span>Str</span>
+                  <input type="range" min="0" max="2" step="0.05" value="${ref.strength}" data-role="strength" />
+                  <strong>${ref.strength.toFixed(2).replace(/\.?0+$/, "")}</strong>
+                </div>
+                <div class="ref-foot">
+                  <button class="${ref.enabled ? "on" : ""}" data-role="toggle">${ref.enabled ? "✓ 사용 중" : "꺼짐"}</button>
+                  <button class="del" data-role="del">삭제</button>
+                </div>
+              </div>
+            </div>`;
+        }).join("")}</div>`;
+
+        body.querySelectorAll(".ref-card").forEach((card) => {
+          const idx = Number(card.dataset.ref);
+          const ref = state.references[idx];
+          card.querySelector('[data-role="mode"]').onchange = (e) => { ref.mode = e.target.value; renderAll(); };
+          const outfitEl = card.querySelector('[data-role="outfit"]');
+          if (outfitEl) outfitEl.onchange = (e) => { ref.preferSameOutfit = e.target.checked; };
+          card.querySelector('[data-role="strength"]').oninput = (e) => {
+            ref.strength = Number(e.target.value);
+            card.querySelector(".ref-slider-row strong").textContent = ref.strength.toFixed(2).replace(/\.?0+$/, "");
+          };
+          card.querySelector('[data-role="toggle"]').onclick = () => { ref.enabled = !ref.enabled; renderAll(); };
+          card.querySelector('[data-role="del"]').onclick = () => { state.references.splice(idx, 1); renderAll(); };
+        });
+        renderInputDock();
+        return;
+      }
+
+      const key = currentTagListKey();
+      const list = state.prompts[key];
+      body.innerHTML = `
+        <div class="chips-wrap" id="chipsWrap">
+          ${list.map((raw, idx) => {
+            const p = parseWeight(raw);
+            return `<button type="button" class="tag-chip ${state.selectedChip === idx ? "selected" : ""}" data-chip="${idx}">
+              ${p.weight !== 1 ? `<span class="w">${p.weight.toFixed(1)}×</span>` : ""}
+              <span>${p.text}</span>
+            </button>`;
+          }).join("")}
+        </div>
+      `;
+
+      body.querySelectorAll(".tag-chip").forEach((btn) => {
+        btn.onclick = () => {
+          const idx = Number(btn.dataset.chip);
+          state.selectedChip = state.selectedChip === idx ? null : idx;
+          renderWorkbench();
+        };
+      });
+      renderInputDock();
+    }
+
+    function renderWorkbench() {
+      renderTabs();
+      renderChipBar();
+      renderBody();
+    }
+
+    function renderAll() {
+      renderStage();
+      renderWorkbench();
+    }
+
+    function addCurrentToReference() {
+      const img = state.images[state.activeImage];
+      state.references.push({
+        id: "ref-" + Date.now(),
+        src: img.src,
+        mode: "character&style",
+        preferSameOutfit: true,
+        strength: 1.0,
+        enabled: true,
+      });
+      state.tab = "reference";
+      showToast(`${img.label} 이미지를 레퍼런스에 추가했습니다`);
+      renderAll();
+    }
+
+    // Wire buttons
+    $("privacyBtn").onclick = () => {
+      state.privacy = !state.privacy;
+      $("privacyBtn").classList.toggle("active", state.privacy);
+      $("privacyBtn").textContent = state.privacy ? "👁 보이기" : "👁 가리기";
+      renderStage();
+    };
+    $("refreshBtn").onclick = () => showToast("사용 한도 72% · Anlas 9,898 갱신됨");
+    $("saveBtn").onclick = () => showToast("저장됨 · NovelAI_latest.webp · 132 KB");
+    $("finishBtn").onclick = () => { state.finishOn = !state.finishOn; renderStage(); };
+    $("seedBtn").onclick = () => {
+      const img = state.images[state.activeImage];
+      state.fixedSeed = state.fixedSeed === img.seed ? null : img.seed;
+      renderStage();
+    };
+    $("upscaleBtn").onclick = () => showToast("2× 업스케일 완료 (시안)");
+    $("toRefBtn").onclick = addCurrentToReference;
+    $("generateBtn").onclick = () => {
+      const nextId = state.images[0].id + 1;
+      const palettes = [
+        ["#1e1a3a", "#5f4994", "#121024", "#ffbf9b"],
+        ["#122733", "#2b6c80", "#0d1a24", "#a8f0e8"],
+        ["#301828", "#8c3f64", "#1c0f18", "#ffd0b8"],
+      ];
+      const pal = palettes[nextId % palettes.length];
+      const seed = state.fixedSeed ?? Math.floor(1000000000 + Math.random() * 2500000000);
+      state.images.unshift({
+        id: nextId,
+        seed,
+        w: 832,
+        h: 1216,
+        src: makeArtwork(...pal),
+      });
+      state.activeImage = 0;
+      renderStage();
+    };
+
+    // Fullscreen viewer
+    $("heroWrap").onclick = () => {
+      if (state.privacy) return;
+      const img = state.images[state.activeImage];
+      $("viewerImg").src = img.src;
+      $("viewerMeta").textContent = `${img.w}×${img.h} · Seed ${img.seed}`;
+      $("viewerOverlay").classList.add("open");
+    };
+    $("viewerClose").onclick = () => $("viewerOverlay").classList.remove("open");
+    $("viewerImgWrap").onclick = () => $("viewerOverlay").classList.remove("open");
+
+    // Ratio presets & divider cycle
+    const ratios = ["58%", "46%", "24%"];
+    function setRatio(r) {
+      document.documentElement.style.setProperty("--stage-ratio", r);
+      document.querySelectorAll("[data-ratio]").forEach((b) => b.classList.toggle("active", b.dataset.ratio === r));
+    }
+    document.querySelectorAll("[data-ratio]").forEach((btn) => {
+      btn.onclick = () => setRatio(btn.dataset.ratio);
+    });
+    $("dividerBar").onclick = () => {
+      const cur = getComputedStyle(document.documentElement).getPropertyValue("--stage-ratio").trim();
+      const next = ratios[(ratios.indexOf(cur) + 1) % ratios.length];
+      setRatio(next);
+    };
+
+    $("dictBtn").onclick = () => {
+      state.dictOpen = !state.dictOpen;
+      if (state.dictOpen) {
+        state.dictCat = state.tab === "artist" ? "artists" : state.tab === "other" ? "actions" : "tags";
+      }
+      $("dictBtn").classList.toggle("active", state.dictOpen);
+      renderWorkbench();
+    };
+
+    // Virtual keyboard simulator
+    function setKb(open) {
+      $("screen").classList.toggle("kb-open", open);
+      $("kbToggle").classList.toggle("active", open);
+      $("kbToggle").textContent = open ? "가상 키보드 닫기" : "가상 키보드 열기";
+      renderInputDock();
+    }
+    $("kbToggle").onclick = () => setKb(!$("screen").classList.contains("kb-open"));
+    $("kbCloseBtn").onclick = () => setKb(false);
+
+    // Responsive bezel scaling so 800x1280 fits any desktop monitor
+    function fitBezel() {
+      const wrap = document.querySelector(".tablet-stage-wrap");
+      const scale = Math.min(1, (wrap.clientWidth - 20) / 800, (wrap.clientHeight - 8) / 1280);
+      $("bezel").style.transform = `scale(${scale})`;
+    }
+    window.addEventListener("resize", fitBezel);
+    fitBezel();
+    renderAll();
+  </script>
+</body>
+</html>

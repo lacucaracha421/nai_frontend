@@ -6,9 +6,11 @@ const TOKEN_SERVICE: &str = "local.nai.v5studio";
 const OLLAMA_ACCOUNT: &str = "translation-ollama-api-key";
 const OPENROUTER_ACCOUNT: &str = "translation-openrouter-api-key";
 const NEURALWATT_ACCOUNT: &str = "translation-neuralwatt-api-key";
+const GEMINI_ACCOUNT: &str = "translation-gemini-api-key";
 const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 const NEURALWATT_URL: &str = "https://api.neuralwatt.com/v1/chat/completions";
+const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const TRANSLATION_SYSTEM_PROMPT: &str = r#"Translate the selected Korean text into English for a NovelAI image prompt.
 Preserve the original writing style: natural-language prose stays natural-language, while tag-like fragments stay concise and tag-like.
@@ -22,6 +24,7 @@ pub enum TranslationProvider {
     Ollama,
     Openrouter,
     Neuralwatt,
+    Gemini,
 }
 impl TranslationProvider {
     pub fn parse(value: &str) -> Result<Self, String> {
@@ -29,6 +32,7 @@ impl TranslationProvider {
             "ollama" => Ok(Self::Ollama),
             "openrouter" => Ok(Self::Openrouter),
             "neuralwatt" => Ok(Self::Neuralwatt),
+            "gemini" => Ok(Self::Gemini),
             _ => Err("지원하지 않는 번역 provider랍니다.".to_string()),
         }
     }
@@ -38,6 +42,7 @@ impl TranslationProvider {
             Self::Ollama => OLLAMA_ACCOUNT,
             Self::Openrouter => OPENROUTER_ACCOUNT,
             Self::Neuralwatt => NEURALWATT_ACCOUNT,
+            Self::Gemini => GEMINI_ACCOUNT,
         }
     }
 }
@@ -55,6 +60,7 @@ pub struct TranslationKeyStatus {
     pub ollama: bool,
     pub openrouter: bool,
     pub neuralwatt: bool,
+    pub gemini: bool,
 }
 
 fn ensure_credential_store() -> Result<(), String> {
@@ -120,6 +126,7 @@ pub fn key_status() -> Result<TranslationKeyStatus, String> {
         ollama: load_api_key(&TranslationProvider::Ollama)?.is_some(),
         openrouter: load_api_key(&TranslationProvider::Openrouter)?.is_some(),
         neuralwatt: load_api_key(&TranslationProvider::Neuralwatt)?.is_some(),
+        gemini: load_api_key(&TranslationProvider::Gemini)?.is_some(),
     })
 }
 
@@ -301,6 +308,64 @@ async fn translate_chat(
     clean_translation(content)
 }
 
+fn gemini_url(model: &str) -> String {
+    let trimmed = model.trim().trim_start_matches("models/");
+    format!("{GEMINI_API_BASE}/{trimmed}:generateContent")
+}
+
+fn gemini_payload(text: &str) -> Value {
+    json!({
+        "systemInstruction": {
+            "parts": [{"text": TRANSLATION_SYSTEM_PROMPT}]
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": text}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0
+        }
+    })
+}
+
+fn gemini_text(value: &Value) -> Option<String> {
+    let parts = value
+        .get("candidates")
+        .and_then(Value::as_array)?
+        .first()?
+        .get("content")?
+        .get("parts")?
+        .as_array()?;
+    let joined = parts
+        .iter()
+        .filter(|part| part.get("thought").and_then(Value::as_bool) != Some(true))
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    (!joined.trim().is_empty()).then_some(joined)
+}
+
+async fn translate_gemini(config: &TranslationConfig, text: &str) -> Result<String, String> {
+    let model = model(config)?;
+    let api_key = load_api_key(&TranslationProvider::Gemini)?
+        .ok_or_else(|| "Gemini API key를 먼저 저장하시와요.".to_string())?;
+    let payload = gemini_payload(text);
+    let response = client()?
+        .post(gemini_url(model))
+        .header("x-goog-api-key", api_key)
+        .header(CONTENT_TYPE, "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|error| format!("Gemini request failed: {error}"))?;
+    let value = response_json(response, "Gemini").await?;
+    let content = gemini_text(&value)
+        .ok_or_else(|| "Gemini 응답에 번역 텍스트가 없사와요.".to_string())?;
+    clean_translation(content)
+}
+
 pub async fn translate(config: &TranslationConfig, text: &str) -> Result<String, String> {
     if text.trim().is_empty() {
         return Err("번역할 텍스트를 선택하시와요.".to_string());
@@ -309,6 +374,7 @@ pub async fn translate(config: &TranslationConfig, text: &str) -> Result<String,
         TranslationProvider::Ollama => translate_ollama(config, text).await,
         TranslationProvider::Openrouter => translate_openrouter(config, text).await,
         TranslationProvider::Neuralwatt => translate_neuralwatt(config, text).await,
+        TranslationProvider::Gemini => translate_gemini(config, text).await,
     }
 }
 
@@ -348,5 +414,30 @@ mod tests {
             TRANSLATION_SYSTEM_PROMPT
         );
         assert_eq!(openrouter["stream"], false);
+    }
+
+    #[test]
+    fn gemini_provider_and_payload_extract_non_thought_text() {
+        let provider = TranslationProvider::parse(" Gemini ").unwrap();
+        assert!(matches!(provider, TranslationProvider::Gemini));
+        assert_eq!(provider.account(), "translation-gemini-api-key");
+        assert_eq!(
+            gemini_url("models/gemini-2.5-flash-lite"),
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+        );
+        let payload = gemini_payload("노을 지는 옥상");
+        assert_eq!(payload["systemInstruction"]["parts"][0]["text"], TRANSLATION_SYSTEM_PROMPT);
+        assert_eq!(payload["contents"][0]["parts"][0]["text"], "노을 지는 옥상");
+        let reply = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {"text": "thinking...", "thought": true},
+                        {"text": "sunset rooftop"}
+                    ]
+                }
+            }]
+        });
+        assert_eq!(gemini_text(&reply).as_deref(), Some("sunset rooftop"));
     }
 }

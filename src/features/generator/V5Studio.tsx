@@ -20,6 +20,8 @@ import { copyWholePrompt } from "../prompt/promptClipboard";
 import { chooseCharacterTag, containsCharacterTag, detectCharacterTagFromPrompt } from "../prompt/characterTag";
 import { randomCharacterPool, randomPickLabel, type RandomCharacterPick } from "../prompt/randomCharacter";
 import { QuickCopySheet } from "../tags/QuickCopySheet";
+import { InlineTagDictionary } from "../tags/InlineTagDictionary";
+import { TagDictionaryManagerSheet, type ManageableDictTab } from "../tags/TagDictionaryManagerSheet";
 import type { TagCategory } from "../tags/localTagIndex";
 import { SettingsSheet, type SettingsScope } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
@@ -36,6 +38,11 @@ import { finishPreviewSource, finishRunner, imageObjectUrl, prepareFinishSourceW
 import { formatFileSize, prepareSave } from "./save/prepareSave";
 import { browserSaveDeps } from "./save/saveDeps";
 import { FinishSheet } from "./finish/FinishSheet";
+import { ReferenceSheet } from "./reference/ReferenceSheet";
+import { ReferencePanel } from "./reference/ReferencePanel";
+import { prepareReferenceBytes } from "./reference/prepareReference";
+import { removeTagAt } from "../prompt/tagChips";
+import "./s11-studio.css";
 import { useQuotaClock } from "./useQuotaClock";
 import { useImageLoader } from "./load/ImageLoadButton";
 import { useDesktopLayout, nativeTextTarget } from "../../app/desktopLayout";
@@ -56,7 +63,7 @@ function savedName(path: string) {
 }
 
 type SaveState = "idle" | "saving" | "success" | "error";
-type Tab = "artist" | "character" | "other" | "fixed";
+type Tab = "artist" | "character" | "other" | "reference" | "fixed";
 type FixedPart = "quality" | "negative";
 type MenuItem = { label: string; hint?: string; disabled?: boolean; danger?: boolean; onSelect: () => void };
 
@@ -64,8 +71,10 @@ const TABS: { key: Tab; label: string; dot?: string }[] = [
   { key: "artist", label: "작가", dot: "artist" },
   { key: "character", label: "캐릭터", dot: "character" },
   { key: "other", label: "장면", dot: "general" },
+  { key: "reference", label: "레퍼런스", dot: "ref" },
   { key: "fixed", label: "품질·제외" },
 ];
+const S11_STAGE_RATIOS = ["56%", "44%", "24%"] as const;
 
 const SECTION_CONFIG: Record<PromptSectionKey, { title: string; categories: TagCategory[]; tagPrefix?: string; placeholder: string }> = {
   artist: { title: "작가", categories: ["artist", "general", "meta"], tagPrefix: "artist:", placeholder: "artist:toma 또는 toma로 검색 가능" },
@@ -250,6 +259,9 @@ export function V5Studio() {
   // Same pool the 🎲 draws from (deduplicated), so the number shown is the number drawn from.
   const randomCharacterCount = useCharacterLibraryStore((s) => randomCharacterPool(s.entries, s).length);
   const settings = useGenerationStore((s) => s.settings);
+  const references = useGenerationStore((s) => s.references);
+  const addReference = useGenerationStore((s) => s.addReference);
+  const setActiveImage = useGenerationStore((s) => s.setActiveImage);
   const images = useGenerationStore((s) => s.images);
   const active = useGenerationStore((s) => s.activeImage);
   const updateCharacter = useGenerationStore((s) => s.updateCharacter);
@@ -297,6 +309,10 @@ export function V5Studio() {
   const [finishBusy, setFinishBusy] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [referenceOpen, setReferenceOpen] = useState(false);
+  const [inlineDictOpen, setInlineDictOpen] = useState(false);
+  const [dictManagerTab, setDictManagerTab] = useState<ManageableDictTab | null>(null);
+  const [stageRatioIndex, setStageRatioIndex] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const [imagesHidden, setImagesHidden] = useState(false);
@@ -405,9 +421,10 @@ export function V5Studio() {
   const finishPreviewUrl = previewUrlFor(selected);
   const viewerPreviewUrl = previewUrlFor(viewed);
   const finishPending = finishEnabled && !!previewTarget && (finishBusy || !previewUrlFor(previewTarget)) && !finishError;
+  const activeReferenceCount = references.filter((ref) => ref.enabled).length;
   const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
   const cost = connectionStatus === "connected" && quota
-    ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps }, quota)
+    ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps, referenceCount: activeReferenceCount }, quota)
     : undefined;
   const anlasText = quota?.anlas !== null && quota?.anlas !== undefined ? `Anlas ${quota.anlas.toLocaleString()}` : null;
 
@@ -525,7 +542,7 @@ export function V5Studio() {
   };
 
   // ---- Current editor section --------------------------------------------------------
-  const section: PromptSectionKey | null = tab === "character" ? null : tab === "fixed" ? fixedPart : tab;
+  const section: PromptSectionKey | null = tab === "character" || tab === "reference" ? null : tab === "fixed" ? fixedPart : tab;
   const sectionValue = section === "artist"
     ? artist
     : section === "other"
@@ -536,7 +553,7 @@ export function V5Studio() {
           ? negative
           : activeCharacter?.prompt ?? "";
   const historyKey = section ? `prompt:${section}` : `character:${activeCharacter?.id ?? "none"}:prompt`;
-  const sectionTitle = section ? SECTION_CONFIG[section].title : "캐릭터";
+  const sectionTitle = section ? SECTION_CONFIG[section].title : tab === "reference" ? "레퍼런스" : "캐릭터";
   const activeCharacterId = activeCharacter?.id;
   const setSectionValue = useCallback((next: string) => {
     if (section) setPrompt(section, next);
@@ -566,8 +583,49 @@ export function V5Studio() {
   };
 
   const openDictionary = () => {
+    if (!desktop) {
+      if (tab === "character") {
+        setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true);
+      } else {
+        setInlineDictOpen((open) => !open);
+      }
+      return;
+    }
     if (section) setQuickCopy(section);
     else { setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true); }
+  };
+
+  const toggleDictionaryTag = (tag: string) => {
+    const targetSection: PromptSectionKey = section ?? "other";
+    const currentText = targetSection === "artist"
+      ? artist
+      : targetSection === "other"
+        ? other
+        : targetSection === "quality"
+          ? quality
+          : negative;
+    const norm = (v: string) => v.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    const list = splitTags(currentText);
+    const existingIndex = list.findIndex((item) => norm(item) === norm(tag));
+    if (existingIndex >= 0) {
+      setPrompt(targetSection, removeTagAt(currentText, existingIndex));
+    } else {
+      appendPrompt(targetSection, tag);
+    }
+  };
+
+  const sendImageToReference = async (image: GenerationImage | undefined) => {
+    if (!image) return;
+    try {
+      const bytes = await readImageBytes(image.src);
+      const prepared = await prepareReferenceBytes(bytes, "image/png");
+      addReference(prepared);
+      setInlineDictOpen(false);
+      setTab("reference");
+      showNotice("레퍼런스에 추가했습니다", 1600);
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "레퍼런스 추가 실패", 2200);
+    }
   };
 
   const copySection = async () => {
@@ -679,7 +737,9 @@ export function V5Studio() {
             ? splitTags(other).length
             : item.key === "character"
               ? chars.filter((character) => character.enabled && character.prompt.trim()).length
-              : 0;
+              : item.key === "reference"
+                ? activeReferenceCount
+                : 0;
         return (
           <button
             type="button"
@@ -801,7 +861,7 @@ export function V5Studio() {
   // PC has one panel slot. Opening another panel replaces the previous panel before paint.
   const previousPanels = useRef<boolean[]>([]);
   useLayoutEffect(() => {
-    const panels = [settingsScope !== null, quickCopy !== null, characterSheet, libraryOpen, rawEditor, finishOpen, placementId !== null];
+    const panels = [settingsScope !== null, quickCopy !== null, characterSheet, libraryOpen, rawEditor, finishOpen, placementId !== null, referenceOpen];
     let opened = -1;
     panels.forEach((open, index) => { if (open && !previousPanels.current[index]) opened = index; });
     previousPanels.current = panels;
@@ -813,7 +873,8 @@ export function V5Studio() {
     if (opened !== 4) setRawEditor(false);
     if (opened !== 5) setFinishOpen(false);
     if (opened !== 6) setPlacementId(null);
-  }, [desktop, settingsScope, quickCopy, characterSheet, libraryOpen, rawEditor, finishOpen, placementId]);
+    if (opened !== 7) setReferenceOpen(false);
+  }, [desktop, settingsScope, quickCopy, characterSheet, libraryOpen, rawEditor, finishOpen, placementId, referenceOpen]);
 
   // Android Back closes the topmost of these (see app/backStack.ts).
   useBackLayer(menu !== null, () => setMenu(null));
@@ -823,6 +884,9 @@ export function V5Studio() {
   useBackLayer(rawEditor, () => setRawEditor(false));
   useBackLayer(placementId !== null, () => setPlacementId(null));
   useBackLayer(finishOpen, () => setFinishOpen(false));
+  useBackLayer(referenceOpen, () => setReferenceOpen(false));
+  useBackLayer(dictManagerTab !== null, () => setDictManagerTab(null));
+  useBackLayer(inlineDictOpen, () => setInlineDictOpen(false));
   useBackLayer(diffOpen, () => setDiffOpen(false));
   useBackLayer(viewer && !imagesHidden, () => setViewer(false));
   useBackLayer(!desktop && expanded, () => setExpanded(false));
@@ -896,7 +960,6 @@ export function V5Studio() {
       </button>
       <button type="button" className="b2-generate" disabled={busy} onClick={() => generateNow(tools)}>
         <strong>{generateLabel}</strong>
-        {costLine && <small>{costLine}</small>}
       </button>
     </div>
   );
@@ -956,6 +1019,353 @@ export function V5Studio() {
     ? SECTION_CONFIG[section]
     : { categories: CHARACTER_CATEGORIES, placeholder: "캐릭터 외형과 의상 태그", tagPrefix: undefined };
 
+  const s11BoardHeader = tab === "character" ? (
+    <>
+      {chars.map((character, index) => (
+        <button
+          type="button"
+          key={character.id}
+          className={`s11-char-pill ${activeCharacter?.id === character.id ? "active" : ""}`}
+          onClick={() => setCharacterId(character.id)}
+        >
+          {index + 1} · {character.name || `캐릭터 ${index + 1}`}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="s11-char-pill"
+        aria-label="캐릭터 추가"
+        onClick={() => { setFinderAdd(true); setFinderRandom(false); setLibraryOpen(true); }}
+      >
+        <Icon name="plus" />
+      </button>
+      <button
+        type="button"
+        className={`s11-char-pill ${randomCharacterEnabled ? "active" : ""}`}
+        aria-pressed={randomCharacterEnabled}
+        onClick={toggleRandomCharacter}
+      >
+        <Icon name="dice" />랜덤
+      </button>
+      <button type="button" className="s11-char-pill" onClick={() => setCharacterSheet(true)}>
+        <Icon name="sliders" />관리
+      </button>
+    </>
+  ) : tab === "fixed" ? (
+    <>
+      <button type="button" className={`s11-fixed-btn ${fixedPart === "quality" ? "active" : ""}`} onClick={() => setFixedPart("quality")}>품질</button>
+      <button type="button" className={`s11-fixed-btn ${fixedPart === "negative" ? "active" : ""}`} onClick={() => setFixedPart("negative")}>제외</button>
+    </>
+  ) : null;
+
+  const s11BottomDock = (tools?: TagBoardTools) => (
+    <footer className="s11-bottom-dock">
+      <button
+        type="button"
+        className={`s11-dock-btn ${inlineDictOpen ? "active" : ""}`}
+        onClick={openDictionary}
+      >
+        <Icon name={tab === "character" ? "search" : "book"} />
+        {dictionaryLabel}
+      </button>
+      <button
+        type="button"
+        className="s11-dock-btn icon"
+        aria-label="되돌리기"
+        disabled={!tools?.canUndo}
+        onClick={() => tools?.undo()}
+      >
+        <Icon name="undo" />
+      </button>
+      <button
+        type="button"
+        className="s11-dock-btn icon"
+        aria-label="다시 실행"
+        disabled={!tools?.canRedo}
+        onClick={() => tools?.redo()}
+      >
+        <Icon name="redo" />
+      </button>
+      <button type="button" className="s11-dock-settings" onClick={() => setSettingsScope("generation")}>
+        <strong>생성 설정</strong>
+        <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}</small>
+      </button>
+      <button type="button" className="s11-dock-generate" disabled={busy} onClick={() => generateNow(tools ?? boardTools.current ?? undefined)}>
+        {generateLabel}
+      </button>
+    </footer>
+  );
+
+  const sharedOverlays = (
+    <>
+      {error && <div className="error-toast b2-toast"><span>{error}</span><button onClick={clearError} aria-label="닫기">×</button></div>}
+      {notice && !desktop && <div className="success-toast b2-toast"><span>{notice}</span></div>}
+      {loader.element}
+
+      <div className="b2-panels">
+        {placementId && (
+          <div className="b2-placement">
+            <div
+              className="image-render-surface positioning"
+              style={{
+                aspectRatio: aspect,
+                "--hw": selected ? selected.height / selected.width : settings.height / settings.width,
+              } as CSSProperties}
+            >
+              {selected && !imagesHidden ? <img src={selected.src} alt="" /> : <div className="b2-placement-blank" />}
+              <CharacterStageOverlay
+                characters={chars}
+                selectedId={placementId}
+                onSelect={setPlacementId}
+                onMove={(id, x, y) => updateCharacter(id, { position: { x, y } })}
+                onDone={() => setPlacementId(null)}
+              />
+            </div>
+          </div>
+        )}
+
+        {characterSheet && (
+          <CharacterSheet
+            onClose={() => setCharacterSheet(false)}
+            onPlaceOnImage={(id) => {
+              setCharacterSheet(false);
+              setPlacementId(id);
+            }}
+          />
+        )}
+        <CharacterCatalogPrefetch />
+        {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
+        {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
+        {rawEditor && (
+          <RawPromptSheet
+            title={sectionTitle}
+            value={sectionValue}
+            historyKey={historyKey}
+            onChange={setSectionValue}
+            onClose={() => setRawEditor(false)}
+          />
+        )}
+        {settingsScope && <SettingsSheet scope={settingsScope} onClose={() => setSettingsScope(null)} />}
+        {referenceOpen && <ReferenceSheet currentImage={selected} onClose={() => setReferenceOpen(false)} />}
+        {dictManagerTab && <TagDictionaryManagerSheet initialTab={dictManagerTab} onClose={() => setDictManagerTab(null)} />}
+        {finishOpen && !viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
+      </div>
+      {viewer && !imagesHidden && (
+        <ImageViewer
+          images={images}
+          index={viewerIndex ?? active}
+          onIndex={setViewerIndex}
+          onClose={() => setViewer(false)}
+          displaySrc={viewerPreviewUrl}
+          topRight={(
+            <button type="button" className="viewer-round" aria-label="이미지 숨기기" onClick={togglePrivacy}>
+              <Icon name="eye" />
+            </button>
+          )}
+          meta={viewerMeta}
+          actions={viewerActions}
+        />
+      )}
+      {finishOpen && viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
+      {menu === "prompt" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "image" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
+    </>
+  );
+
+  if (!desktop) {
+    const seedFixed = seedFixedFor(selected);
+    const upscaleBlocked = upscaleBlockedFor(selected);
+    return (
+      <main
+        className={`s11-shell ${viewport.keyboard ? "s11-kb-open" : ""}`}
+        style={{
+          ...(viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } : {}),
+          "--s11-stage-ratio": S11_STAGE_RATIOS[stageRatioIndex],
+        } as CSSProperties}
+      >
+        <header className="s11-top-bar">
+          <button
+            type="button"
+            className={`b2-status ${statusTone}`}
+            onClick={() => (connectionStatus === "connected" ? void refreshQuota() : setSettingsScope("app"))}
+            aria-label={connectionStatus === "connected" ? "사용량 새로고침" : "NovelAI 연결 설정"}
+          >
+            <span className="b2-status-dot" aria-hidden="true" />
+            <span className="b2-status-text">
+              <span className="b2-status-line">
+                <strong>{statusPrimary}</strong>
+                {statusSecondary && <span>· {statusSecondary}</span>}
+              </span>
+            </span>
+          </button>
+          <span className="b2-top-spacer" />
+          <button type="button" className={`s11-top-btn ${imagesHidden ? "active" : ""}`} aria-pressed={imagesHidden} onClick={togglePrivacy}>
+            <Icon name={imagesHidden ? "eyeoff" : "eye"} />가리기
+          </button>
+          <button type="button" className="s11-top-btn" onClick={() => setSettingsScope("app")}>
+            <Icon name="cog" />설정
+          </button>
+        </header>
+
+        <section className="s11-canvas-zone">
+          <div className={`s11-stage-main ${images.length <= 1 ? "no-rail" : ""}`}>
+            <button
+              type="button"
+              className="s11-hero"
+              disabled={!selected || imagesHidden}
+              aria-label="이미지 크게 보기"
+              onClick={() => { if (selected && !imagesHidden) setViewer(true); }}
+            >
+              {selected && !imagesHidden && thumbSrc && <img src={thumbSrc} alt="" />}
+              {selected && imagesHidden && <PrivacyGlyph />}
+              {!selected && <span className={`s11-hero-empty ${status === "generating" ? "pulse" : ""}`} aria-hidden="true">🖼️</span>}
+            </button>
+
+            {images.length > 1 && (
+              <aside className="s11-session-rail" aria-label="세션 이미지">
+                {images.map((image, index) => ({ image, index })).reverse().map(({ image, index }) => (
+                  <button
+                    type="button"
+                    key={`${image.createdAt}-${index}`}
+                    className={`s11-rail-item ${index === active ? "active" : ""}`}
+                    aria-pressed={index === active}
+                    onClick={() => { if (!imagesHidden) setActiveImage(index); }}
+                  >
+                    {imagesHidden ? <PrivacyGlyph /> : <img src={image.src} alt="" />}
+                  </button>
+                ))}
+              </aside>
+            )}
+          </div>
+
+          <div className="s11-image-actions">
+            <button type="button" className={`s11-act-btn primary save-button ${saveState}`} disabled={!selected || saving} onClick={() => void saveImage(selected)}>
+              {saveState === "saving" ? "저장 중" : saveState === "success" ? "저장됨" : saveState === "error" ? "실패" : <><Icon name="save" />저장</>}
+            </button>
+            <button type="button" className={`s11-act-btn ${finishEnabled ? "active" : ""}`} disabled={!selected} aria-pressed={finishEnabled} {...finishHold}>
+              <span className="s11-state-dot" aria-hidden="true" />
+              {finishPending ? <span className="finish-busy" aria-hidden="true" /> : <Icon name="sparkle" />}
+              마무리
+            </button>
+            <button type="button" className={`s11-act-btn ${seedFixed ? "active" : ""}`} disabled={!selected || selected.seed === null} aria-pressed={seedFixed} onClick={() => toggleSeed(selected)}>
+              <span className="s11-state-dot" aria-hidden="true" />
+              <Icon name="seed" />Seed
+            </button>
+            <button type="button" className="s11-act-btn" disabled={upscaleBlocked} onClick={() => selected && void upscaleImage(active, false)}>
+              <Icon name="upscale" />{status === "upscaling" ? "처리 중" : "업스케일"}
+            </button>
+            <button type="button" className="s11-act-btn" disabled={!selected} onClick={() => void sendImageToReference(selected)}>
+              <Icon name="image" />레퍼런스+
+            </button>
+            <button type="button" className="s11-act-btn icon-only" aria-label="이미지 메뉴" disabled={!selected} onClick={() => setMenu("image")}>
+              <Icon name="more" />
+            </button>
+          </div>
+        </section>
+
+        <button
+          type="button"
+          className="s11-divider"
+          aria-label="이미지 크기 전환"
+          onClick={() => setStageRatioIndex((i) => (i + 1) % S11_STAGE_RATIOS.length)}
+        >
+          <span aria-hidden="true" />
+        </button>
+
+        <section className="s11-workbench">
+          {inlineDictOpen ? (
+            <>
+              <InlineTagDictionary
+                destination={section ?? "other"}
+                currentValue={sectionValue}
+                onToggleTag={toggleDictionaryTag}
+                onOpenManager={(manageTab) => setDictManagerTab(manageTab)}
+                onClose={() => setInlineDictOpen(false)}
+              />
+              {s11BottomDock(boardTools.current ?? undefined)}
+            </>
+          ) : (
+            <>
+              <div className="s11-tabs" role="tablist" aria-label="프롬프트 구역">
+                {TABS.map((item) => {
+                  const count = item.key === "artist"
+                    ? splitTags(artist).length
+                    : item.key === "other"
+                      ? splitTags(other).length
+                      : item.key === "character"
+                        ? chars.filter((character) => character.enabled && character.prompt.trim()).length
+                        : item.key === "reference"
+                          ? activeReferenceCount
+                          : 0;
+                  return (
+                    <button
+                      type="button"
+                      role="tab"
+                      key={item.key}
+                      aria-selected={tab === item.key}
+                      className={tab === item.key ? "active" : ""}
+                      onClick={() => setTab(item.key)}
+                    >
+                      {item.dot && <span className={`tag-dot ${item.dot}`} />}
+                      {item.label}
+                      {count > 0 && <small>{count}</small>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {tab === "reference" ? (
+                <>
+                  <ReferencePanel currentImage={selected} />
+                  {s11BottomDock(boardTools.current ?? undefined)}
+                </>
+              ) : (
+                <TagBoard
+                  key={historyKey}
+                  value={sectionValue}
+                  onChange={setSectionValue}
+                  historyKey={historyKey}
+                  categories={boardConfig?.categories ?? CHARACTER_CATEGORIES}
+                  tagPrefix={boardConfig?.tagPrefix}
+                  onSelectTag={section ? undefined : (tag) => {
+                    if (tag.category === "character" && activeCharacter) updateCharacter(activeCharacter.id, { name: tag.display });
+                  }}
+                  header={s11BoardHeader}
+                  banner={tab === "character" && selectedPick && selectedPickLabel ? (
+                    <div className="s11-random-banner" aria-live="polite">
+                      <span className="s11-random-banner-text">
+                        <span aria-hidden="true">🎲</span> <b>{selectedPickLabel.name}</b>
+                        {selectedPickLabel.series && <small> · {selectedPickLabel.series}</small>}
+                      </span>
+                      <button
+                        type="button"
+                        className="s11-random-keep"
+                        onClick={() => {
+                          void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정`, 1600));
+                        }}
+                      >
+                        고정
+                      </button>
+                    </div>
+                  ) : undefined}
+                  keyboardOpen={viewport.keyboard}
+                  onQuickGenerate={() => generateNow(boardTools.current ?? undefined)}
+                  generateDisabled={busy}
+                  renderTools={(tools) => {
+                    boardTools.current = tools;
+                    return s11BottomDock(tools);
+                  }}
+                />
+              )}
+            </>
+          )}
+        </section>
+
+        {sharedOverlays}
+      </main>
+    );
+  }
+
   return (
     <main
       onClickCapture={(event) => {
@@ -991,6 +1401,16 @@ export function V5Studio() {
               </span>
             </button>
             <span className="b2-top-spacer" />
+            <button
+              type="button"
+              className={`b2-icon ${activeReferenceCount > 0 || referenceOpen ? "active" : ""}`}
+              aria-label="레퍼런스"
+              aria-pressed={referenceOpen}
+              onClick={() => setReferenceOpen((open) => !open)}
+            >
+              <Icon name="image" />
+              <span className="b2-icon-label">레퍼런스{activeReferenceCount > 0 ? ` ${activeReferenceCount}` : ""}</span>
+            </button>
             <button type="button" className={`b2-icon ${imagesHidden ? "active" : ""}`} aria-label={imagesHidden ? "보이기" : "가리기"} onClick={togglePrivacy}>
               <Icon name={imagesHidden ? "eyeoff" : "eye"} />
               <span className="b2-icon-label">{imagesHidden ? "보이기" : "가리기"}</span>
@@ -1071,25 +1491,29 @@ export function V5Studio() {
             <span aria-hidden="true" />
           </button>
         )}
-        <TagBoard
-          key={historyKey}
-          value={sectionValue}
-          onChange={setSectionValue}
-          historyKey={historyKey}
-          categories={boardConfig?.categories ?? CHARACTER_CATEGORIES}
-          tagPrefix={boardConfig?.tagPrefix}
-          placeholder={showHints ? boardConfig?.placeholder ?? "캐릭터 외형과 의상 태그" : undefined}
-          onSelectTag={section ? undefined : (tag) => {
-            if (tag.category === "character" && activeCharacter) updateCharacter(activeCharacter.id, { name: tag.display });
-          }}
-          header={boardHeader}
-          renderTools={(tools) => {
-            boardTools.current = tools;
-            return renderTools(tools);
-          }}
-          onEditingChange={setBoardEditing}
-          startEditing={startEditingOnMount}
-        />
+        {tab === "reference" ? (
+          <ReferencePanel currentImage={selected} />
+        ) : (
+          <TagBoard
+            key={historyKey}
+            value={sectionValue}
+            onChange={setSectionValue}
+            historyKey={historyKey}
+            categories={boardConfig?.categories ?? CHARACTER_CATEGORIES}
+            tagPrefix={boardConfig?.tagPrefix}
+            placeholder={showHints ? boardConfig?.placeholder ?? "캐릭터 외형과 의상 태그" : undefined}
+            onSelectTag={section ? undefined : (tag) => {
+              if (tag.category === "character" && activeCharacter) updateCharacter(activeCharacter.id, { name: tag.display });
+            }}
+            header={boardHeader}
+            renderTools={(tools) => {
+              boardTools.current = tools;
+              return renderTools(tools);
+            }}
+            onEditingChange={setBoardEditing}
+            startEditing={startEditingOnMount}
+          />
+        )}
       </section>
 
 
@@ -1117,75 +1541,7 @@ export function V5Studio() {
         </>
       )}
 
-      {error && <div className="error-toast b2-toast"><span>{error}</span><button onClick={clearError} aria-label="닫기">×</button></div>}
-      {notice && !desktop && <div className="success-toast b2-toast"><span>{notice}</span></div>}
-      {loader.element}
-
-      <div className="b2-panels">
-        {placementId && (
-          <div className="b2-placement">
-            <div
-              className="image-render-surface positioning"
-              style={{
-                aspectRatio: aspect,
-                "--hw": selected ? selected.height / selected.width : settings.height / settings.width,
-              } as CSSProperties}
-            >
-              {selected && !imagesHidden ? <img src={selected.src} alt="" /> : <div className="b2-placement-blank" />}
-              <CharacterStageOverlay
-                characters={chars}
-                selectedId={placementId}
-                onSelect={setPlacementId}
-                onMove={(id, x, y) => updateCharacter(id, { position: { x, y } })}
-                onDone={() => setPlacementId(null)}
-              />
-            </div>
-          </div>
-        )}
-
-        {characterSheet && (
-          <CharacterSheet
-            onClose={() => setCharacterSheet(false)}
-            onPlaceOnImage={(id) => {
-              setCharacterSheet(false);
-              setPlacementId(id);
-            }}
-          />
-        )}
-        <CharacterCatalogPrefetch />
-        {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
-        {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
-        {rawEditor && (
-          <RawPromptSheet
-            title={sectionTitle}
-            value={sectionValue}
-            historyKey={historyKey}
-            onChange={setSectionValue}
-            onClose={() => setRawEditor(false)}
-          />
-        )}
-        {settingsScope && <SettingsSheet scope={settingsScope} onClose={() => setSettingsScope(null)} />}
-        {finishOpen && !viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
-      </div>
-      {viewer && !imagesHidden && (
-        <ImageViewer
-          images={images}
-          index={viewerIndex ?? active}
-          onIndex={setViewerIndex}
-          onClose={() => setViewer(false)}
-          displaySrc={viewerPreviewUrl}
-          topRight={(
-            <button type="button" className="viewer-round" aria-label="이미지 숨기기" onClick={togglePrivacy}>
-              <Icon name="eye" />
-            </button>
-          )}
-          meta={viewerMeta}
-          actions={viewerActions}
-        />
-      )}
-      {finishOpen && viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
-      {menu === "prompt" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
-      {menu === "image" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
+      {sharedOverlays}
     </main>
   );
 }

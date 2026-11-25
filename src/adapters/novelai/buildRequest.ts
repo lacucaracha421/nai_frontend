@@ -114,10 +114,36 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
     parameters.prefer_brownian = true;
   }
 
+  const enabledRefs = (draft.references ?? []).filter((ref) => ref.enabled && ref.pngBase64);
+  if (enabledRefs.length > 0) {
+    parameters.normalize_reference_strength_multiple = true;
+    parameters.director_reference_descriptions = enabledRefs.map((ref) => ({
+      caption: { base_caption: ref.mode, char_captions: [] },
+      legacy_uc: false,
+    }));
+    parameters.director_reference_information_extracted = enabledRefs.map(() => 1);
+    parameters.director_reference_strength_values = enabledRefs.map((ref) => ref.strength);
+    parameters.director_reference_secondary_strength_values = enabledRefs.map((ref) =>
+      ref.mode === "character" || ref.mode === "character&style"
+        ? (ref.preferSameOutfit ? 0 : 1)
+        : 0,
+    );
+    parameters.director_reference_images_cached = enabledRefs.map((ref, index) => ({
+      cache_secret_key: ref.cacheSecretKey,
+      data: `director_ref_${index}`,
+    }));
+  }
+
   return {
     action: "generate",
     input: prompt,
     model: draft.settings.model,
     parameters,
   };
+}
+
+export function activeReferenceImages(draft: Pick<GenerationDraft, "references">): string[] {
+  return (draft.references ?? [])
+    .filter((ref) => ref.enabled && ref.pngBase64)
+    .map((ref) => ref.pngBase64);
 }

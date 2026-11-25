@@ -54,9 +54,10 @@ pub async fn novelai_generate(
     state: State<'_, NovelAiState>,
     cache: State<'_, ImageCacheState>,
     request: Value,
+    reference_images: Option<Vec<String>>,
 ) -> Result<Vec<GeneratedImage>, String> {
     let token = state.token()?;
-    novelai::generate(&token, request, &cache).await
+    novelai::generate(&token, request, reference_images.unwrap_or_default(), &cache).await
 }
 
 #[tauri::command]

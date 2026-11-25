@@ -197,49 +197,61 @@ async fn parse_images(
     cache: &ImageCacheState,
     kind: &str,
     fallback_size: Option<(u32, u32)>,
+    fallback_seed: Option<i64>,
 ) -> Result<Vec<GeneratedImage>, String> {
     let status = response.status();
+    let content_type = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| format!("Could not read NovelAI response [{correlation_id}]: {error}"))?;
     if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
         return Err(format!(
             "NovelAI API error ({status}) [request {correlation_id}]: {}",
-            compact_error(&body)
+            compact_error(&String::from_utf8_lossy(&bytes))
         ));
     }
 
-    let value: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("NovelAI returned invalid JSON: {e}"))?;
-    let images = value
-        .get("images")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "NovelAI JSON response did not include images.".to_string())?;
+    if content_type.contains("json") || bytes.first() == Some(&b'{') {
+        let value: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| format!("NovelAI returned invalid JSON: {e}"))?;
+        let images = value
+            .get("images")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "NovelAI JSON response did not include images.".to_string())?;
 
-    images
-        .iter()
-        .enumerate()
-        .map(|(i, image)| {
-            let encoded = image
-                .get("image")
-                .and_then(Value::as_str)
-                .ok_or_else(|| "NovelAI image entry has no base64 image.".to_string())?;
-            let bytes = decode_base64_image(encoded)?;
-            let index = image.get("index").and_then(Value::as_i64).unwrap_or(i as i64);
-            let seed = image.get("seed").and_then(Value::as_i64);
-            let (width, height) = png_dimensions(&bytes)
-                .or(fallback_size)
-                .ok_or_else(|| "Could not determine generated image dimensions.".to_string())?;
-            let path = write_cached_image(cache, kind, correlation_id, index, &bytes)?;
-            Ok(GeneratedImage {
-                path: path.to_string_lossy().into_owned(),
-                index,
-                seed,
-                width,
-                height,
+        return images
+            .iter()
+            .enumerate()
+            .map(|(i, image)| {
+                let encoded = image
+                    .get("image")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "NovelAI image entry has no base64 image.".to_string())?;
+                let image_bytes = decode_base64_image(encoded)?;
+                let index = image.get("index").and_then(Value::as_i64).unwrap_or(i as i64);
+                let seed = image.get("seed").and_then(Value::as_i64).or(fallback_seed);
+                let (width, height) = png_dimensions(&image_bytes)
+                    .or(fallback_size)
+                    .ok_or_else(|| "Could not determine generated image dimensions.".to_string())?;
+                let path = write_cached_image(cache, kind, correlation_id, index, &image_bytes)?;
+                Ok(GeneratedImage {
+                    path: path.to_string_lossy().into_owned(),
+                    index,
+                    seed,
+                    width,
+                    height,
+                })
             })
-        })
-        .collect()
+            .collect();
+    }
+
+    parse_image_archive(&bytes, correlation_id, cache, kind, fallback_seed)
 }
 
 fn requested_dimensions(request: &Value) -> Option<(u32, u32)> {
@@ -247,6 +259,27 @@ fn requested_dimensions(request: &Value) -> Option<(u32, u32)> {
     let width = parameters.get("width")?.as_u64()?.try_into().ok()?;
     let height = parameters.get("height")?.as_u64()?.try_into().ok()?;
     Some((width, height))
+}
+
+fn requested_seed(request: &Value) -> Option<i64> {
+    request.get("parameters")?.get("seed")?.as_i64()
+}
+
+fn generate_form(request: &Value, reference_images: &[String]) -> Result<Form, String> {
+    let mut form = Form::new();
+    for (index, encoded) in reference_images.iter().enumerate() {
+        let bytes = decode_base64_image(encoded)?;
+        let part = Part::bytes(bytes)
+            .file_name("blob")
+            .mime_str("image/png")
+            .map_err(|error| format!("Could not prepare reference image {index}: {error}"))?;
+        form = form.part(format!("director_ref_{index}"), part);
+    }
+    let request_part = Part::bytes(request.to_string().into_bytes())
+        .file_name("blob")
+        .mime_str("application/json")
+        .map_err(|error| format!("Could not prepare generation request payload: {error}"))?;
+    Ok(form.part("request", request_part))
 }
 
 fn cached_image_bytes(cache: &ImageCacheState, image_path: &str) -> Result<Vec<u8>, String> {
@@ -281,35 +314,58 @@ fn correlation_id() -> String {
 pub async fn generate(
     token: &str,
     request: Value,
+    reference_images: Vec<String>,
+    cache: &ImageCacheState,
+) -> Result<Vec<GeneratedImage>, String> {
+    generate_at(IMAGE_API_BASE, token, request, &reference_images, cache).await
+}
+
+async fn generate_at(
+    base_url: &str,
+    token: &str,
+    request: Value,
+    reference_images: &[String],
     cache: &ImageCacheState,
 ) -> Result<Vec<GeneratedImage>, String> {
     let correlation_id = correlation_id();
     let fallback_size = requested_dimensions(&request);
-    let response = client()?
-        .post(format!("{IMAGE_API_BASE}/ai/generate-image"))
-        .header(AUTHORIZATION, format!("Bearer {token}"))
-        .header(CONTENT_TYPE, "application/json")
+    let fallback_seed = requested_seed(&request);
+    let builder = client()?
+        .post(format!("{base_url}/ai/generate-image"))
+        .header(AUTHORIZATION, format!("Bearer {}", token.trim()))
         .header(ACCEPT, "application/json")
-        .header("x-correlation-id", correlation_id.as_str())
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("NovelAI request failed [{correlation_id}]: {e}"))?;
-    parse_images(response, &correlation_id, cache, "generation", fallback_size).await
+        .header("x-correlation-id", correlation_id.as_str());
+    let response = if reference_images.is_empty() {
+        builder
+            .header(CONTENT_TYPE, "application/json")
+            .json(&request)
+            .send()
+            .await
+    } else {
+        builder
+            .header("x-initiated-at", iso_timestamp_now())
+            .multipart(generate_form(&request, reference_images)?)
+            .send()
+            .await
+    }
+    .map_err(|e| format!("NovelAI request failed [{correlation_id}]: {e}"))?;
+    parse_images(response, &correlation_id, cache, "generation", fallback_size, fallback_seed).await
 }
 
-fn parse_upscale_archive(
+fn parse_image_archive(
     bytes: &[u8],
     correlation_id: &str,
     cache: &ImageCacheState,
+    kind: &str,
+    fallback_seed: Option<i64>,
 ) -> Result<Vec<GeneratedImage>, String> {
     // Be permissive if the service ever returns a direct PNG.
     if let Some((width, height)) = png_dimensions(bytes) {
-        let path = write_cached_image(cache, "upscale", correlation_id, 0, bytes)?;
+        let path = write_cached_image(cache, kind, correlation_id, 0, bytes)?;
         return Ok(vec![GeneratedImage {
             path: path.to_string_lossy().into_owned(),
             index: 0,
-            seed: None,
+            seed: fallback_seed,
             width,
             height,
         }]);
@@ -317,13 +373,13 @@ fn parse_upscale_archive(
 
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|error| format!("NovelAI upscale response was not a valid ZIP archive: {error}"))?;
+        .map_err(|error| format!("NovelAI response was not a valid ZIP archive: {error}"))?;
 
     let mut images = Vec::new();
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
-            .map_err(|error| format!("Could not read NovelAI upscale ZIP entry: {error}"))?;
+            .map_err(|error| format!("Could not read NovelAI ZIP entry: {error}"))?;
         if entry.is_dir() {
             continue;
         }
@@ -331,27 +387,35 @@ fn parse_upscale_archive(
         let mut image = Vec::new();
         entry
             .read_to_end(&mut image)
-            .map_err(|error| format!("Could not extract NovelAI upscale image: {error}"))?;
+            .map_err(|error| format!("Could not extract NovelAI image: {error}"))?;
 
         let Some((width, height)) = png_dimensions(&image) else {
             continue;
         };
 
         let image_index = images.len() as i64;
-        let path = write_cached_image(cache, "upscale", correlation_id, image_index, &image)?;
+        let path = write_cached_image(cache, kind, correlation_id, image_index, &image)?;
         images.push(GeneratedImage {
             path: path.to_string_lossy().into_owned(),
             index: image_index,
-            seed: None,
+            seed: fallback_seed,
             width,
             height,
         });
     }
 
     if images.is_empty() {
-        return Err("NovelAI upscale ZIP contained no PNG image.".to_string());
+        return Err("NovelAI ZIP contained no PNG image.".to_string());
     }
     Ok(images)
+}
+
+fn parse_upscale_archive(
+    bytes: &[u8],
+    correlation_id: &str,
+    cache: &ImageCacheState,
+) -> Result<Vec<GeneratedImage>, String> {
+    parse_image_archive(bytes, correlation_id, cache, "upscale", None)
 }
 
 /// The site's dedicated upscaler model. It is shared by every V5 generation
@@ -803,5 +867,86 @@ mod tests {
             assert_eq!(parse_quota(&json!({"usage": usage})).usage, None);
         }
         assert_eq!(parse_quota(&json!({})).usage, None);
+    }
+
+    #[test]
+    fn generate_with_references_sends_multipart_and_reads_json_response() {
+        let cache = temp_cache("generate-refs");
+        let ref_png = png_header(512, 768);
+        let generated_png = png_header(832, 1216);
+        let response_json = json!({
+            "images": [{
+                "image": BASE64.encode(&generated_png),
+                "index": 0,
+                "seed": 42
+            }]
+        })
+        .to_string()
+        .into_bytes();
+        let (base, captured) = serve_once("HTTP/1.1 200 OK", "application/json", response_json);
+
+        let req_json = json!({
+            "action": "generate",
+            "input": "1girl",
+            "model": "nai-diffusion-5-full",
+            "parameters": {
+                "width": 832,
+                "height": 1216,
+                "director_reference_images_cached": [{
+                    "cache_secret_key": "abc",
+                    "data": "director_ref_0"
+                }]
+            }
+        });
+        let images = tauri::async_runtime::block_on(generate_at(
+            &base,
+            " secret-token ",
+            req_json.clone(),
+            &[BASE64.encode(&ref_png)],
+            &cache,
+        ))
+        .unwrap();
+
+        let request = captured.recv().unwrap();
+        let mut lines = request.head.lines();
+        assert_eq!(lines.next(), Some("POST /ai/generate-image HTTP/1.1"));
+        assert_eq!(header(&request.head, "authorization"), Some("Bearer secret-token"));
+        let content_type = header(&request.head, "content-type").unwrap();
+        let boundary = content_type
+            .strip_prefix("multipart/form-data; boundary=")
+            .expect("multipart content type");
+
+        let delimiter = format!("--{boundary}\r\n");
+        let mut parts = Vec::new();
+        let mut rest = &request.body[..];
+        while let Some(start) = find(rest, delimiter.as_bytes()) {
+            rest = &rest[start + delimiter.len()..];
+            let end = find(rest, format!("\r\n--{boundary}").as_bytes()).unwrap();
+            parts.push(rest[..end].to_vec());
+            rest = &rest[end + 2..];
+        }
+        assert_eq!(parts.len(), 2);
+        let split = |part: &[u8]| {
+            let at = find(part, b"\r\n\r\n").unwrap();
+            (String::from_utf8_lossy(&part[..at]).into_owned(), part[at + 4..].to_vec())
+        };
+        let (ref_head, ref_body) = split(&parts[0]);
+        assert_eq!(
+            ref_head,
+            "Content-Disposition: form-data; name=\"director_ref_0\"; filename=\"blob\"\r\nContent-Type: image/png"
+        );
+        assert_eq!(ref_body, ref_png);
+        let (req_head, req_body) = split(&parts[1]);
+        assert_eq!(
+            req_head,
+            "Content-Disposition: form-data; name=\"request\"; filename=\"blob\"\r\nContent-Type: application/json"
+        );
+        assert_eq!(serde_json::from_slice::<Value>(&req_body).unwrap(), req_json);
+
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].seed, Some(42));
+        assert_eq!((images[0].width, images[0].height), (832, 1216));
+        assert_eq!(fs::read(&images[0].path).unwrap(), generated_png);
+        fs::remove_dir_all(&cache.dir).unwrap();
     }
 }

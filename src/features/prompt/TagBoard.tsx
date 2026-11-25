@@ -16,6 +16,7 @@ import {
   insertTagsAt,
   moveTagAt,
   removeTagAt,
+  reorderTagAt,
   replaceTagAt,
   splitTags,
   tagWeight,
@@ -53,6 +54,8 @@ type Props = {
   onSelectTag?: (tag: LocalTag) => void;
   /** Quiet line above the chips (hint, diff chip, character row). */
   header?: ReactNode;
+  /** Optional banner inside the S11 chips box (e.g. drawn random character). */
+  banner?: ReactNode;
   renderTools: (tools: TagBoardTools) => ReactNode;
   /** Editing mode: true while a tag input is open (it drives the compact layout, not the keyboard). */
   onEditingChange?: (editing: boolean) => void;
@@ -62,6 +65,10 @@ type Props = {
    * keeps the keyboard up.
    */
   startEditing?: boolean;
+  /** Tablet portrait mode: keyboard is up, show compact Generate inside the input dock. */
+  keyboardOpen?: boolean;
+  onQuickGenerate?: () => void;
+  generateDisabled?: boolean;
 };
 
 type Anchor = { top: number; left: number; arrow: number };
@@ -148,15 +155,25 @@ export function TagBoard({
   placeholder,
   onSelectTag,
   header,
+  banner,
   renderTools,
   onEditingChange,
   startEditing,
+  keyboardOpen = false,
+  onQuickGenerate,
+  generateDisabled = false,
 }: Props) {
   const desktop = useDesktopLayout();
   const tags = useMemo(() => splitTags(value), [value]);
   const [selected, setSelected] = useState<number | null>(null);
   const [draft, setDraftState] = useState<Draft | null>(() => initialDraft(startEditing, value));
   const draftRef = useRef<Draft | null>(draft);
+  const [dockText, setDockText] = useState("");
+  const dockInputRef = useRef<HTMLInputElement>(null);
+  const [drag, setDrag] = useState<{ from: number; over: number; x: number; y: number; label: string } | null>(null);
+  const dragRef = useRef<{ from: number; over: number } | null>(null);
+  const holdRef = useRef<{ timer: number; pointerId: number; startX: number; startY: number; index: number } | null>(null);
+  const suppressClickRef = useRef(false);
   const [armed, setArmed] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<LocalTag[]>([]);
   const [bubble, setBubble] = useState<Anchor | null>(null);
@@ -326,8 +343,8 @@ export function TagBoard({
     return () => observer.disconnect();
   }, [anchored]);
 
-  const draftText = draft?.text ?? "";
-  const drafting = draft !== null;
+  const draftText = desktop ? (draft?.text ?? "") : (draft?.mode === "edit" ? draft.text : dockText);
+  const drafting = desktop ? draft !== null : (draft !== null || !!dockText.trim());
 
   // Editing mode is reported before paint, so the layout switches in the same frame as the tap.
   const editingChangeRef = useRef(onEditingChange);
@@ -614,19 +631,332 @@ export function TagBoard({
     );
   }
 
+  const commitDockInput = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    if (draft?.mode === "edit") {
+      apply(replaceTagAt(valueRef.current, draft.index, trimmed), draft.index);
+      setDraft(null);
+      setDockText("");
+      setSuggestions([]);
+      return;
+    }
+    apply(insertTagsAt(valueRef.current, trimmed), tags.length);
+    setDockText("");
+    setSuggestions([]);
+  };
+
+  const translateDock = async () => {
+    if (translating) return;
+    const source = (draft?.mode === "edit" ? draft.text : dockText).trim();
+    if (!source) return;
+    setMessage(null);
+    try {
+      const translated = await translateText(source);
+      if (draft?.mode === "edit") {
+        apply(replaceTagAt(valueRef.current, draft.index, withWeightOf(draft.original, translated)), draft.index);
+        setDraft(null);
+      } else {
+        apply(insertTagsAt(valueRef.current, translated), tags.length);
+      }
+      setDockText("");
+      setSuggestions([]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const tools: TagBoardTools = {
     editing: draft !== null,
     canWeight: draft !== null ? !!draft.text.trim() : selected !== null,
     weight,
-    canTranslate: draft !== null ? !!draft.text.trim() : selected !== null,
+    canTranslate: draft !== null ? !!draft.text.trim() : (selected !== null || !!dockText.trim()),
     translating,
-    translate: () => void translate(),
+    translate: () => void (dockText.trim() && !draft && selected === null ? translateDock() : translate()),
     canUndo,
     canRedo,
     undo: () => restore("undo"),
     redo: () => restore("redo"),
-    flush: () => { commitDraft(false); },
+    flush: () => {
+      commitDraft(false);
+      if (!desktop && dockText.trim()) commitDockInput(dockText);
+    },
   };
+
+  const hitChipIndex = (clientX: number, clientY: number, fallback: number) => {
+    let best = fallback;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < chipRefs.current.length; i += 1) {
+      const el = chipRefs.current[i];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        return i;
+      }
+      const cx = (rect.left + rect.right) / 2;
+      const cy = (rect.top + rect.bottom) / 2;
+      const dist = Math.hypot(clientX - cx, clientY - cy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  useEffect(() => {
+    if (!drag) return;
+    const updateAt = (clientX: number, clientY: number) => {
+      if (!dragRef.current) return;
+      const over = hitChipIndex(clientX, clientY, dragRef.current.over);
+      dragRef.current.over = over;
+      setDrag((prev) => (prev ? { ...prev, over, x: clientX, y: clientY } : null));
+    };
+    const finish = () => {
+      if (holdRef.current) {
+        window.clearTimeout(holdRef.current.timer);
+        holdRef.current = null;
+      }
+      const activeDrag = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (activeDrag && activeDrag.from !== activeDrag.over) {
+        apply(reorderTagAt(valueRef.current, activeDrag.from, activeDrag.over), activeDrag.over);
+        setSelected(activeDrag.over);
+      }
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (event.cancelable) event.preventDefault();
+      updateAt(touch.clientX, touch.clientY);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      event.preventDefault();
+      updateAt(event.clientX, event.clientY);
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      finish();
+    };
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", finish);
+    window.addEventListener("touchcancel", finish);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", finish);
+      window.removeEventListener("touchcancel", finish);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [drag !== null]);
+
+  if (!desktop) {
+    const hasSel = selected !== null && tags[selected] !== undefined;
+    const selectedTag = hasSel ? tagWeight(tags[selected]) : null;
+    const dockValue = draft?.mode === "edit" ? draft.text : dockText;
+
+    const clearHold = () => {
+      if (holdRef.current) {
+        window.clearTimeout(holdRef.current.timer);
+        holdRef.current = null;
+      }
+    };
+
+    return (
+      <div className="tag-board s11-tag-board">
+        <div className={`s11-chip-bar ${hasSel ? "selected-mode" : ""}`} data-keeps-selection>
+          <div className="s11-chip-bar-left">
+            {hasSel && selectedTag ? (
+              <span className="s11-chip-bar-label">
+                <b>{selectedTag.content || tags[selected]}</b>
+              </span>
+            ) : (
+              header
+            )}
+          </div>
+          <div className="s11-chip-bar-actions">
+            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("down")}>−0.1</button>
+            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("up")}>+0.1</button>
+            <button type="button" data-keeps-selection disabled={!hasSel || selected === 0} onPointerDown={keepFocus} onClick={() => bubbleAction("left")} aria-label="왼쪽으로 이동"><Icon name="left" /></button>
+            <button type="button" data-keeps-selection disabled={!hasSel || selected >= tags.length - 1} onPointerDown={keepFocus} onClick={() => bubbleAction("right")} aria-label="오른쪽으로 이동"><Icon name="right" /></button>
+            <button type="button" data-keeps-selection disabled={!hasSel || translating} onPointerDown={keepFocus} onClick={() => void translate()}>{translating ? "…" : "번역"}</button>
+            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => {
+              if (selected === null) return;
+              const orig = tags[selected];
+              setDraft({ mode: "edit", index: selected, text: orig, original: orig });
+              setSelected(null);
+              requestAnimationFrame(() => dockInputRef.current?.focus({ preventScroll: true }));
+            }}>수정</button>
+            <button type="button" className="danger" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("delete")} aria-label="삭제"><Icon name="trash" /></button>
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className={`tag-board-scroll s11-chips-scroll ${drag ? "dragging" : ""}`}
+          onPointerMove={(event) => {
+            if (!dragRef.current && holdRef.current && Math.hypot(event.clientX - holdRef.current.startX, event.clientY - holdRef.current.startY) > 8) {
+              clearHold();
+            }
+          }}
+          onPointerUp={clearHold}
+        >
+          {banner}
+          {message && <div className="tag-board-message" role="status">{message}</div>}
+          <div ref={contentRef} className="tag-board-chips">
+            {tags.map((tag, index) => {
+              const { weight: tagWeightValue, content, weighted } = tagWeight(tag);
+              const isDragged = drag?.from === index;
+              const isDropTarget = drag !== null && drag.over === index && drag.from !== index;
+              return (
+                <button
+                  type="button"
+                  key={`${index}:${tag}`}
+                  ref={(element) => { chipRefs.current[index] = element; }}
+                  className={`tag-chip ${selected === index ? "selected" : ""} ${isDragged ? "is-dragging" : ""} ${isDropTarget ? "is-drop-target" : ""} ${weighted ? (tagWeightValue >= 1 ? "weight-up" : "weight-down") : ""}`}
+                  aria-pressed={selected === index}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    clearHold();
+                    suppressClickRef.current = false;
+                    const startX = event.clientX;
+                    const startY = event.clientY;
+                    const pointerId = event.pointerId;
+                    const label = content || tag;
+                    const timer = window.setTimeout(() => {
+                      holdRef.current = null;
+                      suppressClickRef.current = true;
+                      dragRef.current = { from: index, over: index };
+                      setDrag({ from: index, over: index, x: startX, y: startY, label });
+                    }, 220);
+                    holdRef.current = { timer, pointerId, startX, startY, index };
+                  }}
+                  onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      return;
+                    }
+                    if (selected === index) setSelected(null);
+                    else setSelected(index);
+                  }}
+                >
+                  {weighted && <small className="tag-chip-weight">{tagWeightValue.toFixed(1)}×</small>}
+                  <span className="tag-chip-text">{content || tag}</span>
+                </button>
+              );
+            })}
+          </div>
+          {drag && (
+            <div
+              className="s11-drag-ghost"
+              style={{ left: drag.x, top: drag.y }}
+              aria-hidden="true"
+            >
+              {drag.label}
+            </div>
+          )}
+        </div>
+
+        <div className="s11-input-dock">
+          {suggestions.length > 0 && (
+            <div className="s11-suggest-row">
+              {suggestions.map((tag) => (
+                <button
+                  type="button"
+                  key={tag.raw}
+                  className="s11-suggest-pill"
+                  onPointerDown={keepFocus}
+                  onClick={() => {
+                    const inserted = insertionForSuggestion(tag.display, tag.category, tagPrefix);
+                    commitDockInput(inserted);
+                    onSelectTag?.(tag);
+                  }}
+                >
+                  <span className={`tag-dot ${tag.category}`} />
+                  <span>{tag.display}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="s11-input-bar">
+            <input
+              ref={dockInputRef}
+              className="s11-input"
+              value={dockValue}
+              placeholder={draft?.mode === "edit" ? "태그 수정" : "태그 또는 문장 입력"}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
+              onChange={(event) => {
+                const next = event.target.value;
+                if (draft?.mode === "edit") {
+                  setDraft({ ...draft, text: next });
+                  return;
+                }
+                const seps = topLevelSeparators(next);
+                if (!seps.length) {
+                  setDockText(next);
+                  return;
+                }
+                const last = seps[seps.length - 1];
+                commitDockInput(next.slice(0, last));
+                setDockText(next.slice(last + 1).trimStart());
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                  event.preventDefault();
+                  commitDockInput(dockValue);
+                } else if (event.key === "Escape" && draft?.mode === "edit") {
+                  setDraft(null);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="s11-input-btn translate"
+              disabled={translating || !dockValue.trim()}
+              onPointerDown={keepFocus}
+              onClick={() => void translateDock()}
+            >
+              {translating ? "번역 중…" : "번역"}
+            </button>
+            <button
+              type="button"
+              className="s11-input-btn"
+              disabled={!dockValue.trim()}
+              onPointerDown={keepFocus}
+              onClick={() => commitDockInput(dockValue)}
+            >
+              {draft?.mode === "edit" ? "완료" : "추가"}
+            </button>
+            {keyboardOpen && onQuickGenerate && (
+              <button
+                type="button"
+                className="s11-input-btn gen-mini"
+                disabled={generateDisabled}
+                onPointerDown={keepFocus}
+                onClick={() => {
+                  if (dockValue.trim()) commitDockInput(dockValue);
+                  onQuickGenerate();
+                }}
+              >
+                생성
+              </button>
+            )}
+          </div>
+        </div>
+
+        {renderTools(tools)}
+      </div>
+    );
+  }
 
   return (
     <div className="tag-board">

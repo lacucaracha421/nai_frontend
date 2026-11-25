@@ -22,6 +22,7 @@ describe("estimateAnlas", () => {
     expect(estimateAnlas({ width: 1024, height: 1536, steps: 28 }, opus(withinLimit))).toBeNull();
     expect(estimateAnlas({ width: 832, height: 1216, steps: 29 }, opus(withinLimit))).toBeNull();
     expect(estimateAnlas({ width: 832, height: 1216, steps: 28, samples: 2 }, opus(withinLimit))).toBeNull();
+    expect(estimateAnlas({ width: 832, height: 1216, steps: 28, referenceCount: 1 }, opus(withinLimit))).toBeNull();
     expect(estimateAnlas({ width: 832, height: 1216, steps: 28 }, opus({ ...withinLimit, isNegative: true }))).toBeNull();
     expect(estimateAnlas({ width: 832, height: 1216, steps: 28 }, opus(null))).toBeNull();
     expect(estimateAnlas({ width: 832, height: 1216, steps: 28 }, { ...opus(withinLimit), tier: 2 })).toBeNull();

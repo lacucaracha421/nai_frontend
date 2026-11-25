@@ -1,4 +1,4 @@
-import type { CharacterPrompt, GenerationSettings, NovelAiV5Model } from "../../types/generation";
+import type { CharacterPrompt, GenerationSettings, NovelAiV5Model, PreciseReference, ReferenceMode } from "../../types/generation";
 
 export type GenerationDraft = {
   artistPrompt: string;
@@ -7,7 +7,18 @@ export type GenerationDraft = {
   negativePrompt: string;
   characters: CharacterPrompt[];
   useCharacterCoords: boolean;
+  references?: PreciseReference[];
   settings: GenerationSettings;
+};
+
+export type V5DirectorReferenceDescription = {
+  caption: { base_caption: ReferenceMode; char_captions: [] };
+  legacy_uc: false;
+};
+
+export type V5DirectorReferenceCached = {
+  cache_secret_key: string;
+  data: string;
 };
 
 export type V5Center = { x: number; y: number };
@@ -43,6 +54,12 @@ export type NovelAiImageParameters = {
   extra_noise_seed?: number;
   deliberate_euler_ancestral_bug?: false;
   prefer_brownian?: true;
+  normalize_reference_strength_multiple?: true;
+  director_reference_descriptions?: V5DirectorReferenceDescription[];
+  director_reference_information_extracted?: number[];
+  director_reference_strength_values?: number[];
+  director_reference_secondary_strength_values?: number[];
+  director_reference_images_cached?: V5DirectorReferenceCached[];
 };
 
 export type NovelAiImageRequest = {

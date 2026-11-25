@@ -1,0 +1,211 @@
+.inline-dict {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-sys-color-surface-container-low);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  overflow: hidden;
+}
+
+.inline-dict-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-dict-cats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.inline-dict-cats button {
+  height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.inline-dict-cats button.active {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.inline-dict-edit-btn {
+  flex: none;
+  height: 38px;
+  padding: 0 11px;
+  border-radius: 9px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inline-dict-icon {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+}
+
+.inline-dict-icon.active {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.inline-dict-search-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-dict-search {
+  flex: 0 0 min(220px, 44%);
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 9px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font-size: 13.5px;
+  outline: none;
+}
+
+.inline-dict-search:focus {
+  border-color: var(--md-sys-color-primary);
+}
+
+.inline-dict-subs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.inline-dict-subs::-webkit-scrollbar {
+  display: none;
+}
+
+.inline-dict-subs button {
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.inline-dict-subs button.active {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary-container);
+  font-weight: 600;
+}
+
+.inline-dict-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 7px;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 560px) {
+  .inline-dict-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.inline-dict-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 28px 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  text-align: left;
+}
+
+.inline-dict-card.added {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+}
+
+.inline-dict-card strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+
+.inline-dict-card.added strong {
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.inline-dict-card small {
+  font-size: 11.5px;
+  color: var(--md-sys-color-on-surface-variant);
+  word-break: break-all;
+}
+
+.inline-dict-star {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-sys-color-outline);
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+}
+
+.inline-dict-star.fav {
+  color: #e6be7a;
+}
+
+.inline-dict-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13.5px;
+}

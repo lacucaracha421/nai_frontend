@@ -112,6 +112,29 @@ export function moveTagAt(value: string, index: number, direction: -1 | 1) {
     + value.slice(second.end);
 }
 
+/** Moves the tag at `from` to index `to`, keeping the existing separators in place. */
+export function reorderTagAt(value: string, from: number, to: number) {
+  const ranges = tagRanges(value);
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= ranges.length ||
+    to >= ranges.length
+  ) {
+    return value;
+  }
+  const tags = ranges.map((range) => value.slice(range.start, range.end));
+  const [moved] = tags.splice(from, 1);
+  tags.splice(to, 0, moved);
+  let out = value.slice(0, ranges[0].start);
+  for (let i = 0; i < ranges.length; i += 1) {
+    out += tags[i];
+    out += i < ranges.length - 1 ? value.slice(ranges[i].end, ranges[i + 1].start) : value.slice(ranges[i].end);
+  }
+  return out;
+}
+
 /** Inserts typed text (possibly several tags) before tag `at`, or after the last tag. */
 export function insertTagsAt(value: string, text: string, at = Number.POSITIVE_INFINITY) {
   const pieces = splitTags(text);

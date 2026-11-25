@@ -1,0 +1,208 @@
+.dict-mgr-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.dict-mgr-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 20px;
+  overflow: hidden;
+}
+
+.dict-mgr-top {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dict-mgr-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 3px;
+  min-width: 240px;
+  border-radius: 10px;
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.dict-mgr-tabs button {
+  height: 38px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dict-mgr-tabs button.active {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.dict-mgr-search {
+  flex: 1 1 180px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font-size: 14px;
+  outline: none;
+}
+
+.dict-mgr-search:focus {
+  border-color: var(--md-sys-color-primary);
+}
+
+.dict-mgr-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dict-mgr-form {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-primary);
+}
+
+.dict-mgr-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .dict-mgr-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dict-mgr-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.dict-mgr-form input,
+.dict-mgr-form select {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font-size: 14px;
+}
+
+.dict-mgr-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dict-mgr-form-actions button {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.dict-mgr-form-actions button.primary {
+  background: var(--md-sys-color-primary);
+  border-color: transparent;
+  color: var(--md-sys-color-on-primary);
+}
+
+.dict-mgr-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+.dict-mgr-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.dict-mgr-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dict-mgr-row-info strong {
+  font-size: 14.5px;
+  color: var(--md-sys-color-on-surface);
+}
+
+.dict-mgr-row-info small {
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  word-break: break-all;
+}
+
+.dict-mgr-row-actions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dict-mgr-row-actions button {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dict-mgr-row-actions button.fav {
+  color: #e6be7a;
+}
+
+.dict-mgr-row-actions button.danger {
+  color: var(--md-sys-color-error);
+}

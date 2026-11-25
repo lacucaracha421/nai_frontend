@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/buildRequest";
+import { activeReferenceImages, buildNovelAiRequest, joinPositivePrompt } from "../adapters/novelai/buildRequest";
 import { cachedImageSrc, generateNovelAiImage, upscaleNovelAiImage } from "../adapters/novelai/client";
 import { usePromptHistoryStore } from "./promptHistoryStore";
 import { useCharacterLibraryStore } from "./characterLibraryStore";
@@ -11,7 +11,9 @@ import type {
   GenerationImage,
   GenerationSettings,
   GenerationStatus,
+  PreciseReference,
   PromptSectionKey,
+  ReferenceMode,
 } from "../types/generation";
 
 const DEFAULT_SETTINGS: GenerationSettings = {
@@ -60,6 +62,7 @@ type State = {
   negativePrompt: string;
   characters: CharacterPrompt[];
   useCharacterCoords: boolean;
+  references: PreciseReference[];
   randomCharacterEnabled: boolean;
   lastRandomCharacter: RandomCharacterPick | null;
   settings: GenerationSettings;
@@ -74,6 +77,10 @@ type State = {
   removeCharacter: (id: string) => void;
   updateCharacter: (id: string, patch: Partial<CharacterPrompt>) => void;
   setUseCharacterCoords: (value: boolean) => void;
+  addReference: (item: { previewUrl: string; pngBase64: string; cacheSecretKey: string; mode?: ReferenceMode }) => void;
+  updateReference: (id: string, patch: Partial<Pick<PreciseReference, "mode" | "preferSameOutfit" | "strength" | "enabled">>) => void;
+  removeReference: (id: string) => void;
+  clearReferences: () => void;
   setRandomCharacterEnabled: (value: boolean) => void;
   /** Puts a drawn character into the first character's prompt and turns 🎲 off. */
   keepRandomCharacter: (pick: RandomCharacterPick) => Promise<void>;
@@ -123,6 +130,7 @@ export const useGenerationStore = create<State>()(
       negativePrompt: "",
       characters: [newCharacter(0)],
       useCharacterCoords: false,
+      references: [],
       randomCharacterEnabled: false,
       lastRandomCharacter: null,
       settings: { ...DEFAULT_SETTINGS },
@@ -152,6 +160,39 @@ export const useGenerationStore = create<State>()(
       updateCharacter: (id, patch) =>
         set((state) => ({ characters: state.characters.map((character) => character.id === id ? { ...character, ...patch } : character) })),
       setUseCharacterCoords: (useCharacterCoords) => set({ useCharacterCoords }),
+      addReference: (item) =>
+        set((state) => ({
+          references: [
+            ...state.references,
+            {
+              id: crypto.randomUUID(),
+              previewUrl: item.previewUrl,
+              pngBase64: item.pngBase64,
+              cacheSecretKey: item.cacheSecretKey,
+              mode: item.mode ?? "character&style",
+              preferSameOutfit: true,
+              strength: 1,
+              enabled: true,
+            },
+          ],
+        })),
+      updateReference: (id, patch) =>
+        set((state) => ({
+          references: state.references.map((ref) => (ref.id === id ? { ...ref, ...patch } : ref)),
+        })),
+      removeReference: (id) =>
+        set((state) => {
+          const target = state.references.find((ref) => ref.id === id);
+          if (target?.previewUrl.startsWith("blob:")) URL.revokeObjectURL(target.previewUrl);
+          return { references: state.references.filter((ref) => ref.id !== id) };
+        }),
+      clearReferences: () =>
+        set((state) => {
+          for (const ref of state.references) {
+            if (ref.previewUrl.startsWith("blob:")) URL.revokeObjectURL(ref.previewUrl);
+          }
+          return { references: [] };
+        }),
       setRandomCharacterEnabled: (randomCharacterEnabled) => {
         if (randomCharacterEnabled && !randomCharacterPool(useCharacterLibraryStore.getState().entries, useCharacterLibraryStore.getState()).length) {
           set({ errorMessage: "내 도감에 캐릭터를 저장하고 랜덤 범위를 골라 주세요." });
@@ -213,7 +254,10 @@ export const useGenerationStore = create<State>()(
             randomCharacter = toRandomPick(picked);
           }
           const request = buildNovelAiRequest(effective);
-          const result = await generateNovelAiImage(request);
+          const referenceImages = activeReferenceImages(effective);
+          const result = referenceImages.length
+            ? await generateNovelAiImage(request, referenceImages)
+            : await generateNovelAiImage(request);
           const positivePrompt = joinPositivePrompt(effective);
           const createdAt = Date.now();
           const incoming = result.map((image) => ({

@@ -100,4 +100,11 @@ describe("typing separators", () => {
     expect(topLevelSeparators("a, 1.2::b, c ::,")).toEqual([1, 15]);
     expect(topLevelSeparators("{x, y")).toEqual([]);
   });
+
+  it("reorders a tag across multiple positions while keeping separators", async () => {
+    const { reorderTagAt } = await import("./tagChips");
+    expect(reorderTagAt("a, b, c\nd", 3, 1)).toBe("a, d, b\nc");
+    expect(reorderTagAt("a, b, c, d", 0, 2)).toBe("b, c, a, d");
+    expect(reorderTagAt("a, b", 1, 1)).toBe("a, b");
+  });
 });

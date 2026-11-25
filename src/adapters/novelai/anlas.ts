@@ -14,19 +14,22 @@ export type AnlasEstimateInput = {
   height: number;
   steps: number;
   samples?: number;
+  referenceCount?: number;
 };
 
 /**
  * Anlas cost of one generation, or `null` when it is not known.
  *
  * Only the case verified for V5 is answered: Opus, within the V5 usage limit,
- * one image of Normal size or smaller with ≤ 28 steps costs 0. Everything
- * else (other tiers, past the usage limit, larger images, more steps) has no
- * published V5 formula, so no number is invented.
+ * one image of Normal size or smaller with ≤ 28 steps and no Precise References
+ * costs 0. Everything else (other tiers, past the usage limit, larger images,
+ * more steps, active references) has no published V5 formula, so no number is
+ * invented.
  */
 export function estimateAnlas(input: AnlasEstimateInput, quota: NovelAiQuota | null | undefined): number | null {
   if (!quota || quota.tier !== OPUS_TIER) return null;
   if (!isWithinUsageLimit(quota.usage)) return null;
+  if ((input.referenceCount ?? 0) > 0) return null;
   const samples = input.samples ?? 1;
   if (
     samples <= OPUS_FREE_MAX_SAMPLES &&

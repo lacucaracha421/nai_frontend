@@ -52,9 +52,12 @@ export async function getNovelAiQuota() {
   return invoke<NovelAiQuota>("novelai_quota");
 }
 
-export async function generateNovelAiImage(request: NovelAiImageRequest) {
+export async function generateNovelAiImage(request: NovelAiImageRequest, referenceImages?: string[]) {
   if (!isTauriRuntime()) throw new Error("브라우저 미리보기에서는 실제 생성 요청을 보내지 않사와요.");
-  return invoke<NovelAiGeneratedImage[]>("novelai_generate", { request });
+  return invoke<NovelAiGeneratedImage[]>("novelai_generate", {
+    request,
+    ...(referenceImages && referenceImages.length > 0 ? { referenceImages } : {}),
+  });
 }
 
 export async function upscaleNovelAiImage(imagePath: string) {
