@@ -1,7 +1,9 @@
 //! Offline character catalog. Original catalog and thumbnail attribution: Jio7/Prombot.
+#[cfg(feature = "tauri-app")]
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, io::Read, sync::OnceLock};
+use std::{collections::HashSet, io::Read, path::Path, sync::OnceLock};
+#[cfg(feature = "tauri-app")]
 use tauri::Manager;
 
 const CATALOG: &[u8] = include_bytes!("../resources/prombot-characters.csv.gz");
@@ -81,16 +83,21 @@ fn catalog() -> Result<&'static Vec<CatalogCharacter>, String> {
     .as_ref()
     .map_err(Clone::clone)
 }
-#[tauri::command]
-pub fn character_catalog() -> Result<Vec<CatalogCharacter>, String> {
+pub fn catalog_rows() -> Result<Vec<CatalogCharacter>, String> {
     catalog().cloned()
 }
 
-fn thumbnail_url(raw: &str) -> Result<tauri::Url, String> {
+#[cfg(feature = "tauri-app")]
+#[tauri::command]
+pub fn character_catalog() -> Result<Vec<CatalogCharacter>, String> {
+    catalog_rows()
+}
+
+fn thumbnail_url(raw: &str) -> Result<reqwest::Url, String> {
     let name = raw.replace(':', "_");
     let first = name.chars().next().ok_or("Empty character")?.to_string();
     let mut url =
-        tauri::Url::parse("https://huggingface.co/Jio7/Prombot/resolve/main/character-images/")
+        reqwest::Url::parse("https://huggingface.co/Jio7/Prombot/resolve/main/character-images/")
             .map_err(|e| e.to_string())?;
     url.path_segments_mut()
         .map_err(|_| "Invalid image base")?
@@ -104,12 +111,8 @@ fn valid_webp(bytes: &[u8]) -> bool {
 }
 
 /// The catalog is the allowlist; callers cannot supply a URL or filesystem path.
-/// Null means no image exists. Errors are transient and may be retried.
-#[tauri::command]
-pub async fn character_thumbnail(
-    app: tauri::AppHandle,
-    raw: String,
-) -> Result<Option<String>, String> {
+/// None means no image exists. Errors are transient and may be retried.
+pub async fn character_thumbnail_bytes(data_dir: &Path, raw: &str) -> Result<Option<Vec<u8>>, String> {
     let rows = catalog()?;
     let index = rows
         .iter()
@@ -119,30 +122,20 @@ pub async fn character_thumbnail(
         return Ok(None);
     }
     // Snapshot-specific indices keep filenames short, portable and traversal-free.
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("character-thumbnails-v1");
+    let dir = data_dir.join("character-thumbnails-v1");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("{index}.webp"));
     let missing = dir.join(format!("{index}.missing"));
-    let data_url = |bytes: &[u8]| {
-        format!(
-            "data:image/webp;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(bytes)
-        )
-    };
     if let Ok(bytes) = std::fs::read(&path) {
         if valid_webp(&bytes) {
-            return Ok(Some(data_url(&bytes)));
+            return Ok(Some(bytes));
         }
     }
     if missing.exists() {
         return Ok(None);
     }
     let mut response = reqwest::Client::new()
-        .get(thumbnail_url(&raw)?)
+        .get(thumbnail_url(raw)?)
         .timeout(std::time::Duration::from_secs(20))
         .send()
         .await
@@ -165,7 +158,23 @@ pub async fn character_thumbnail(
     let temporary = dir.join(format!("{index}-{}.tmp", uuid::Uuid::new_v4()));
     std::fs::write(&temporary, &bytes).map_err(|e| e.to_string())?;
     std::fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
-    Ok(Some(data_url(&bytes)))
+    Ok(Some(bytes))
+}
+
+#[cfg(feature = "tauri-app")]
+#[tauri::command]
+pub async fn character_thumbnail(
+    app: tauri::AppHandle,
+    raw: String,
+) -> Result<Option<String>, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let Some(bytes) = character_thumbnail_bytes(&data_dir, &raw).await? else {
+        return Ok(None);
+    };
+    Ok(Some(format!(
+        "data:image/webp;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )))
 }
 
 #[cfg(test)]

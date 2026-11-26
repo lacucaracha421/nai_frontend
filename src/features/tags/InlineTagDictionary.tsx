@@ -108,7 +108,14 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
     return () => window.removeEventListener(QUICKCOPY_UPDATED_EVENT, sync);
   }, [defaultTags]);
 
-  const currentSet = useMemo(() => new Set(splitTags(currentValue).map(normTag)), [currentValue]);
+  const currentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tag of splitTags(currentValue)) {
+      const key = normTag(tag);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [currentValue]);
 
   const items = useMemo<DictItem[]>(() => {
     if (cat === "artists") {
@@ -166,6 +173,28 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
       };
     });
   }, [cat, stored, sexTags, sexFavs]);
+
+  const activeKeys = useMemo(() => {
+    const active = new Set<string>();
+    const remaining = new Map(currentCounts);
+    for (const item of items) {
+      const parts = splitTags(item.prompt).map(normTag);
+      if (parts.length <= 1) continue;
+      if (parts.every((part) => (currentCounts.get(part) ?? 0) > 0)) {
+        active.add(item.key);
+        for (const part of parts) {
+          remaining.set(part, Math.max(0, (remaining.get(part) ?? 0) - 1));
+        }
+      }
+    }
+    for (const item of items) {
+      const parts = splitTags(item.prompt).map(normTag);
+      if (parts.length === 1 && (remaining.get(parts[0]) ?? 0) > 0) {
+        active.add(item.key);
+      }
+    }
+    return active;
+  }, [items, currentCounts]);
 
   const subs = useMemo(() => {
     const unique = Array.from(new Set(items.map((i) => i.sub))).filter(Boolean);
@@ -287,7 +316,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
       ) : (
         <div className="inline-dict-grid">
           {filtered.map((item) => {
-            const added = currentSet.has(normTag(item.prompt));
+            const added = activeKeys.has(item.key);
             return (
               <div
                 key={item.key}

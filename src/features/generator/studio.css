@@ -354,7 +354,47 @@
 .tag-chip-weight { font-size: 13px; font-weight: 600; color: var(--md-sys-color-primary); }
 .tag-chip.weight-down .tag-chip-weight { color: #e9b959; }
 .tag-chip.weight-up { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.b2-rating-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.b2-rating-pill {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.b2-rating-pill:hover {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+.b2-rating-pill.active {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary-container);
+}
 .tag-chip.selected { border-color: var(--md-sys-color-primary); }
+.tag-chip.multi-selected {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+.tag-bubble-count {
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-primary-container);
+  white-space: nowrap;
+}
 .tag-chip.armed { border-color: #b45b6c; background: #321f26; }
 .tag-chip-add {
   border: 1.5px dashed var(--md-sys-color-outline);
@@ -622,8 +662,9 @@
   background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
 }
-.b2-generate strong { font-size: 19px; font-weight: 700; }
-.b2-generate small { font-size: 12px; opacity: .85; }
+.b2-generate strong { font-size: 19px; font-weight: 700; line-height: 1.15; }
+.b2-generate.has-cost strong { font-size: 16px; }
+.b2-generate small { font-size: 12px; font-weight: 600; opacity: .9; line-height: 1.1; }
 .b2-generate:disabled { opacity: .55; }
 
 .b2-toast { bottom: calc(env(safe-area-inset-bottom) + 176px) !important; z-index: 230 !important; }

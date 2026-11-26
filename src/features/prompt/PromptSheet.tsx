@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { isTauriRuntime } from "../../adapters/webApi";
 import type { PromptSectionKey } from "../../types/generation";
 import { useGenerationStore } from "../../stores/generationStore";
 import { usePromptHistoryStore } from "../../stores/promptHistoryStore";
@@ -91,7 +92,10 @@ export function PromptSheet({
     clearTimeout(copyTimer.current);
     setCopyState("idle");
     try {
-      await copyWholePrompt(value, writeText);
+      const writer = isTauriRuntime()
+        ? writeText
+        : (text: string) => navigator.clipboard.writeText(text);
+      await copyWholePrompt(value, writer);
       if (attempt !== copyAttempt.current) return;
       setCopyState("copied");
     } catch {

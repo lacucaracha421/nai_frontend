@@ -1,0 +1,21 @@
+[Unit]
+Description=NAI V5 Studio Web Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Replace YOUR_USER and /path/to/nai_frontend before installing to /etc/systemd/system/
+User=YOUR_USER
+WorkingDirectory=/path/to/nai_frontend
+Environment=NAI_HOST=127.0.0.1
+Environment=NAI_PORT=3080
+Environment=NAI_DATA_DIR=/path/to/nai_frontend/nai-web-data
+Environment=NAI_DIST_DIR=/path/to/nai_frontend/dist
+Environment=NAI_RESOURCES_DIR=/path/to/nai_frontend/src-tauri/resources
+ExecStart=/path/to/nai_frontend/src-tauri/target/release/nai-web-server
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

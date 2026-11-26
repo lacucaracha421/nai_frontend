@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { apiJson, isTauriRuntime, isWebServerRuntime } from "../../adapters/webApi";
 
 export type TagCategory = "general" | "artist" | "copyright" | "character" | "meta" | "unknown";
 export type LocalTag = {
@@ -18,7 +19,6 @@ type SourceTag = {
   aliases?: unknown;
 };
 
-const isTauriRuntime = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const unescapeDisplay = (value: string) => value.replace(/\\+([(){}\[\]])/g, "$1").replace(/_/g, " ");
 const norm = (value: string) => unescapeDisplay(value).toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -117,32 +117,56 @@ async function previewSearch(query: string, categories?: TagCategory[], limit = 
 export async function searchLocalTags(query: string, categories?: TagCategory[], limit = 36): Promise<LocalTag[]> {
   const q = norm(query);
   if (q.length < 2) return [];
-  if (!isTauriRuntime()) return previewSearch(q, categories, limit);
-  try {
-    // Ask native search for a slightly wider candidate pool, then apply context-aware ordering in JS.
-    const nativeLimit = Math.min(96, Math.max(24, limit * 3));
-    const rows = await invoke<LocalTag[]>("search_local_tags", { query: q, categories, limit: nativeLimit });
-    return rerankTags(rows, q, categories, limit);
-  } catch (error) {
-    console.error("[tags] SQLite search failed; using tiny browser preview index instead.", error);
-    return previewSearch(q, categories, limit);
+  const nativeLimit = Math.min(96, Math.max(24, limit * 3));
+  if (isTauriRuntime()) {
+    try {
+      // Ask native search for a slightly wider candidate pool, then apply context-aware ordering in JS.
+      const rows = await invoke<LocalTag[]>("search_local_tags", { query: q, categories, limit: nativeLimit });
+      return rerankTags(rows, q, categories, limit);
+    } catch (error) {
+      console.error("[tags] SQLite search failed; using tiny browser preview index instead.", error);
+      return previewSearch(q, categories, limit);
+    }
   }
+  if (isWebServerRuntime()) {
+    try {
+      const params = new URLSearchParams({ q, limit: String(nativeLimit) });
+      if (categories?.length) params.set("categories", categories.join(","));
+      const rows = await apiJson<LocalTag[]>(`/api/tags/search?${params.toString()}`);
+      return rerankTags(rows, q, categories, limit);
+    } catch (error) {
+      console.error("[tags] Web SQLite search failed; using tiny browser preview index instead.", error);
+      return previewSearch(q, categories, limit);
+    }
+  }
+  return previewSearch(q, categories, limit);
 }
 
 export async function favoriteLocalTags(keys: string[], categories?: TagCategory[]): Promise<LocalTag[]> {
   if (!keys.length) return [];
-  if (!isTauriRuntime()) {
-    const order = new Map(keys.map((key, index) => [key, index]));
-    const allowed = categories?.length ? new Set(categories) : null;
-    return (await previewTags())
-      .filter((tag) => order.has(tag.raw) && (!allowed || allowed.has(tag.category)))
-      .sort((a, b) => (order.get(a.raw) ?? 0) - (order.get(b.raw) ?? 0))
-      .map(({ raw, display, category, count }) => ({ raw, display, category, count }));
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<LocalTag[]>("favorite_local_tags", { keys, categories });
+    } catch (error) {
+      console.error("[tags] Favorite lookup failed.", error);
+      return [];
+    }
   }
-  try {
-    return await invoke<LocalTag[]>("favorite_local_tags", { keys, categories });
-  } catch (error) {
-    console.error("[tags] Favorite lookup failed.", error);
-    return [];
+  if (isWebServerRuntime()) {
+    try {
+      return await apiJson<LocalTag[]>("/api/tags/favorites", {
+        method: "POST",
+        body: JSON.stringify({ keys, categories }),
+      });
+    } catch (error) {
+      console.error("[tags] Web favorite lookup failed.", error);
+      return [];
+    }
   }
+  const order = new Map(keys.map((key, index) => [key, index]));
+  const allowed = categories?.length ? new Set(categories) : null;
+  return (await previewTags())
+    .filter((tag) => order.has(tag.raw) && (!allowed || allowed.has(tag.category)))
+    .sort((a, b) => (order.get(a.raw) ?? 0) - (order.get(b.raw) ?? 0))
+    .map(({ raw, display, category, count }) => ({ raw, display, category, count }));
 }

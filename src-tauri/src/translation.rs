@@ -2,10 +2,15 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+#[cfg(feature = "tauri-app")]
 const TOKEN_SERVICE: &str = "local.nai.v5studio";
+#[allow(dead_code)]
 const OLLAMA_ACCOUNT: &str = "translation-ollama-api-key";
+#[allow(dead_code)]
 const OPENROUTER_ACCOUNT: &str = "translation-openrouter-api-key";
+#[allow(dead_code)]
 const NEURALWATT_ACCOUNT: &str = "translation-neuralwatt-api-key";
+#[allow(dead_code)]
 const GEMINI_ACCOUNT: &str = "translation-gemini-api-key";
 const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -37,12 +42,22 @@ impl TranslationProvider {
         }
     }
 
+    #[allow(dead_code)]
     fn account(&self) -> &'static str {
         match self {
             Self::Ollama => OLLAMA_ACCOUNT,
             Self::Openrouter => OPENROUTER_ACCOUNT,
             Self::Neuralwatt => NEURALWATT_ACCOUNT,
             Self::Gemini => GEMINI_ACCOUNT,
+        }
+    }
+
+    pub fn key_name(&self) -> &'static str {
+        match self {
+            Self::Ollama => "ollama",
+            Self::Openrouter => "openrouter",
+            Self::Neuralwatt => "neuralwatt",
+            Self::Gemini => "gemini",
         }
     }
 }
@@ -63,6 +78,7 @@ pub struct TranslationKeyStatus {
     pub gemini: bool,
 }
 
+#[cfg(feature = "tauri-app")]
 fn ensure_credential_store() -> Result<(), String> {
     if keyring_core::get_default_store().is_some() {
         return Ok(());
@@ -90,12 +106,14 @@ fn ensure_credential_store() -> Result<(), String> {
     }
 }
 
+#[cfg(feature = "tauri-app")]
 fn key_entry(provider: &TranslationProvider) -> Result<keyring_core::Entry, String> {
     ensure_credential_store()?;
     keyring_core::Entry::new(TOKEN_SERVICE, provider.account())
         .map_err(|error| format!("Could not open the local credential store: {error}"))
 }
 
+#[cfg(feature = "tauri-app")]
 fn load_api_key(provider: &TranslationProvider) -> Result<Option<String>, String> {
     let entry = key_entry(provider)?;
     match entry.get_password() {
@@ -105,6 +123,7 @@ fn load_api_key(provider: &TranslationProvider) -> Result<Option<String>, String
     }
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn save_api_key(provider: &TranslationProvider, api_key: &str) -> Result<(), String> {
     let value = api_key.trim();
     if value.is_empty() {
@@ -115,12 +134,14 @@ pub fn save_api_key(provider: &TranslationProvider, api_key: &str) -> Result<(),
         .map_err(|error| format!("Could not save the translation API key locally: {error}"))
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn clear_api_key(provider: &TranslationProvider) -> Result<(), String> {
     match key_entry(provider)?.delete_credential() {
         Ok(()) | Err(_) => Ok(()),
     }
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn key_status() -> Result<TranslationKeyStatus, String> {
     Ok(TranslationKeyStatus {
         ollama: load_api_key(&TranslationProvider::Ollama)?.is_some(),
@@ -208,7 +229,11 @@ fn ollama_chat_url(base_url: Option<&str>) -> String {
     }
 }
 
-async fn translate_ollama(config: &TranslationConfig, text: &str) -> Result<String, String> {
+async fn translate_ollama(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+    text: &str,
+) -> Result<String, String> {
     let model = model(config)?;
     let payload = json!({
         "model": model,
@@ -223,7 +248,7 @@ async fn translate_ollama(config: &TranslationConfig, text: &str) -> Result<Stri
         .post(ollama_chat_url(config.base_url.as_deref()))
         .header(CONTENT_TYPE, "application/json")
         .json(&payload);
-    if let Some(api_key) = load_api_key(&TranslationProvider::Ollama)? {
+    if let Some(api_key) = api_key {
         request = request.header(AUTHORIZATION, format!("Bearer {api_key}"));
     }
 
@@ -240,9 +265,14 @@ async fn translate_ollama(config: &TranslationConfig, text: &str) -> Result<Stri
     clean_translation(content)
 }
 
-async fn translate_openrouter(config: &TranslationConfig, text: &str) -> Result<String, String> {
+async fn translate_openrouter(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+    text: &str,
+) -> Result<String, String> {
     translate_chat(
         config,
+        api_key,
         text,
         &TranslationProvider::Openrouter,
         OPENROUTER_URL,
@@ -251,9 +281,14 @@ async fn translate_openrouter(config: &TranslationConfig, text: &str) -> Result<
     .await
 }
 
-async fn translate_neuralwatt(config: &TranslationConfig, text: &str) -> Result<String, String> {
+async fn translate_neuralwatt(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+    text: &str,
+) -> Result<String, String> {
     translate_chat(
         config,
+        api_key,
         text,
         &TranslationProvider::Neuralwatt,
         NEURALWATT_URL,
@@ -279,14 +314,17 @@ fn chat_payload(model: &str, text: &str, provider: &TranslationProvider) -> Valu
 
 async fn translate_chat(
     config: &TranslationConfig,
+    api_key: Option<&str>,
     text: &str,
     provider: &TranslationProvider,
     url: &str,
     label: &str,
 ) -> Result<String, String> {
     let model = model(config)?;
-    let api_key =
-        load_api_key(provider)?.ok_or_else(|| format!("{label} API key를 먼저 저장하시와요."))?;
+    let api_key = api_key
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{label} API key를 먼저 저장하시와요."))?;
     let payload = chat_payload(model, text, provider);
     let response = client()?
         .post(url)
@@ -313,7 +351,18 @@ fn gemini_url(model: &str) -> String {
     format!("{GEMINI_API_BASE}/{trimmed}:generateContent")
 }
 
-fn gemini_payload(text: &str) -> Value {
+fn gemini_thinking_config(model: &str) -> Value {
+    let id = model.trim().trim_start_matches("models/").to_ascii_lowercase();
+    if id.starts_with("gemini-4-") {
+        json!({ "thinkingLevel": "low" })
+    } else if id.starts_with("gemini-2.5-") {
+        json!({ "thinkingBudget": 0 })
+    } else {
+        json!({ "thinkingLevel": "minimal" })
+    }
+}
+
+fn gemini_payload(model: &str, text: &str) -> Value {
     json!({
         "systemInstruction": {
             "parts": [{"text": TRANSLATION_SYSTEM_PROMPT}]
@@ -325,7 +374,8 @@ fn gemini_payload(text: &str) -> Value {
             }
         ],
         "generationConfig": {
-            "temperature": 0
+            "temperature": 0,
+            "thinkingConfig": gemini_thinking_config(model)
         }
     })
 }
@@ -347,11 +397,17 @@ fn gemini_text(value: &Value) -> Option<String> {
     (!joined.trim().is_empty()).then_some(joined)
 }
 
-async fn translate_gemini(config: &TranslationConfig, text: &str) -> Result<String, String> {
+async fn translate_gemini(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+    text: &str,
+) -> Result<String, String> {
     let model = model(config)?;
-    let api_key = load_api_key(&TranslationProvider::Gemini)?
+    let api_key = api_key
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
         .ok_or_else(|| "Gemini API key를 먼저 저장하시와요.".to_string())?;
-    let payload = gemini_payload(text);
+    let payload = gemini_payload(model, text);
     let response = client()?
         .post(gemini_url(model))
         .header("x-goog-api-key", api_key)
@@ -366,18 +422,36 @@ async fn translate_gemini(config: &TranslationConfig, text: &str) -> Result<Stri
     clean_translation(content)
 }
 
-pub async fn translate(config: &TranslationConfig, text: &str) -> Result<String, String> {
+pub async fn translate_with_key(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+    text: &str,
+) -> Result<String, String> {
     if text.trim().is_empty() {
         return Err("번역할 텍스트를 선택하시와요.".to_string());
     }
     match config.provider {
-        TranslationProvider::Ollama => translate_ollama(config, text).await,
-        TranslationProvider::Openrouter => translate_openrouter(config, text).await,
-        TranslationProvider::Neuralwatt => translate_neuralwatt(config, text).await,
-        TranslationProvider::Gemini => translate_gemini(config, text).await,
+        TranslationProvider::Ollama => translate_ollama(config, api_key, text).await,
+        TranslationProvider::Openrouter => translate_openrouter(config, api_key, text).await,
+        TranslationProvider::Neuralwatt => translate_neuralwatt(config, api_key, text).await,
+        TranslationProvider::Gemini => translate_gemini(config, api_key, text).await,
     }
 }
 
+pub async fn test_with_key(
+    config: &TranslationConfig,
+    api_key: Option<&str>,
+) -> Result<String, String> {
+    translate_with_key(config, api_key, "테스트").await
+}
+
+#[cfg(feature = "tauri-app")]
+pub async fn translate(config: &TranslationConfig, text: &str) -> Result<String, String> {
+    let api_key = load_api_key(&config.provider)?;
+    translate_with_key(config, api_key.as_deref(), text).await
+}
+
+#[cfg(feature = "tauri-app")]
 pub async fn test(config: &TranslationConfig) -> Result<String, String> {
     translate(config, "테스트").await
 }
@@ -425,9 +499,21 @@ mod tests {
             gemini_url("models/gemini-2.5-flash-lite"),
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
         );
-        let payload = gemini_payload("노을 지는 옥상");
+        let payload = gemini_payload("gemini-4-hydrogen", "노을 지는 옥상");
         assert_eq!(payload["systemInstruction"]["parts"][0]["text"], TRANSLATION_SYSTEM_PROMPT);
         assert_eq!(payload["contents"][0]["parts"][0]["text"], "노을 지는 옥상");
+        assert_eq!(
+            payload["generationConfig"]["thinkingConfig"],
+            json!({ "thinkingLevel": "low" })
+        );
+        assert_eq!(
+            gemini_thinking_config("gemini-3.5-flash-lite"),
+            json!({ "thinkingLevel": "minimal" })
+        );
+        assert_eq!(
+            gemini_thinking_config("models/gemini-2.5-flash-lite"),
+            json!({ "thinkingBudget": 0 })
+        );
         let reply = json!({
             "candidates": [{
                 "content": {

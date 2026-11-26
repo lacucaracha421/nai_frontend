@@ -107,4 +107,12 @@ describe("typing separators", () => {
     expect(reorderTagAt("a, b, c, d", 0, 2)).toBe("b, c, a, d");
     expect(reorderTagAt("a, b", 1, 1)).toBe("a, b");
   });
+
+  it("removes multiple tags in one step while keeping surrounding separators", async () => {
+    const { removeTagsAt } = await import("./tagChips");
+    expect(removeTagsAt("a, b, c, d, e", [1, 3, 2])).toBe("a, e");
+    expect(removeTagsAt("a, b, c", [0, 2])).toBe("b");
+    expect(removeTagsAt("a, b", [0, 1])).toBe("");
+    expect(removeTagsAt("a, b", [5, -1])).toBe("a, b");
+  });
 });

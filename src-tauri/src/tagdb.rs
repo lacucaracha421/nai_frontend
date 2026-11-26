@@ -7,11 +7,13 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+#[cfg(feature = "tauri-app")]
 use tauri::{path::BaseDirectory, Manager};
 
 const BUNDLED_VERSION: &str = include_str!("../resources/danbooru.version");
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "tauri-app", target_os = "android"))]
 const ANDROID_DB_GZ: &[u8] = include_bytes!("../resources/danbooru.sqlite.gz");
+#[cfg(feature = "tauri-app")]
 const RESOURCE_DB_GZ: &str = "resources/danbooru.sqlite.gz";
 const DB_FILENAME: &str = "danbooru.sqlite";
 const VERSION_FILENAME: &str = "danbooru.version";
@@ -206,6 +208,41 @@ fn unpack_gzip<R: io::Read>(reader: R, target: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub fn prepare_in(app_data: &Path, resource_gz: &Path) -> Result<TagDbState, String> {
+    fs::create_dir_all(app_data).map_err(|error| format!("Could not create app data directory: {error}"))?;
+
+    let target = app_data.join(DB_FILENAME);
+    let version_target = app_data.join(VERSION_FILENAME);
+    let bundled_version = BUNDLED_VERSION.trim();
+    let installed_version = fs::read_to_string(&version_target).unwrap_or_default();
+
+    if target.exists() && installed_version.trim() == bundled_version && validate_database(&target).is_ok() {
+        return Ok(TagDbState { path: target });
+    }
+
+    let temp = app_data.join("danbooru.sqlite.tmp");
+    let _ = fs::remove_file(&temp);
+
+    let source = File::open(resource_gz).map_err(|error| {
+        format!(
+            "Could not open bundled tag database at {}: {error}",
+            resource_gz.display()
+        )
+    })?;
+    unpack_gzip(source, &temp)?;
+
+    validate_database(&temp)?;
+    if target.exists() {
+        fs::remove_file(&target).map_err(|error| format!("Could not replace old tag database: {error}"))?;
+    }
+    fs::rename(&temp, &target).map_err(|error| format!("Could not install tag database: {error}"))?;
+    fs::write(&version_target, format!("{bundled_version}\n"))
+        .map_err(|error| format!("Could not save tag database version: {error}"))?;
+
+    Ok(TagDbState { path: target })
+}
+
+#[cfg(feature = "tauri-app")]
 pub fn prepare(app: &tauri::App) -> Result<TagDbState, String> {
     let app_data = app
         .path()

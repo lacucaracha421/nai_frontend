@@ -160,6 +160,17 @@
   background: var(--md-sys-color-surface-container);
   color: var(--md-sys-color-on-surface);
   text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 100ms ease;
+}
+
+.inline-dict-card:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.inline-dict-card:active {
+  background: var(--md-sys-color-surface-container-highest);
+  transform: translateY(1px);
 }
 
 .inline-dict-card.added {

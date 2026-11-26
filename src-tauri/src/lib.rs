@@ -1,13 +1,18 @@
-mod character_catalog;
+pub mod character_catalog;
+#[cfg(feature = "tauri-app")]
 mod commands;
-mod novelai;
+pub mod novelai;
+#[cfg(feature = "tauri-app")]
 mod save;
-mod tagdb;
-mod translation;
+pub mod tagdb;
+pub mod translation;
 
+#[cfg(feature = "tauri-app")]
 use novelai::NovelAiState;
+#[cfg(feature = "tauri-app")]
 use tauri::Manager;
 
+#[cfg(feature = "tauri-app")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -51,7 +56,7 @@ pub fn run() {
 /// Tauri 2.11 no longer initializes ndk-context for application crates.
 /// MainActivity calls this JNI method from onCreate before the frontend can
 /// request token restoration.
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "tauri-app", target_os = "android"))]
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn Java_local_nai_v5studio_MainActivity_initNdkContext(

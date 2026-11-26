@@ -1,11 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { isTauriRuntime } from "../adapters/novelai/client";
+import {
+  clearNovelAiToken,
+  exportNovelAiToken,
+  isTauriRuntime,
+  isWebServerRuntime,
+  setNovelAiToken,
+} from "../adapters/novelai/client";
+import { flushWebStorageSync, isAppStorageKey } from "./webStateSync";
 
 const BACKUP_FORMAT = "nai-v5-studio-backup";
 const BACKUP_VERSION = 1;
-const QUICKCOPY_KEYS = new Set(["artist-tag-quick-copy.v4", "artist-quick-copy.v1"]);
 
 export type NaiBackup = {
   format: typeof BACKUP_FORMAT;
@@ -28,10 +33,6 @@ export type BackupPreview = {
   quickCopyTags: number;
   includesToken: boolean;
 };
-
-function isAppStorageKey(key: string) {
-  return key.startsWith("nai-v5-") || QUICKCOPY_KEYS.has(key) || key.startsWith("artist-tag-quick-copy.");
-}
 
 function safeParse(value: string | null): unknown {
   if (value === null) return null;
@@ -94,8 +95,8 @@ export async function exportFullBackup(includeToken: boolean) {
     storage: collectStorage(),
   };
 
-  if (includeToken && isTauriRuntime()) {
-    payload.novelAiToken = await invoke<string | null>("export_novelai_token");
+  if (includeToken && (isTauriRuntime() || isWebServerRuntime())) {
+    payload.novelAiToken = await exportNovelAiToken();
   }
 
   const text = `${JSON.stringify(payload, null, 2)}\n`;
@@ -177,8 +178,9 @@ export async function restoreFullBackup(backup: NaiBackup) {
   const affected = new Set([...currentKeys, ...Object.keys(backup.storage)]);
   const snapshot = new Map<string, string | null>();
   for (const key of affected) snapshot.set(key, localStorage.getItem(key));
-  const previousToken = isTauriRuntime() && Object.prototype.hasOwnProperty.call(backup, "novelAiToken")
-    ? await invoke<string | null>("export_novelai_token")
+  const canSyncToken = isTauriRuntime() || isWebServerRuntime();
+  const previousToken = canSyncToken && Object.prototype.hasOwnProperty.call(backup, "novelAiToken")
+    ? await exportNovelAiToken()
     : undefined;
 
   try {
@@ -188,10 +190,10 @@ export async function restoreFullBackup(backup: NaiBackup) {
       localStorage.setItem(key, serializeStorageValue(value));
     }
 
-    if (isTauriRuntime() && Object.prototype.hasOwnProperty.call(backup, "novelAiToken")) {
+    if (canSyncToken && Object.prototype.hasOwnProperty.call(backup, "novelAiToken")) {
       const token = backup.novelAiToken?.trim() ?? "";
-      if (token) await invoke("set_novelai_token", { token });
-      else await invoke("clear_novelai_token");
+      if (token) await setNovelAiToken(token);
+      else await clearNovelAiToken();
     }
   } catch (error) {
     for (const key of affected) {
@@ -199,12 +201,13 @@ export async function restoreFullBackup(backup: NaiBackup) {
       if (previous === null || previous === undefined) localStorage.removeItem(key);
       else localStorage.setItem(key, previous);
     }
-    if (isTauriRuntime() && previousToken !== undefined) {
-      if (previousToken) await invoke("set_novelai_token", { token: previousToken }).catch(() => undefined);
-      else await invoke("clear_novelai_token").catch(() => undefined);
+    if (canSyncToken && previousToken !== undefined) {
+      if (previousToken) await setNovelAiToken(previousToken).catch(() => undefined);
+      else await clearNovelAiToken().catch(() => undefined);
     }
     throw error;
   }
 
+  await flushWebStorageSync();
   window.location.reload();
 }

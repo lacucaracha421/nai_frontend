@@ -8,13 +8,17 @@ use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
+#[cfg(feature = "tauri-app")]
 use tauri::Manager;
 
 const IMAGE_API_BASE: &str = "https://image.novelai.net";
 const V5_FULL: &str = "nai-diffusion-5-full";
+#[cfg(feature = "tauri-app")]
 const TOKEN_SERVICE: &str = "local.nai.v5studio";
+#[cfg(feature = "tauri-app")]
 const TOKEN_ACCOUNT: &str = "novelai-persistent-api-token";
 
+#[cfg(feature = "tauri-app")]
 fn ensure_credential_store() -> Result<(), String> {
     // Store setup is deliberately lazy. On Android the Java Activity must first
     // initialize ndk-context; doing this in Tauri's Rust setup hook can race
@@ -45,18 +49,21 @@ fn ensure_credential_store() -> Result<(), String> {
     }
 }
 
+#[cfg(feature = "tauri-app")]
 fn token_entry() -> Result<keyring_core::Entry, String> {
     ensure_credential_store()?;
     keyring_core::Entry::new(TOKEN_SERVICE, TOKEN_ACCOUNT)
         .map_err(|error| format!("Could not open the local credential store: {error}"))
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn save_persistent_token(token: &str) -> Result<(), String> {
     token_entry()?
         .set_password(token)
         .map_err(|error| format!("Could not save the NovelAI token locally: {error}"))
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn load_persistent_token() -> Result<Option<String>, String> {
     let entry = token_entry()?;
     match entry.get_password() {
@@ -66,6 +73,7 @@ pub fn load_persistent_token() -> Result<Option<String>, String> {
     }
 }
 
+#[cfg(feature = "tauri-app")]
 pub fn delete_persistent_token() -> Result<(), String> {
     let entry = token_entry()?;
     match entry.delete_credential() {
@@ -117,17 +125,39 @@ pub struct GeneratedImage {
     pub height: u32,
 }
 
+pub fn prepare_image_cache_in(dir: PathBuf) -> Result<ImageCacheState, String> {
+    if dir.exists() {
+        fs::remove_dir_all(&dir).map_err(|error| format!("Could not clear old session image cache: {error}"))?;
+    }
+    fs::create_dir_all(&dir).map_err(|error| format!("Could not create session image cache: {error}"))?;
+    Ok(ImageCacheState { dir })
+}
+
+#[cfg(feature = "tauri-app")]
 pub fn prepare_image_cache(app: &tauri::App) -> Result<ImageCacheState, String> {
     let dir = app
         .path()
         .app_cache_dir()
         .map_err(|error| format!("Could not resolve image cache directory: {error}"))?
         .join("nai-v5-images");
-    if dir.exists() {
-        fs::remove_dir_all(&dir).map_err(|error| format!("Could not clear old session image cache: {error}"))?;
+    prepare_image_cache_in(dir)
+}
+
+pub fn resolve_cached_image_filename(cache: &ImageCacheState, filename: &str) -> Result<PathBuf, String> {
+    if filename.is_empty()
+        || !filename.ends_with(".png")
+        || !filename
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+        || filename.contains("..")
+    {
+        return Err("Invalid cached image filename.".to_string());
     }
-    fs::create_dir_all(&dir).map_err(|error| format!("Could not create session image cache: {error}"))?;
-    Ok(ImageCacheState { dir })
+    let path = cache.dir.join(filename);
+    if !path.is_file() {
+        return Err("Cached image not found.".to_string());
+    }
+    Ok(path)
 }
 
 fn client() -> Result<reqwest::Client, String> {
@@ -731,6 +761,17 @@ mod tests {
         writer.finish().unwrap().into_inner()
     }
 
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        #[cfg(feature = "tauri-app")]
+        {
+            tauri::async_runtime::block_on(future)
+        }
+        #[cfg(all(not(feature = "tauri-app"), feature = "web-server"))]
+        {
+            tokio::runtime::Runtime::new().unwrap().block_on(future)
+        }
+    }
+
     #[test]
     fn upscale_sends_the_novelai_site_multipart_request_and_reads_the_zip() {
         let cache = temp_cache("upscale");
@@ -744,7 +785,7 @@ mod tests {
             zip_with(&[("image_0.png", &upscaled)]),
         );
 
-        let images = tauri::async_runtime::block_on(upscale_at(
+        let images = block_on(upscale_at(
             &base,
             " secret-token ",
             source_path.to_str().unwrap(),
@@ -819,7 +860,7 @@ mod tests {
             "application/json",
             br#"{"statusCode":400,"message":"Validation error: model is required"}"#.to_vec(),
         );
-        let error = tauri::async_runtime::block_on(upscale_at(
+        let error = block_on(upscale_at(
             &base,
             "token",
             source_path.to_str().unwrap(),
@@ -898,7 +939,7 @@ mod tests {
                 }]
             }
         });
-        let images = tauri::async_runtime::block_on(generate_at(
+        let images = block_on(generate_at(
             &base,
             " secret-token ",
             req_json.clone(),

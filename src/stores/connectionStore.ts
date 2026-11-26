@@ -3,6 +3,7 @@ import {
   clearNovelAiToken,
   getNovelAiQuota,
   isTauriRuntime,
+  isWebServerRuntime,
   restoreNovelAiToken,
   setNovelAiToken,
   testNovelAiConnection,
@@ -111,7 +112,7 @@ export const useConnectionStore = create<State>((set, get) => ({
   setTokenInput: (tokenInput) => set({ tokenInput }),
 
   refreshQuota: async () => {
-    if (!isTauriRuntime() || get().status !== "connected" || get().quotaStatus === "loading") return;
+    if ((!isTauriRuntime() && !isWebServerRuntime()) || get().status !== "connected" || get().quotaStatus === "loading") return;
     set({ quotaStatus: "loading" });
     try {
       const quota = await getNovelAiQuota();
@@ -127,7 +128,7 @@ export const useConnectionStore = create<State>((set, get) => ({
   },
 
   restore: async () => {
-    if (!isTauriRuntime() || restoreStarted) return;
+    if ((!isTauriRuntime() && !isWebServerRuntime()) || restoreStarted) return;
     restoreStarted = true;
     try {
       const restored = await restoreNovelAiToken();

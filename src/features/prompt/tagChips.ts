@@ -82,6 +82,19 @@ export function removeTagAt(value: string, index: number) {
   return value.slice(0, range.start) + value.slice(range.end);
 }
 
+/** Removes multiple tags by index as one edit, preserving surrounding separators. */
+export function removeTagsAt(value: string, indices: Iterable<number>) {
+  const count = tagRanges(value).length;
+  const sorted = Array.from(new Set(indices))
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < count)
+    .sort((a, b) => b - a);
+  let next = value;
+  for (const index of sorted) {
+    next = removeTagAt(next, index);
+  }
+  return next;
+}
+
 /** Replaces one tag's text; text with commas becomes several tags, empty text removes it. */
 export function replaceTagAt(value: string, index: number, text: string) {
   const range = tagRanges(value)[index];

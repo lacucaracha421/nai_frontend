@@ -26,7 +26,7 @@ import type { TagCategory } from "../tags/localTagIndex";
 import { SettingsSheet, type SettingsScope } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
 import { Icon } from "../../components/Icon";
-import { readImageBytes, saveImageBytes } from "../../adapters/novelai/client";
+import { isTauriRuntime, readImageBytes, saveImageBytes } from "../../adapters/novelai/client";
 import {
   UPSCALE_ANLAS,
   estimateAnlas,
@@ -41,7 +41,7 @@ import { FinishSheet } from "./finish/FinishSheet";
 import { ReferenceSheet } from "./reference/ReferenceSheet";
 import { ReferencePanel } from "./reference/ReferencePanel";
 import { prepareReferenceBytes } from "./reference/prepareReference";
-import { removeTagAt } from "../prompt/tagChips";
+import { insertTagsAt, removeTagsAt } from "../prompt/tagChips";
 import "./s11-studio.css";
 import { useQuotaClock } from "./useQuotaClock";
 import { useImageLoader } from "./load/ImageLoadButton";
@@ -65,6 +65,19 @@ function savedName(path: string) {
 type SaveState = "idle" | "saving" | "success" | "error";
 type Tab = "artist" | "character" | "other" | "reference" | "fixed";
 type FixedPart = "quality" | "negative";
+
+const RATING_OPTIONS = [
+  { tag: "rating:general", label: "General" },
+  { tag: "rating:sensitive", label: "Sensitive" },
+  { tag: "rating:questionable", label: "Questionable" },
+  { tag: "rating:explicit", label: "Explicit" },
+] as const;
+
+const RATING_TAG_SET = new Set<string>(RATING_OPTIONS.map((item) => item.tag));
+
+function normalizeRatingTag(value: string) {
+  return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
 type MenuItem = { label: string; hint?: string; disabled?: boolean; danger?: boolean; onSelect: () => void };
 
 const TABS: { key: Tab; label: string; dot?: string }[] = [
@@ -595,6 +608,31 @@ export function V5Studio() {
     else { setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true); }
   };
 
+  const activeRating = useMemo(() => {
+    const list = splitTags(other);
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const normalized = normalizeRatingTag(list[i]);
+      if (RATING_TAG_SET.has(normalized)) return normalized;
+    }
+    return null;
+  }, [other]);
+
+  const toggleRating = (tag: string) => {
+    const list = splitTags(other);
+    const existingIndices: number[] = [];
+    let alreadyActive = false;
+    list.forEach((item, index) => {
+      const normalized = normalizeRatingTag(item);
+      if (RATING_TAG_SET.has(normalized)) {
+        existingIndices.push(index);
+        if (normalized === tag) alreadyActive = true;
+      }
+    });
+    const withoutRating = existingIndices.length > 0 ? removeTagsAt(other, existingIndices) : other;
+    const next = alreadyActive ? withoutRating : insertTagsAt(withoutRating, tag);
+    setPrompt("other", next);
+  };
+
   const toggleDictionaryTag = (tag: string) => {
     const targetSection: PromptSectionKey = section ?? "other";
     const currentText = targetSection === "artist"
@@ -606,9 +644,20 @@ export function V5Studio() {
           : negative;
     const norm = (v: string) => v.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
     const list = splitTags(currentText);
-    const existingIndex = list.findIndex((item) => norm(item) === norm(tag));
-    if (existingIndex >= 0) {
-      setPrompt(targetSection, removeTagAt(currentText, existingIndex));
+    const parts = splitTags(tag);
+    if (!parts.length) return;
+    const matchedIndices: number[] = [];
+    const used = new Set<number>();
+    for (const part of parts) {
+      const target = norm(part);
+      const found = list.findIndex((item, idx) => !used.has(idx) && norm(item) === target);
+      if (found >= 0) {
+        used.add(found);
+        matchedIndices.push(found);
+      }
+    }
+    if (matchedIndices.length === parts.length) {
+      setPrompt(targetSection, removeTagsAt(currentText, matchedIndices));
     } else {
       appendPrompt(targetSection, tag);
     }
@@ -630,7 +679,10 @@ export function V5Studio() {
 
   const copySection = async () => {
     try {
-      await copyWholePrompt(sectionValue, writeText);
+      const writer = isTauriRuntime()
+        ? writeText
+        : (text: string) => navigator.clipboard.writeText(text);
+      await copyWholePrompt(sectionValue, writer);
       showNotice(`${sectionTitle} 전체를 복사했습니다`);
     } catch {
       showNotice("복사하지 못했습니다");
@@ -808,6 +860,25 @@ export function V5Studio() {
           <button type="button" onClick={() => { setFinderRandom(true); setFinderAdd(false); setLibraryOpen(true); }}>범위 바꾸기</button>
         </p>
       )}
+      {tab === "other" && (
+        <div className="b2-rating-bar" role="group" aria-label="수위 태그">
+          {RATING_OPTIONS.map((item) => {
+            const active = activeRating === item.tag;
+            return (
+              <button
+                key={item.tag}
+                type="button"
+                className={`b2-rating-pill ${active ? "active" : ""}`}
+                aria-pressed={active}
+                title={item.tag}
+                onClick={() => toggleRating(item.tag)}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {tab === "fixed" && (
         <div className="b2-fixed-switch" role="tablist" aria-label="품질 또는 제외">
           <button type="button" role="tab" aria-selected={fixedPart === "quality"} className={fixedPart === "quality" ? "active" : ""} onPointerDown={switchPointerDown} onClick={() => switchSection(() => setFixedPart("quality"))}>
@@ -945,6 +1016,7 @@ export function V5Studio() {
   const viewerActions = viewed && imageActionButtons(viewed, "viewer");
 
   const generateLabel = status === "generating" ? "생성 중…" : status === "upscaling" ? "업스케일 중…" : "생성";
+  const paidAnlasLabel = !busy && typeof cost === "number" && cost > 0 ? formatAnlasCost(cost) : null;
   const dictionaryLabel = tab === "character" ? "캐릭터 찾기" : "태그사전";
   const sectionMenuLabel = `${sectionTitle} 메뉴`;
 
@@ -958,8 +1030,9 @@ export function V5Studio() {
           <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}{settings.seed !== null ? " · Seed 고정" : ""}</small>
         </span>
       </button>
-      <button type="button" className="b2-generate" disabled={busy} onClick={() => generateNow(tools)}>
+      <button type="button" className={`b2-generate ${paidAnlasLabel ? "has-cost" : ""}`} disabled={busy} onClick={() => generateNow(tools)}>
         <strong>{generateLabel}</strong>
+        {paidAnlasLabel && <small>{paidAnlasLabel}</small>}
       </button>
     </div>
   );
@@ -1051,6 +1124,24 @@ export function V5Studio() {
         <Icon name="sliders" />관리
       </button>
     </>
+  ) : tab === "other" ? (
+    <div className="s11-rating-bar" role="group" aria-label="수위 태그">
+      {RATING_OPTIONS.map((item) => {
+        const active = activeRating === item.tag;
+        return (
+          <button
+            key={item.tag}
+            type="button"
+            className={`s11-fixed-btn ${active ? "active" : ""}`}
+            aria-pressed={active}
+            title={item.tag}
+            onClick={() => toggleRating(item.tag)}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
   ) : tab === "fixed" ? (
     <>
       <button type="button" className={`s11-fixed-btn ${fixedPart === "quality" ? "active" : ""}`} onClick={() => setFixedPart("quality")}>품질</button>
@@ -1090,8 +1181,9 @@ export function V5Studio() {
         <strong>생성 설정</strong>
         <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}</small>
       </button>
-      <button type="button" className="s11-dock-generate" disabled={busy} onClick={() => generateNow(tools ?? boardTools.current ?? undefined)}>
-        {generateLabel}
+      <button type="button" className={`s11-dock-generate ${paidAnlasLabel ? "has-cost" : ""}`} disabled={busy} onClick={() => generateNow(tools ?? boardTools.current ?? undefined)}>
+        <strong>{generateLabel}</strong>
+        {paidAnlasLabel && <small>{paidAnlasLabel}</small>}
       </button>
     </footer>
   );

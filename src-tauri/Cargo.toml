@@ -9,11 +9,40 @@ edition="2021"
 name="nai_frontend_lib"
 crate-type= ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "nai-frontend"
+path = "src/main.rs"
+required-features = ["tauri-app"]
+
+[[bin]]
+name = "nai-web-server"
+path = "src/bin/nai_web_server.rs"
+required-features = ["web-server"]
+
+[features]
+default = ["tauri-app"]
+tauri-app = [
+    "dep:tauri",
+    "dep:tauri-plugin-fs",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-clipboard-manager",
+    "dep:keyring-core",
+    "dep:android-native-keyring-store",
+    "dep:jni",
+    "dep:ndk-context",
+    "dep:windows-native-keyring-store",
+]
+web-server = [
+    "dep:axum",
+    "dep:tokio",
+    "dep:tower-http",
+]
+
 [build-dependencies]
 tauri-build= {version="2", features = [] }
 
 [dependencies]
-tauri= {version="2",features= ["protocol-asset"] }
+tauri= {version="2",features= ["protocol-asset"], optional = true }
 serde= {version="1",features= ["derive"] }
 serde_json="1"
 reqwest= {version="0.12",default-features=false,features= ["json", "rustls-tls", "multipart"] }
@@ -21,17 +50,20 @@ rusqlite= {version="0.40",default-features=false,features= ["bundled"] }
 flate2="1"
 csv="1"
 uuid= {version="1",features= ["v4"] }
-tauri-plugin-fs="2"
-tauri-plugin-dialog="2"
+tauri-plugin-fs= {version="2", optional = true }
+tauri-plugin-dialog= {version="2", optional = true }
 zip= {version="4",default-features=false,features= ["deflate"] }
 base64="0.22"
-keyring-core="1"
-tauri-plugin-clipboard-manager = "2"
+keyring-core= {version="1", optional = true }
+tauri-plugin-clipboard-manager = {version="2", optional = true }
+axum = {version="0.8", optional = true }
+tokio = {version="1", features = ["rt-multi-thread", "macros", "net", "signal"], optional = true }
+tower-http = {version="0.6", features = ["fs", "limit"], optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-android-native-keyring-store="1.0.0"
-jni="0.21.1"
-ndk-context="0.1.1"
+android-native-keyring-store= {version="1.0.0", optional = true }
+jni= {version="0.21.1", optional = true }
+ndk-context= {version="0.1.1", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-native-keyring-store= {version="1.1.0",default-features=false}
+windows-native-keyring-store= {version="1.1.0",default-features=false, optional = true }

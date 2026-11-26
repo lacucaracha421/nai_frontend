@@ -13,6 +13,8 @@
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",
     "android:build": "tauri android build",
+    "web:server": "cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features web-server --bin nai-web-server --",
+    "web:build": "npm run build && cargo build --manifest-path src-tauri/Cargo.toml --release --no-default-features --features web-server --bin nai-web-server",
     "tags:import": "node scripts/import-danbooru.mjs",
     "tags:sync": "python scripts/import-nextaltair.py && python scripts/build-tag-sqlite.py",
     "tags:sqlite": "python scripts/build-tag-sqlite.py",

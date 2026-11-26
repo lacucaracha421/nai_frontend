@@ -99,9 +99,10 @@ export function TranslationSettings() {
         )}
         {provider === "gemini" && (
           <datalist id="gemini-translation-models">
+            <option value="gemini-4-hydrogen" />
+            <option value="gemini-3.5-flash-lite" />
+            <option value="gemini-3.1-flash-lite" />
             <option value="gemini-2.5-flash-lite" />
-            <option value="gemini-2.5-flash" />
-            <option value="gemini-3-flash-preview" />
           </datalist>
         )}
         {provider === "gemini" && (

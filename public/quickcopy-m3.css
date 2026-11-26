@@ -30,8 +30,27 @@ body { background:var(--bg); font-family:Roboto,"Noto Sans KR",system-ui,-apple-
 input, textarea, select { border-color:var(--line)!important; background:transparent!important; }
 .search { min-height:56px; border-radius:28px!important; padding-inline:20px!important; background:var(--panel)!important; }
 .artist-grid,.tag-grid,.action-grid { gap:8px; }
-.artist-row,.tag-card,.action-card { border-color:transparent!important; border-radius:16px!important; background:var(--panel)!important; box-shadow:none!important; }
-.artist-row:active,.tag-card:active,.action-card:active { background:var(--panel-2)!important; }
+.artist-row,.tag-card,.action-card {
+  border:1px solid transparent;
+  border-radius:16px;
+  background:var(--panel);
+  box-shadow:none;
+  transition:background .12s ease,border-color .12s ease,transform .1s ease;
+}
+.artist-row:nth-child(odd) { border-right-color:transparent; }
+.artist-row:hover,.tag-card:hover,.action-card:hover { background:var(--panel-2); }
+.artist-row:active,.tag-card:active,.action-card:active { background:var(--panel-3); transform:translateY(1px); }
+.artist-name-cell:hover { background:transparent; }
+.tag-card.selected {
+  background:var(--primary-container);
+  border-color:var(--primary);
+  box-shadow:none;
+}
+@keyframes flash {
+  0% { background:var(--primary-container); border-color:var(--primary); }
+  100% { background:var(--panel); border-color:transparent; }
+}
+.artist-row.flash,.tag-card.flash,.action-card.flash { animation:flash .42s ease; }
 .section-title { color:var(--muted); }
 .dialog { border:0; border-radius:28px; background:var(--panel-2); box-shadow:0 8px 24px rgb(0 0 0 / 30%); }
 button:focus-visible,input:focus-visible,textarea:focus-visible { outline:3px solid color-mix(in srgb,var(--primary) 72%,transparent); outline-offset:2px; }

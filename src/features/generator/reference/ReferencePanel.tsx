@@ -32,8 +32,8 @@ export function ReferencePanel({ currentImage }: Props) {
     setBusy(true);
     setError(null);
     try {
-      for (const file of Array.from(files)) {
-        const prepared = await prepareReferenceBlob(file);
+      const preparedList = await Promise.all(Array.from(files).map((file) => prepareReferenceBlob(file)));
+      for (const prepared of preparedList) {
         addReference(prepared);
       }
     } catch (err) {

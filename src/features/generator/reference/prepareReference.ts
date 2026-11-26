@@ -5,6 +5,8 @@
  * an object URL for thumbnail display.
  */
 
+import { isWebServerRuntime } from "../../../adapters/webApi";
+
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const MAX_REFERENCE_SIDE = 1536;
 
@@ -89,9 +91,36 @@ export type PreparedReferenceImage = {
   cacheSecretKey: string;
 };
 
+async function uploadReferenceToWebServer(pngBytes: Uint8Array): Promise<{ id: string; previewUrl: string } | null> {
+  if (!isWebServerRuntime()) return null;
+  try {
+    const response = await fetch("/api/references", {
+      method: "POST",
+      headers: { "Content-Type": "image/png" },
+      body: new Blob([pngBytes as BlobPart], { type: "image/png" }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { id?: unknown; previewUrl?: unknown };
+    if (typeof data.id === "string" && data.id && typeof data.previewUrl === "string" && data.previewUrl) {
+      return { id: data.id, previewUrl: data.previewUrl };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function prepareReferenceBlob(blob: Blob): Promise<PreparedReferenceImage> {
   const pngBytes = await blobToPngBytes(blob);
   const cacheSecretKey = await sha256Hex(pngBytes);
+  const cached = await uploadReferenceToWebServer(pngBytes);
+  if (cached) {
+    return {
+      previewUrl: cached.previewUrl,
+      pngBase64: `ref:${cached.id}`,
+      cacheSecretKey,
+    };
+  }
   const pngBase64 = bytesToBase64(pngBytes);
   const previewBlob = new Blob([pngBytes as BlobPart], { type: "image/png" });
   const previewUrl = URL.createObjectURL(previewBlob);

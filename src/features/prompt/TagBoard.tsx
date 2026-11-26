@@ -16,6 +16,7 @@ import {
   insertTagsAt,
   moveTagAt,
   removeTagAt,
+  removeTagsAt,
   reorderTagAt,
   replaceTagAt,
   splitTags,
@@ -166,6 +167,8 @@ export function TagBoard({
   const desktop = useDesktopLayout();
   const tags = useMemo(() => splitTags(value), [value]);
   const [selected, setSelected] = useState<number | null>(null);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() => new Set());
+  const selectionAnchorRef = useRef<number | null>(null);
   const [draft, setDraftState] = useState<Draft | null>(() => initialDraft(startEditing, value));
   const draftRef = useRef<Draft | null>(draft);
   const [dockText, setDockText] = useState("");
@@ -205,20 +208,67 @@ export function TagBoard({
     setDraftState(next);
   };
 
+  const clearSelection = () => {
+    selectionAnchorRef.current = null;
+    setSelected(null);
+    setSelectedIndices(new Set());
+  };
+
+  const selectSingle = (index: number) => {
+    selectionAnchorRef.current = index;
+    setSelected(index);
+    setSelectedIndices(new Set([index]));
+  };
+
+  const selectRange = (anchor: number, end: number) => {
+    const lo = Math.min(anchor, end);
+    const hi = Math.max(anchor, end);
+    const next = new Set<number>();
+    for (let i = lo; i <= hi; i += 1) next.add(i);
+    selectionAnchorRef.current = anchor;
+    setSelected(end);
+    setSelectedIndices(next);
+  };
+
+  const toggleSelect = (index: number) => {
+    setSelectedIndices((current) => {
+      const next = new Set(current);
+      if (next.has(index)) {
+        next.delete(index);
+        if (next.size === 0) {
+          selectionAnchorRef.current = null;
+          setSelected(null);
+        } else {
+          const fallback = Array.from(next)[next.size - 1];
+          selectionAnchorRef.current = fallback;
+          setSelected(fallback);
+        }
+      } else {
+        next.add(index);
+        selectionAnchorRef.current = index;
+        setSelected(index);
+      }
+      return next;
+    });
+  };
+
+  const selectionCount = selectedIndices.size;
+  const multiSelected = selectionCount > 1;
+
   // Any tap outside the bubble, the chips and selection tools closes the bubble
   // (pointerdown, so it works for touch in the Android WebView).
   useEffect(() => {
-    if (selected === null) return;
+    if (selected === null && selectedIndices.size === 0) return;
     const onDown = (event: PointerEvent) => {
-      if (closesBubble(event.target instanceof Element ? event.target : null)) setSelected(null);
+      if (closesBubble(event.target instanceof Element ? event.target : null)) clearSelection();
     };
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);
-  }, [selected]);
+  }, [selected, selectedIndices.size]);
 
   // Android Back (newest layer first): with the keyboard hidden, suggestions close first
   // (they open after the input), then editing ends (the typed tag is kept).
-  useBackLayer(selected !== null, () => setSelected(null));
+  useBackLayer(selected !== null || selectedIndices.size > 0, clearSelection);
   useBackLayer(suggestions.length > 0, () => setSuggestions([]));
   useBackLayer(draft !== null, () => {
     commitDraft(true);
@@ -228,6 +278,11 @@ export function TagBoard({
   // Tags changed from outside (undo, dictionary insert, load): drop a stale selection.
   useEffect(() => {
     setSelected((current) => (current !== null && current >= tags.length ? null : current));
+    setSelectedIndices((current) => {
+      if (current.size === 0) return current;
+      const valid = Array.from(current).filter((i) => i < tags.length);
+      return valid.length === current.size ? current : new Set(valid);
+    });
     setArmed(null);
   }, [tags.length]);
 
@@ -268,7 +323,7 @@ export function TagBoard({
    */
   const openDraft = (next: Draft) => {
     flushSync(() => {
-      setSelected(null);
+      clearSelection();
       setMessage(null);
       setDraft(next);
     });
@@ -282,16 +337,24 @@ export function TagBoard({
     openDraft({ mode: "edit", index, text, original: text });
   };
 
-  const tapChip = (index: number) => {
+  const tapChip = (index: number, event?: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => {
     setMessage(null);
     if (draftRef.current) {
       // The chip keeps the input focused on pointerdown, so the draft is committed
       // here and the tapped chip is found again after the list shifted.
-      setSelected(commitDraft(true)(index));
+      selectSingle(commitDraft(true)(index));
       return;
     }
-    if (!desktop && selected === index) startEdit(index);
-    else setSelected(index);
+    if (desktop && event?.shiftKey && selected !== null) {
+      selectRange(selectionAnchorRef.current ?? selected, index);
+      return;
+    }
+    if (desktop && (event?.ctrlKey || event?.metaKey)) {
+      toggleSelect(index);
+      return;
+    }
+    if (!desktop && selected === index && !multiSelected) startEdit(index);
+    else selectSingle(index);
   };
 
   const selectedRef = useRef(selected);
@@ -439,8 +502,13 @@ export function TagBoard({
     }
     if (action === "edit") startEdit(selected);
     if (action === "delete") {
-      apply(removeTagAt(current, selected), selected);
-      setSelected(null);
+      if (selectedIndices.size > 1) {
+        const first = Math.min(...selectedIndices);
+        apply(removeTagsAt(current, selectedIndices), first);
+      } else {
+        apply(removeTagAt(current, selected), selected);
+      }
+      clearSelection();
     }
   };
 
@@ -509,9 +577,14 @@ export function TagBoard({
   useEffect(() => {
     if (!desktop) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Delete" || nativeTextTarget(event.target) || selected === null) return;
-      event.preventDefault();
-      bubbleAction("delete");
+      if (nativeTextTarget(event.target) || (selected === null && selectedIndices.size === 0)) return;
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        bubbleAction("delete");
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        clearSelection();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -580,15 +653,16 @@ export function TagBoard({
       return;
     }
     const { weight: tagWeightValue, content, weighted } = tagWeight(tag);
+    const isSelected = selectedIndices.has(index) || selected === index;
     const chip = (
       <button
         type="button"
         key={`${index}:${tag}`}
         ref={(element) => { chipRefs.current[index] = element; }}
-        className={`tag-chip ${selected === index ? "selected" : ""} ${armed === index ? "armed" : ""} ${weighted ? (tagWeightValue >= 1 ? "weight-up" : "weight-down") : ""}`}
-        aria-pressed={selected === index}
+        className={`tag-chip ${isSelected ? "selected" : ""} ${multiSelected && isSelected ? "multi-selected" : ""} ${armed === index ? "armed" : ""} ${weighted ? (tagWeightValue >= 1 ? "weight-up" : "weight-down") : ""}`}
+        aria-pressed={isSelected}
         onPointerDown={chipPointerDown}
-        onClick={() => tapChip(index)}
+        onClick={(event) => tapChip(index, event)}
         onDoubleClick={desktop ? () => startEdit(index) : undefined}
       >
         <span className="tag-chip-text">{content || tag}</span>
@@ -598,7 +672,7 @@ export function TagBoard({
     chips.push(desktop ? (
       <span className="tag-chip-wrap" key={`${index}:${tag}`}>
         {chip}
-        <button type="button" className="chip-x" aria-label={`${content || tag} 삭제`} onPointerDown={keepFocus} onClick={() => { apply(removeTagAt(valueRef.current, index), index); setSelected(null); }}>×</button>
+        <button type="button" className="chip-x" aria-label={`${content || tag} 삭제`} onPointerDown={keepFocus} onClick={() => { apply(removeTagAt(valueRef.current, index), index); clearSelection(); }}>×</button>
       </span>
     ) : chip);
   });
@@ -668,9 +742,9 @@ export function TagBoard({
 
   const tools: TagBoardTools = {
     editing: draft !== null,
-    canWeight: draft !== null ? !!draft.text.trim() : selected !== null,
+    canWeight: draft !== null ? !!draft.text.trim() : (selected !== null && !multiSelected),
     weight,
-    canTranslate: draft !== null ? !!draft.text.trim() : (selected !== null || !!dockText.trim()),
+    canTranslate: draft !== null ? !!draft.text.trim() : ((selected !== null && !multiSelected) || !!dockText.trim()),
     translating,
     translate: () => void (dockText.trim() && !draft && selected === null ? translateDock() : translate()),
     canUndo,
@@ -722,7 +796,15 @@ export function TagBoard({
       setDrag(null);
       if (activeDrag && activeDrag.from !== activeDrag.over) {
         apply(reorderTagAt(valueRef.current, activeDrag.from, activeDrag.over), activeDrag.over);
-        setSelected(activeDrag.over);
+        selectSingle(activeDrag.over);
+      } else if (
+        activeDrag
+        && activeDrag.from === activeDrag.over
+        && selectedRef.current !== null
+        && selectedRef.current !== activeDrag.from
+      ) {
+        // Two-point range select: tap chip A, then long-press chip B without dragging.
+        selectRange(selectionAnchorRef.current ?? selectedRef.current, activeDrag.from);
       }
     };
     const onTouchMove = (event: TouchEvent) => {
@@ -755,8 +837,9 @@ export function TagBoard({
   }, [drag !== null]);
 
   if (!desktop) {
-    const hasSel = selected !== null && tags[selected] !== undefined;
-    const selectedTag = hasSel ? tagWeight(tags[selected]) : null;
+    const hasSel = (selected !== null && tags[selected] !== undefined) || selectionCount > 0;
+    const hasSingleSel = !multiSelected && selected !== null && tags[selected] !== undefined;
+    const selectedTag = hasSingleSel ? tagWeight(tags[selected]) : null;
     const dockValue = draft?.mode === "edit" ? draft.text : dockText;
 
     const clearHold = () => {
@@ -770,28 +853,41 @@ export function TagBoard({
       <div className="tag-board s11-tag-board">
         <div className={`s11-chip-bar ${hasSel ? "selected-mode" : ""}`} data-keeps-selection>
           <div className="s11-chip-bar-left">
-            {hasSel && selectedTag ? (
+            {multiSelected ? (
               <span className="s11-chip-bar-label">
-                <b>{selectedTag.content || tags[selected]}</b>
+                <b>{selectionCount}개 선택됨</b>
+              </span>
+            ) : hasSingleSel && selectedTag ? (
+              <span className="s11-chip-bar-label">
+                <b>{selectedTag.content || tags[selected!]}</b>
               </span>
             ) : (
               header
             )}
           </div>
           <div className="s11-chip-bar-actions">
-            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("down")}>−0.1</button>
-            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("up")}>+0.1</button>
-            <button type="button" data-keeps-selection disabled={!hasSel || selected === 0} onPointerDown={keepFocus} onClick={() => bubbleAction("left")} aria-label="왼쪽으로 이동"><Icon name="left" /></button>
-            <button type="button" data-keeps-selection disabled={!hasSel || selected >= tags.length - 1} onPointerDown={keepFocus} onClick={() => bubbleAction("right")} aria-label="오른쪽으로 이동"><Icon name="right" /></button>
-            <button type="button" data-keeps-selection disabled={!hasSel || translating} onPointerDown={keepFocus} onClick={() => void translate()}>{translating ? "…" : "번역"}</button>
-            <button type="button" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => {
-              if (selected === null) return;
-              const orig = tags[selected];
-              setDraft({ mode: "edit", index: selected, text: orig, original: orig });
-              setSelected(null);
-              requestAnimationFrame(() => dockInputRef.current?.focus({ preventScroll: true }));
-            }}>수정</button>
-            <button type="button" className="danger" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("delete")} aria-label="삭제"><Icon name="trash" /></button>
+            {multiSelected ? (
+              <>
+                <button type="button" data-keeps-selection onPointerDown={keepFocus} onClick={clearSelection}>취소</button>
+                <button type="button" className="danger" data-keeps-selection onPointerDown={keepFocus} onClick={() => bubbleAction("delete")} aria-label={`${selectionCount}개 삭제`}><Icon name="trash" /> {selectionCount}개 삭제</button>
+              </>
+            ) : (
+              <>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel} onPointerDown={keepFocus} onClick={() => bubbleAction("down")}>−0.1</button>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel} onPointerDown={keepFocus} onClick={() => bubbleAction("up")}>+0.1</button>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel || selected === 0} onPointerDown={keepFocus} onClick={() => bubbleAction("left")} aria-label="왼쪽으로 이동"><Icon name="left" /></button>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel || (selected ?? 0) >= tags.length - 1} onPointerDown={keepFocus} onClick={() => bubbleAction("right")} aria-label="오른쪽으로 이동"><Icon name="right" /></button>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel || translating} onPointerDown={keepFocus} onClick={() => void translate()}>{translating ? "…" : "번역"}</button>
+                <button type="button" data-keeps-selection disabled={!hasSingleSel} onPointerDown={keepFocus} onClick={() => {
+                  if (selected === null) return;
+                  const orig = tags[selected];
+                  setDraft({ mode: "edit", index: selected, text: orig, original: orig });
+                  clearSelection();
+                  requestAnimationFrame(() => dockInputRef.current?.focus({ preventScroll: true }));
+                }}>수정</button>
+                <button type="button" className="danger" data-keeps-selection disabled={!hasSel} onPointerDown={keepFocus} onClick={() => bubbleAction("delete")} aria-label="삭제"><Icon name="trash" /></button>
+              </>
+            )}
           </div>
         </div>
 
@@ -812,13 +908,14 @@ export function TagBoard({
               const { weight: tagWeightValue, content, weighted } = tagWeight(tag);
               const isDragged = drag?.from === index;
               const isDropTarget = drag !== null && drag.over === index && drag.from !== index;
+              const isSelected = selectedIndices.has(index) || selected === index;
               return (
                 <button
                   type="button"
                   key={`${index}:${tag}`}
                   ref={(element) => { chipRefs.current[index] = element; }}
-                  className={`tag-chip ${selected === index ? "selected" : ""} ${isDragged ? "is-dragging" : ""} ${isDropTarget ? "is-drop-target" : ""} ${weighted ? (tagWeightValue >= 1 ? "weight-up" : "weight-down") : ""}`}
-                  aria-pressed={selected === index}
+                  className={`tag-chip ${isSelected ? "selected" : ""} ${multiSelected && isSelected ? "multi-selected" : ""} ${isDragged ? "is-dragging" : ""} ${isDropTarget ? "is-drop-target" : ""} ${weighted ? (tagWeightValue >= 1 ? "weight-up" : "weight-down") : ""}`}
+                  aria-pressed={isSelected}
                   onContextMenu={(event) => event.preventDefault()}
                   onPointerDown={(event) => {
                     clearHold();
@@ -840,8 +937,8 @@ export function TagBoard({
                       suppressClickRef.current = false;
                       return;
                     }
-                    if (selected === index) setSelected(null);
-                    else setSelected(index);
+                    if (!multiSelected && selected === index) clearSelection();
+                    else selectSingle(index);
                   }}
                 >
                   {weighted && <small className="tag-chip-weight">{tagWeightValue.toFixed(1)}×</small>}
@@ -1008,14 +1105,25 @@ export function TagBoard({
                 ["--arrow" as string]: `${bubble?.arrow ?? 0}px`,
               }}
             >
-              <button type="button" onClick={() => bubbleAction("down")} aria-label="가중치 −0.1">−0.1</button>
-              <button type="button" onClick={() => bubbleAction("up")} aria-label="가중치 +0.1">+0.1</button>
-              <span className="tag-bubble-divider" />
-              <button type="button" disabled={selected === 0} onClick={() => bubbleAction("left")} aria-label="왼쪽으로 이동"><Icon name="left" /></button>
-              <button type="button" disabled={selected >= tags.length - 1} onClick={() => bubbleAction("right")} aria-label="오른쪽으로 이동"><Icon name="right" /></button>
-              <span className="tag-bubble-divider" />
-              <button type="button" onClick={() => bubbleAction("edit")}>수정</button>
-              <button type="button" className="danger" onClick={() => bubbleAction("delete")} aria-label="삭제"><Icon name="trash" /></button>
+              {multiSelected ? (
+                <>
+                  <span className="tag-bubble-count">{selectionCount}개 선택</span>
+                  <span className="tag-bubble-divider" />
+                  <button type="button" onClick={clearSelection}>취소</button>
+                  <button type="button" className="danger" onClick={() => bubbleAction("delete")} aria-label={`${selectionCount}개 삭제`}><Icon name="trash" /></button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => bubbleAction("down")} aria-label="가중치 −0.1">−0.1</button>
+                  <button type="button" onClick={() => bubbleAction("up")} aria-label="가중치 +0.1">+0.1</button>
+                  <span className="tag-bubble-divider" />
+                  <button type="button" disabled={selected === 0} onClick={() => bubbleAction("left")} aria-label="왼쪽으로 이동"><Icon name="left" /></button>
+                  <button type="button" disabled={selected >= tags.length - 1} onClick={() => bubbleAction("right")} aria-label="오른쪽으로 이동"><Icon name="right" /></button>
+                  <span className="tag-bubble-divider" />
+                  <button type="button" onClick={() => bubbleAction("edit")}>수정</button>
+                  <button type="button" className="danger" onClick={() => bubbleAction("delete")} aria-label="삭제"><Icon name="trash" /></button>
+                </>
+              )}
             </div>
           )}
 

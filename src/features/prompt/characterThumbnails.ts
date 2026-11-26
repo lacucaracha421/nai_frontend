@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isWebServerRuntime } from "../../adapters/webApi";
 export type Thumbnail = { status: "loading" | "ready" | "missing" | "failed"; src?: string };
 const images = new Map<string, Thumbnail>();
 const listeners = new Set<() => void>();
@@ -8,11 +9,21 @@ let active = 0;
 let version = 0;
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 function notify() { version++; for (const listener of listeners) listener(); }
+async function fetchThumbnailSrc(raw: string): Promise<string | null> {
+  if (isWebServerRuntime()) {
+    const url = `/api/character-thumbnail?raw=${encodeURIComponent(raw)}`;
+    const response = await fetch(url);
+    if (response.status === 204) return null;
+    if (!response.ok) throw new Error(`Thumbnail fetch failed (${response.status})`);
+    return url;
+  }
+  return invoke<string | null>("character_thumbnail", { raw });
+}
 function pump() {
   while (active < 2 && queue.length) {
     const raw = queue.shift()!;
     active++;
-    void invoke<string | null>("character_thumbnail", { raw }).then(src => {
+    void fetchThumbnailSrc(raw).then(src => {
       images.set(raw, src ? { status: "ready", src } : { status: "missing" });
     }).catch(() => { images.set(raw, { status: "failed" }); }).finally(() => {
       active--; notify(); pump();

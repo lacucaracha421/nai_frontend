@@ -22,6 +22,9 @@ public/data/danbooru/
 # Uncompressed working DB only
 src-tauri/resources/danbooru.sqlite
 
+# Self-hosted web server persistent data (tokens, synced state, caches)
+nai-web-data/
+
 # Old patch-delivery leftovers
 PATCH_NOTES*.txt
 APPLY_README.txt

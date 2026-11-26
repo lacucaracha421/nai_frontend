@@ -514,6 +514,11 @@
   padding: 0 14px;
 }
 
+.s11-rating-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 /* Inline character/fixed controls inside s11-chip-bar-left */
 .s11-char-pill,
 .s11-fixed-btn {
@@ -607,7 +612,12 @@
   font-size: 16px;
   font-weight: 700;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
 }
+.s11-dock-generate strong { font-size: 16px; font-weight: 700; line-height: 1.15; }
+.s11-dock-generate.has-cost strong { font-size: 13.5px; }
+.s11-dock-generate small { font-size: 11px; font-weight: 600; opacity: 0.9; line-height: 1.1; }
 .s11-dock-generate:disabled { opacity: 0.5; }
