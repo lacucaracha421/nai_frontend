@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { PromptSectionKey } from "../../types/generation";
 import { Icon } from "../../components/Icon";
 import { splitTags } from "../prompt/tagChips";
+import { compositionGlyph } from "./compositionGlyphs";
 import {
   QUICKCOPY_UPDATED_EVENT,
   fetchDefaultDictionaryTags,
@@ -11,32 +12,35 @@ import {
   type StoredQuickCopy,
   type StoredTag,
 } from "./quickCopyStorage";
+import { classifySexTag, SEX_CATEGORY_ORDER, type RawSexTag } from "./sexTagMetadata";
 import type { ManageableDictTab } from "./TagDictionaryManagerSheet";
 import "./inlineDictionary.css";
 
 export type InlineDictCategory = "artists" | "tags" | "actions" | "sex";
 
-type SexualTag = {
-  raw: string;
-  display: string;
-  count: number;
-  groups?: Array<"core" | "acts" | "positions">;
-};
-
 type DictItem = {
   key: string;
   title: string;
   prompt: string;
+  tooltip: string;
   sub: string;
   search: string;
   pinned: boolean;
+  glyph?: ReactNode;
+  noise?: boolean;
 };
 
-const SEX_SUB_LABELS: Record<string, string> = {
-  core: "기본",
-  acts: "행위",
-  positions: "체위",
-};
+const TAG_SECTION_ORDER = [
+  "품질",
+  "제외",
+  "시점",
+  "프레이밍",
+  "렌즈·원근",
+  "구도",
+  "초점",
+  "화면 효과",
+  "V5",
+];
 
 function normTag(value: string) {
   return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
@@ -46,6 +50,24 @@ export function defaultDictCategory(destination: PromptSectionKey): InlineDictCa
   if (destination === "artist") return "artists";
   if (destination === "other") return "actions";
   return "tags";
+}
+
+function orderSubCategories(present: string[], preferred: string[]) {
+  const seen = new Set(present);
+  const ordered: string[] = [];
+  for (const name of preferred) {
+    if (seen.has(name)) {
+      ordered.push(name);
+      seen.delete(name);
+    }
+  }
+  for (const name of present) {
+    if (seen.has(name)) {
+      ordered.push(name);
+      seen.delete(name);
+    }
+  }
+  return ordered;
 }
 
 type Props = {
@@ -63,7 +85,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
   const [favOnly, setFavOnly] = useState(false);
   const [defaultTags, setDefaultTags] = useState<StoredTag[]>([]);
   const [stored, setStored] = useState<StoredQuickCopy>(() => readQuickCopyData());
-  const [sexTags, setSexTags] = useState<SexualTag[]>([]);
+  const [sexTags, setSexTags] = useState<RawSexTag[]>([]);
   const [sexFavs, setSexFavs] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem("nai-v5-sex-dict-favs");
@@ -89,7 +111,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
       .then((res) => (res.ok ? res.json() : null))
       .then((payload) => {
         if (!cancelled && payload && Array.isArray(payload.tags)) {
-          setSexTags(payload.tags as SexualTag[]);
+          setSexTags(payload.tags as RawSexTag[]);
         }
       })
       .catch(() => {});
@@ -122,6 +144,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
             key: `artist:${a.name}`,
             title: displayTitle,
             prompt,
+            tooltip: prompt,
             sub: "작가",
             search: `${a.title ?? ""} ${a.name} ${a.note ?? ""}`.toLowerCase(),
             pinned: !!a.pinned,
@@ -137,6 +160,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
             key: `action:${prompt}`,
             title,
             prompt,
+            tooltip: prompt,
             sub: (a.category ?? "행동").trim() || "행동",
             search: `${title} ${prompt} ${a.aliases ?? ""} ${a.note ?? ""}`.toLowerCase(),
             pinned: !!a.pinned,
@@ -147,24 +171,33 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
     if (cat === "tags") {
       return stored.tags
         .filter((t) => t && t.prompt)
-        .map((t) => ({
-          key: `tag:${t.prompt}`,
-          title: (t.title || t.prompt).trim(),
-          prompt: t.prompt.trim(),
-          sub: (t.category || "기타").trim(),
-          search: `${t.title} ${t.prompt} ${t.aliases ?? ""} ${t.description ?? ""}`.toLowerCase(),
-          pinned: !!t.pinned,
-        }));
+        .map((t) => {
+          const prompt = t.prompt.trim();
+          const title = (t.title || prompt).trim();
+          const description = (t.description ?? "").trim();
+          return {
+            key: `tag:${prompt}`,
+            title,
+            prompt,
+            tooltip: description ? `${prompt} — ${description}` : prompt,
+            sub: (t.category || "기타").trim(),
+            search: `${title} ${prompt} ${t.category ?? ""} ${t.aliases ?? ""} ${description} ${t.note ?? ""}`.toLowerCase(),
+            pinned: !!t.pinned,
+            glyph: compositionGlyph(prompt),
+          };
+        });
     }
     return sexTags.map((t) => {
-      const firstGroup = t.groups?.[0] ?? "core";
+      const { title, category, isNoise } = classifySexTag(t);
       return {
         key: `sex:${t.display}`,
-        title: t.display,
+        title,
         prompt: t.display,
-        sub: SEX_SUB_LABELS[firstGroup] ?? "기타",
-        search: `${t.display} ${t.raw}`.toLowerCase(),
+        tooltip: title !== t.display ? `${t.display} (${category})` : t.display,
+        sub: category,
+        search: `${title} ${t.display} ${t.raw} ${category}`.toLowerCase(),
         pinned: sexFavs.has(t.display),
+        noise: isNoise,
       };
     });
   }, [cat, stored, sexTags, sexFavs]);
@@ -192,9 +225,15 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
   }, [items, currentCounts]);
 
   const subs = useMemo(() => {
-    const unique = Array.from(new Set(items.map((i) => i.sub))).filter(Boolean);
-    return unique.length > 1 ? ["전체", ...unique] : [];
-  }, [items]);
+    const present = Array.from(new Set(items.map((i) => i.sub))).filter(Boolean);
+    if (present.length <= 1) return [];
+    const ordered = cat === "sex"
+      ? orderSubCategories(present, SEX_CATEGORY_ORDER)
+      : cat === "tags"
+        ? orderSubCategories(present, TAG_SECTION_ORDER)
+        : present;
+    return ["전체", ...ordered];
+  }, [cat, items]);
 
   const activeSub = subs.includes(sub) ? sub : "전체";
 
@@ -206,8 +245,39 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
       if (q && !item.search.includes(q)) return false;
       return true;
     });
-    return list.sort((a, b) => Number(b.pinned) - Number(a.pinned)).slice(0, 120);
+    return list.sort((a, b) => {
+      const pinDiff = Number(b.pinned) - Number(a.pinned);
+      if (pinDiff !== 0) return pinDiff;
+      return Number(!!a.noise) - Number(!!b.noise);
+    });
   }, [items, favOnly, activeSub, query]);
+
+  const groupedSections = useMemo(() => {
+    const shouldGroup = activeSub === "전체" && !query.trim() && !favOnly && subs.length > 1;
+    if (!shouldGroup) return null;
+
+    const pinnedItems = filtered.filter((item) => item.pinned);
+    const rest = filtered.filter((item) => !item.pinned);
+    const bySub = new Map<string, DictItem[]>();
+    for (const item of rest) {
+      const bucket = bySub.get(item.sub);
+      if (bucket) bucket.push(item);
+      else bySub.set(item.sub, [item]);
+    }
+
+    const sections: Array<{ label: string; items: DictItem[] }> = [];
+    if (pinnedItems.length > 0) {
+      sections.push({ label: "★ 즐겨찾기", items: pinnedItems });
+    }
+    for (const name of subs) {
+      if (name === "전체") continue;
+      const bucket = bySub.get(name);
+      if (bucket && bucket.length > 0) {
+        sections.push({ label: name, items: bucket });
+      }
+    }
+    return sections;
+  }, [activeSub, query, favOnly, subs, filtered]);
 
   const togglePin = (item: DictItem) => {
     if (cat === "sex") {
@@ -232,6 +302,40 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
     }
     setStored(next);
     writeQuickCopyData(next);
+  };
+
+  const renderCard = (item: DictItem) => {
+    const added = activeKeys.has(item.key);
+    return (
+      <div
+        key={item.key}
+        role="button"
+        tabIndex={0}
+        className={`inline-dict-card ${added ? "added" : ""} ${item.glyph ? "has-glyph" : ""}`}
+        title={item.tooltip}
+        onClick={() => onToggleTag(item.prompt)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggleTag(item.prompt);
+          }
+        }}
+      >
+        {item.glyph}
+        <strong>{item.title}</strong>
+        <button
+          type="button"
+          className={`inline-dict-star ${item.pinned ? "fav" : ""}`}
+          aria-label="즐겨찾기"
+          onClick={(event) => {
+            event.stopPropagation();
+            togglePin(item);
+          }}
+        >
+          {item.pinned ? "★" : "☆"}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -310,38 +414,19 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
         </div>
       ) : (
         <div className="inline-dict-grid">
-          {filtered.map((item) => {
-            const added = activeKeys.has(item.key);
-            return (
-              <div
-                key={item.key}
-                role="button"
-                tabIndex={0}
-                className={`inline-dict-card ${added ? "added" : ""}`}
-                title={item.prompt}
-                onClick={() => onToggleTag(item.prompt)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onToggleTag(item.prompt);
-                  }
-                }}
-              >
-                <strong>{item.title}</strong>
-                <button
-                  type="button"
-                  className={`inline-dict-star ${item.pinned ? "fav" : ""}`}
-                  aria-label="즐겨찾기"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    togglePin(item);
-                  }}
-                >
-                  {item.pinned ? "★" : "☆"}
-                </button>
-              </div>
-            );
-          })}
+          {groupedSections ? (
+            groupedSections.map((section, idx) => (
+              <Fragment key={section.label}>
+                <div className={`inline-dict-section-head ${idx === 0 ? "first" : ""}`}>
+                  <span>{section.label}</span>
+                  <small>{section.items.length}</small>
+                </div>
+                {section.items.map(renderCard)}
+              </Fragment>
+            ))
+          ) : (
+            filtered.slice(0, 300).map(renderCard)
+          )}
         </div>
       )}
     </div>
