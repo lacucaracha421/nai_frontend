@@ -22,6 +22,7 @@ import { randomCharacterPool, randomPickLabel, type RandomCharacterPick } from "
 import { QuickCopySheet } from "../tags/QuickCopySheet";
 import { InlineTagDictionary } from "../tags/InlineTagDictionary";
 import { TagDictionaryManagerSheet, type ManageableDictTab } from "../tags/TagDictionaryManagerSheet";
+import { saveSectionPresetWithDefaults } from "../tags/quickCopyStorage";
 import type { TagCategory } from "../tags/localTagIndex";
 import { SettingsSheet, type SettingsScope } from "../options/SettingsSheet";
 import { ImageViewer } from "../../components/ImageViewer";
@@ -325,6 +326,9 @@ export function V5Studio() {
   const [referenceOpen, setReferenceOpen] = useState(false);
   const [inlineDictOpen, setInlineDictOpen] = useState(false);
   const [dictManagerTab, setDictManagerTab] = useState<ManageableDictTab | null>(null);
+  const [presetSaveOpen, setPresetSaveOpen] = useState(false);
+  const [presetSaveName, setPresetSaveName] = useState("");
+  const [presetSaveTarget, setPresetSaveTarget] = useState<string | null>(null);
   const [stageRatioIndex, setStageRatioIndex] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
@@ -602,6 +606,61 @@ export function V5Studio() {
       setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true);
     } else {
       setInlineDictOpen((open) => !open);
+    }
+  };
+
+  useEffect(() => {
+    if (presetSaveOpen) {
+      setPresetSaveOpen(false);
+      setPresetSaveName("");
+      setPresetSaveTarget(null);
+    }
+  }, [tab, fixedPart]);
+
+  const closePresetSave = () => {
+    setPresetSaveOpen(false);
+    setPresetSaveName("");
+    setPresetSaveTarget(null);
+  };
+
+  const latestPromptForSection = (sec: PromptSectionKey) => {
+    const state = useGenerationStore.getState();
+    if (sec === "artist") return state.artistPrompt;
+    if (sec === "other") return state.otherPrompt;
+    if (sec === "quality") return state.qualityPrompt;
+    return state.negativePrompt;
+  };
+
+  const openPresetSave = (overrideTarget?: string) => {
+    if (!section) return;
+    boardTools.current?.flush();
+    const raw = overrideTarget ?? latestPromptForSection(section);
+    if (!raw.trim()) {
+      showNotice(`저장할 ${sectionTitle} 태그가 없습니다`);
+      return;
+    }
+    setPresetSaveTarget(overrideTarget ?? null);
+    setPresetSaveName("");
+    setPresetSaveOpen(true);
+  };
+
+  const submitSectionPreset = async () => {
+    if (!section) return;
+    boardTools.current?.flush();
+    const targetSection = section;
+    const raw = presetSaveTarget ?? latestPromptForSection(targetSection);
+    const titleInput = presetSaveName;
+    closePresetSave();
+    const result = await saveSectionPresetWithDefaults(targetSection, raw, titleInput);
+    if (result.status === "empty") {
+      showNotice(`저장할 ${SECTION_CONFIG[targetSection].title} 태그가 없습니다`);
+    } else if (result.status === "duplicate") {
+      showNotice(`이미 태그사전 '${result.targetLabel}'에 있는 조합입니다`);
+    } else if (result.status === "updated") {
+      showNotice(`프리셋 이름 변경 · ${result.title ?? ""}`);
+    } else {
+      const label = result.title || `${SECTION_CONFIG[targetSection].title} 조합`;
+      showNotice(`태그사전 '${result.targetLabel}'에 저장됨 · ${label}`);
     }
   };
 
@@ -949,6 +1008,7 @@ export function V5Studio() {
   useBackLayer(finishOpen, () => setFinishOpen(false));
   useBackLayer(referenceOpen, () => setReferenceOpen(false));
   useBackLayer(dictManagerTab !== null, () => setDictManagerTab(null));
+  useBackLayer(presetSaveOpen, closePresetSave);
   useBackLayer(inlineDictOpen, () => setInlineDictOpen(false));
   useBackLayer(diffOpen, () => setDiffOpen(false));
   useBackLayer(viewer && !imagesHidden, () => setViewer(false));
@@ -1084,7 +1144,59 @@ export function V5Studio() {
     ? SECTION_CONFIG[section]
     : { categories: CHARACTER_CATEGORIES, placeholder: "캐릭터 외형과 의상 태그", tagPrefix: undefined };
 
-  const s11BoardHeader = tab === "character" ? (
+  const presetSaveForm = section ? (
+    <form
+      className="s11-artist-save-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitSectionPreset();
+      }}
+    >
+      <input
+        className="s11-artist-save-input"
+        type="text"
+        value={presetSaveName}
+        onChange={(event) => setPresetSaveName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.nativeEvent.isComposing) {
+            event.preventDefault();
+            return;
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closePresetSave();
+          }
+        }}
+        placeholder={
+          presetSaveTarget
+            ? `선택 ${splitTags(presetSaveTarget).length}개 별명 (비우면 자동 이름)`
+            : `${sectionTitle} 별명 입력 (비우면 자동 이름)`
+        }
+        aria-label={`${sectionTitle} 프리셋 별명`}
+        autoFocus
+      />
+      <button type="submit" className="s11-fixed-btn active">저장</button>
+      <button type="button" className="s11-fixed-btn" onClick={closePresetSave}>취소</button>
+    </form>
+  ) : null;
+
+  const presetSaveButton = section ? (
+    <button
+      type="button"
+      className="s11-fixed-btn"
+      disabled={!sectionValue.trim()}
+      onClick={() => openPresetSave()}
+    >
+      <Icon name="save" />프리셋 저장
+    </button>
+  ) : null;
+
+  const s11BoardHeader = presetSaveOpen && presetSaveForm ? (
+    presetSaveForm
+  ) : tab === "artist" ? (
+    presetSaveButton
+  ) : tab === "character" ? (
     <>
       {chars.map((character, index) => (
         <button
@@ -1117,27 +1229,33 @@ export function V5Studio() {
       </button>
     </>
   ) : tab === "other" ? (
-    <div className="s11-rating-bar" role="group" aria-label="수위 태그">
-      {RATING_OPTIONS.map((item) => {
-        const active = activeRating === item.tag;
-        return (
-          <button
-            key={item.tag}
-            type="button"
-            className={`s11-fixed-btn ${active ? "active" : ""}`}
-            aria-pressed={active}
-            title={item.tag}
-            onClick={() => toggleRating(item.tag)}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="s11-rating-bar" role="group" aria-label="수위 태그">
+        {RATING_OPTIONS.map((item) => {
+          const active = activeRating === item.tag;
+          return (
+            <button
+              key={item.tag}
+              type="button"
+              className={`s11-fixed-btn ${active ? "active" : ""}`}
+              aria-pressed={active}
+              title={item.tag}
+              onClick={() => toggleRating(item.tag)}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+      <span className="s11-header-sep" aria-hidden="true" />
+      {presetSaveButton}
+    </>
   ) : tab === "fixed" ? (
     <>
       <button type="button" className={`s11-fixed-btn ${fixedPart === "quality" ? "active" : ""}`} onClick={() => setFixedPart("quality")}>품질</button>
       <button type="button" className={`s11-fixed-btn ${fixedPart === "negative" ? "active" : ""}`} onClick={() => setFixedPart("negative")}>제외</button>
+      <span className="s11-header-sep" aria-hidden="true" />
+      {presetSaveButton}
     </>
   ) : null;
 
@@ -1453,6 +1571,7 @@ export function V5Studio() {
                   keyboardOpen={viewport.keyboard}
                   onQuickGenerate={() => generateNow(boardTools.current ?? undefined)}
                   generateDisabled={busy}
+                  onSaveSelection={section ? (picked) => openPresetSave(picked) : undefined}
                   renderTools={(tools) => {
                     boardTools.current = tools;
                     return s11BottomDock(tools);

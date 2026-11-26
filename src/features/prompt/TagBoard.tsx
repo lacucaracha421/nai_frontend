@@ -70,6 +70,8 @@ type Props = {
   keyboardOpen?: boolean;
   onQuickGenerate?: () => void;
   generateDisabled?: boolean;
+  /** Optional action when multiple chips are selected (e.g. save selected artist combo as preset). */
+  onSaveSelection?: (selectedText: string) => void;
 };
 
 type Anchor = { top: number; left: number; arrow: number };
@@ -163,6 +165,7 @@ export function TagBoard({
   keyboardOpen = false,
   onQuickGenerate,
   generateDisabled = false,
+  onSaveSelection,
 }: Props) {
   const desktop = useDesktopLayout();
   const tags = useMemo(() => splitTags(value), [value]);
@@ -869,6 +872,24 @@ export function TagBoard({
           <div className="s11-chip-bar-actions">
             {multiSelected ? (
               <>
+                {onSaveSelection && (
+                  <button
+                    type="button"
+                    data-keeps-selection
+                    onPointerDown={keepFocus}
+                    onClick={() => {
+                      const picked = Array.from(selectedIndices)
+                        .sort((a, b) => a - b)
+                        .map((idx) => tags[idx])
+                        .filter((tag): tag is string => Boolean(tag))
+                        .join(", ");
+                      clearSelection();
+                      if (picked) onSaveSelection(picked);
+                    }}
+                  >
+                    프리셋 저장
+                  </button>
+                )}
                 <button type="button" data-keeps-selection onPointerDown={keepFocus} onClick={clearSelection}>취소</button>
                 <button type="button" className="danger" data-keeps-selection onPointerDown={keepFocus} onClick={() => bubbleAction("delete")} aria-label={`${selectionCount}개 삭제`}><Icon name="trash" /> {selectionCount}개 삭제</button>
               </>

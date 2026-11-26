@@ -153,6 +153,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
+  min-height: 38px;
   gap: 3px;
   padding: 9px 28px 9px 11px;
   border-radius: 10px;

@@ -8,8 +8,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 16px 20px;
+  gap: 8px;
+  padding: 0 14px 14px;
   overflow: hidden;
 }
 
@@ -18,28 +18,30 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dict-mgr-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  gap: 3px;
   padding: 3px;
-  min-width: 240px;
+  min-width: 230px;
   border-radius: 10px;
   background: var(--md-sys-color-surface-container-lowest);
   border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .dict-mgr-tabs button {
-  height: 38px;
+  height: 34px;
+  padding: 0 8px;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--md-sys-color-on-surface-variant);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .dict-mgr-tabs button.active {
@@ -48,14 +50,15 @@
 }
 
 .dict-mgr-search {
-  flex: 1 1 180px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
+  flex: 1 1 160px;
+  min-width: 140px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 9px;
   border: 1px solid var(--md-sys-color-outline-variant);
   background: var(--md-sys-color-surface-container-lowest);
   color: var(--md-sys-color-on-surface);
-  font-size: 14px;
+  font-size: 13.5px;
   outline: none;
 }
 
@@ -63,17 +66,68 @@
   border-color: var(--md-sys-color-primary);
 }
 
+.dict-mgr-fav-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 15px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.dict-mgr-fav-btn.active {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+  color: #e6be7a;
+}
+
 .dict-mgr-add-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 14px;
+  gap: 5px;
+  height: 36px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-on-primary-container);
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dict-mgr-subs {
+  flex: none;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dict-mgr-subs::-webkit-scrollbar {
+  display: none;
+}
+
+.dict-mgr-subs button {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dict-mgr-subs button.active {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary-container);
   font-weight: 600;
 }
 
@@ -81,21 +135,33 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 11px;
   background: var(--md-sys-color-surface-container);
   border: 1px solid var(--md-sys-color-primary);
 }
 
 .dict-mgr-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(140px, 1fr) minmax(200px, 1.7fr) minmax(110px, 0.8fr) minmax(120px, 1fr);
+  gap: 8px;
 }
 
-@media (max-width: 560px) {
-  .dict-mgr-form-grid {
+.dict-mgr-form-grid.is-artist {
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.9fr) minmax(120px, 1fr);
+}
+
+@media (max-width: 720px) {
+  .dict-mgr-form-grid,
+  .dict-mgr-form-grid.is-artist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .dict-mgr-form-grid,
+  .dict-mgr-form-grid.is-artist {
     grid-template-columns: 1fr;
   }
 }
@@ -103,36 +169,46 @@
 .dict-mgr-form label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 11.5px;
   color: var(--md-sys-color-on-surface-variant);
 }
 
 .dict-mgr-form input,
 .dict-mgr-form select {
-  height: 38px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 9px;
   border-radius: 8px;
   border: 1px solid var(--md-sys-color-outline-variant);
   background: var(--md-sys-color-surface-container-lowest);
   color: var(--md-sys-color-on-surface);
-  font-size: 14px;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.dict-mgr-form input:focus,
+.dict-mgr-form select:focus {
+  border-color: var(--md-sys-color-primary);
 }
 
 .dict-mgr-form-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+}
+
+.dict-mgr-form-spacer {
+  flex: 1;
 }
 
 .dict-mgr-form-actions button {
-  height: 36px;
-  padding: 0 14px;
+  height: 32px;
+  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--md-sys-color-outline-variant);
   background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -142,24 +218,55 @@
   color: var(--md-sys-color-on-primary);
 }
 
+.dict-mgr-form-actions button.danger {
+  color: var(--md-sys-color-error);
+}
+
 .dict-mgr-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding-right: 2px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+  align-content: start;
+  gap: 6px;
+  padding: 2px 2px 4px;
+}
+
+@media (max-width: 520px) {
+  .dict-mgr-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dict-mgr-empty {
+  grid-column: 1 / -1;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .dict-mgr-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 9px;
   border: 1px solid var(--md-sys-color-outline-variant);
   background: var(--md-sys-color-surface-container-low);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.dict-mgr-row:hover {
+  background: var(--md-sys-color-surface-container);
+}
+
+.dict-mgr-row.editing {
+  background: var(--md-sys-color-primary-container);
+  border-color: var(--md-sys-color-primary);
 }
 
 .dict-mgr-row-info {
@@ -167,36 +274,52 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .dict-mgr-row-info strong {
-  font-size: 14.5px;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--md-sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dict-mgr-row.editing .dict-mgr-row-info strong {
+  color: var(--md-sys-color-on-primary-container);
 }
 
 .dict-mgr-row-info small {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--md-sys-color-on-surface-variant);
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dict-mgr-row-actions {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
 }
 
 .dict-mgr-row-actions button {
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--md-sys-color-outline-variant);
-  background: var(--md-sys-color-surface-container);
-  color: var(--md-sys-color-on-surface);
-  font-size: 12.5px;
-  font-weight: 600;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.dict-mgr-row-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .dict-mgr-row-actions button.fav {
@@ -204,5 +327,9 @@
 }
 
 .dict-mgr-row-actions button.danger {
+  font-size: 16px;
+}
+
+.dict-mgr-row-actions button.danger:hover {
   color: var(--md-sys-color-error);
 }

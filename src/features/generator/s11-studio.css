@@ -536,12 +536,45 @@
   gap: 5px;
   white-space: nowrap;
 }
-.s11-char-pill .ui-icon { width: 14px; height: 14px; }
+.s11-char-pill .ui-icon,
+.s11-fixed-btn .ui-icon { width: 14px; height: 14px; }
+.s11-fixed-btn:disabled { opacity: 0.35; }
 .s11-char-pill.active,
 .s11-fixed-btn.active {
   background: var(--md-sys-color-primary-container);
   border-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary-container);
+}
+.s11-artist-save-form {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.s11-artist-save-input {
+  flex: 1;
+  min-width: 120px;
+  max-width: 240px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  font-size: 12.5px;
+  outline: none;
+}
+.s11-artist-save-input::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.75;
+}
+.s11-header-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--md-sys-color-outline-variant);
 }
 
 /* 4. Bottom Thumb Dock */
@@ -705,6 +738,10 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
 }
 .s11-shell.s11-wide .b2-panels > .character-finder-sheet {
+  height: min(84vh, 800px);
+}
+.s11-shell.s11-wide .b2-panels > .dict-mgr-sheet {
+  width: min(940px, calc(100vw - 48px));
   height: min(84vh, 800px);
 }
 .s11-shell.s11-wide .b2-menu-scrim {

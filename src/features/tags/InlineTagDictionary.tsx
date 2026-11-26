@@ -5,6 +5,7 @@ import { splitTags } from "../prompt/tagChips";
 import {
   QUICKCOPY_UPDATED_EVENT,
   fetchDefaultDictionaryTags,
+  formatArtistPrompt,
   readQuickCopyData,
   writeQuickCopyData,
   type StoredQuickCopy,
@@ -39,13 +40,6 @@ const SEX_SUB_LABELS: Record<string, string> = {
 
 function normTag(value: string) {
   return value.replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function formatArtistPrompt(name: string) {
-  const clean = name.trim();
-  if (!clean) return "";
-  if (/^artist:/i.test(clean) || clean.includes(",")) return clean;
-  return `artist:${clean}`;
 }
 
 export function defaultDictCategory(destination: PromptSectionKey): InlineDictCategory {
@@ -123,12 +117,13 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
         .filter((a) => a && typeof a.name === "string" && a.name.trim())
         .map((a) => {
           const prompt = formatArtistPrompt(a.name);
+          const displayTitle = (a.title ?? "").trim() || a.name.trim();
           return {
             key: `artist:${a.name}`,
-            title: a.name.trim(),
+            title: displayTitle,
             prompt,
             sub: "작가",
-            search: `${a.name} ${a.note ?? ""}`.toLowerCase(),
+            search: `${a.title ?? ""} ${a.name} ${a.note ?? ""}`.toLowerCase(),
             pinned: !!a.pinned,
           };
         });
@@ -229,7 +224,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
       tags: [...stored.tags],
     };
     if (cat === "artists") {
-      next.artists = next.artists.map((a) => (a.name.trim() === item.title ? { ...a, pinned: !a.pinned } : a));
+      next.artists = next.artists.map((a) => (`artist:${a.name}` === item.key ? { ...a, pinned: !a.pinned } : a));
     } else if (cat === "actions") {
       next.actions = next.actions.map((a) => ((a.prompt ?? a.name ?? "").trim() === item.prompt ? { ...a, pinned: !a.pinned } : a));
     } else if (cat === "tags") {
@@ -323,6 +318,7 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
                 role="button"
                 tabIndex={0}
                 className={`inline-dict-card ${added ? "added" : ""}`}
+                title={item.prompt}
                 onClick={() => onToggleTag(item.prompt)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -332,7 +328,6 @@ export function InlineTagDictionary({ destination, currentValue, onToggleTag, on
                 }}
               >
                 <strong>{item.title}</strong>
-                {item.prompt !== item.title && <small>{item.prompt}</small>}
                 <button
                   type="button"
                   className={`inline-dict-star ${item.pinned ? "fav" : ""}`}
