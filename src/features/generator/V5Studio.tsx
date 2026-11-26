@@ -728,12 +728,7 @@ export function V5Studio() {
 
   const generateNow = (tools?: TagBoardTools) => {
     tools?.flush();
-    void generate().then(() => {
-      // The 🎲 pick only exists in the request, so name it wherever the user is.
-      const state = useGenerationStore.getState();
-      const pick = state.status === "success" ? state.images[state.activeImage]?.randomCharacter : undefined;
-      if (pick) showNotice(`🎲 ${randomPickLabel(pick).name}`, 2400);
-    });
+    void generate();
   };
 
   const upscaleImage = async (index: number, openViewer: boolean) => {
