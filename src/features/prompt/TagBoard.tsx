@@ -836,7 +836,8 @@ export function TagBoard({
     };
   }, [drag !== null]);
 
-  if (!desktop) {
+  const useUnifiedBoard = true;
+  if (useUnifiedBoard) {
     const hasSel = (selected !== null && tags[selected] !== undefined) || selectionCount > 0;
     const hasSingleSel = !multiSelected && selected !== null && tags[selected] !== undefined;
     const selectedTag = hasSingleSel ? tagWeight(tags[selected]) : null;
@@ -932,14 +933,28 @@ export function TagBoard({
                     }, 220);
                     holdRef.current = { timer, pointerId, startX, startY, index };
                   }}
-                  onClick={() => {
+                  onClick={(event) => {
                     if (suppressClickRef.current) {
                       suppressClickRef.current = false;
+                      return;
+                    }
+                    if (desktop && event.shiftKey && selected !== null) {
+                      selectRange(selectionAnchorRef.current ?? selected, index);
+                      return;
+                    }
+                    if (desktop && (event.ctrlKey || event.metaKey)) {
+                      toggleSelect(index);
                       return;
                     }
                     if (!multiSelected && selected === index) clearSelection();
                     else selectSingle(index);
                   }}
+                  onDoubleClick={desktop ? () => {
+                    const orig = tags[index];
+                    setDraft({ mode: "edit", index, text: orig, original: orig });
+                    clearSelection();
+                    requestAnimationFrame(() => dockInputRef.current?.focus({ preventScroll: true }));
+                  } : undefined}
                 >
                   {weighted && <small className="tag-chip-weight">{tagWeightValue.toFixed(1)}×</small>}
                   <span className="tag-chip-text">{content || tag}</span>

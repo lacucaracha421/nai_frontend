@@ -596,16 +596,11 @@ export function V5Studio() {
   };
 
   const openDictionary = () => {
-    if (!desktop) {
-      if (tab === "character") {
-        setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true);
-      } else {
-        setInlineDictOpen((open) => !open);
-      }
-      return;
+    if (tab === "character") {
+      setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true);
+    } else {
+      setInlineDictOpen((open) => !open);
     }
-    if (section) setQuickCopy(section);
-    else { setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true); }
   };
 
   const activeRating = useMemo(() => {
@@ -1191,7 +1186,7 @@ export function V5Studio() {
   const sharedOverlays = (
     <>
       {error && <div className="error-toast b2-toast"><span>{error}</span><button onClick={clearError} aria-label="닫기">×</button></div>}
-      {notice && !desktop && <div className="success-toast b2-toast"><span>{notice}</span></div>}
+      {notice && <div className="success-toast b2-toast"><span>{notice}</span></div>}
       {loader.element}
 
       <div className="b2-panels">
@@ -1264,12 +1259,12 @@ export function V5Studio() {
     </>
   );
 
-  if (!desktop) {
+  {
     const seedFixed = seedFixedFor(selected);
     const upscaleBlocked = upscaleBlockedFor(selected);
     return (
       <main
-        className={`s11-shell ${viewport.keyboard ? "s11-kb-open" : ""}`}
+        className={`s11-shell ${desktop ? "s11-wide" : ""} ${viewport.keyboard ? "s11-kb-open" : ""}`}
         style={{
           ...(viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } : {}),
           "--s11-stage-ratio": S11_STAGE_RATIOS[stageRatioIndex],

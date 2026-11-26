@@ -621,3 +621,51 @@
 .s11-dock-generate.has-cost strong { font-size: 13.5px; }
 .s11-dock-generate small { font-size: 11px; font-weight: 600; opacity: 0.9; line-height: 1.1; }
 .s11-dock-generate:disabled { opacity: 0.5; }
+
+/* Unified Wide PC Split Studio (left canvas + right workbench, same controls as S11) */
+.s11-shell.s11-wide {
+  width: 100%;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  grid-template-columns: minmax(420px, 48%) minmax(0, 1fr);
+  grid-template-areas:
+    "top top"
+    "canvas workbench";
+}
+.s11-shell.s11-wide .s11-top-bar {
+  grid-area: top;
+}
+.s11-shell.s11-wide .s11-canvas-zone {
+  grid-area: canvas;
+  flex: none;
+  min-height: 0;
+  height: 100%;
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+}
+.s11-shell.s11-wide .s11-divider {
+  display: none;
+}
+.s11-shell.s11-wide .s11-workbench {
+  grid-area: workbench;
+  min-height: 0;
+  padding: 10px 14px 12px;
+}
+.s11-shell.s11-wide .s11-stage-main {
+  padding: 12px 10px 6px 14px;
+}
+.s11-shell.s11-wide .s11-stage-main.no-rail {
+  padding: 12px 14px 6px;
+}
+.s11-shell.s11-wide .s11-image-actions {
+  padding: 6px 14px 12px;
+}
+.s11-shell.s11-wide button:not(:disabled) {
+  cursor: pointer;
+}
+.s11-shell.s11-wide .sheet,
+.s11-shell.s11-wide .finish-sheet {
+  left: 50%;
+  right: auto;
+  width: min(760px, calc(100vw - 48px));
+  transform: translateX(-50%);
+}
