@@ -88,7 +88,16 @@ const TABS: { key: Tab; label: string; dot?: string }[] = [
   { key: "reference", label: "레퍼런스", dot: "ref" },
   { key: "fixed", label: "품질·제외" },
 ];
-const S11_STAGE_RATIOS = ["56%", "44%", "24%"] as const;
+const S11_STAGE_SNAPS = [56, 44, 24] as const;
+const S11_WIDE_SNAPS = [48, 38, 58] as const;
+
+function readSavedSplitPct(key: string, fallback: number, min: number, max: number) {
+  try {
+    const n = Number(localStorage.getItem(key));
+    if (Number.isFinite(n) && n >= min && n <= max) return n;
+  } catch {}
+  return fallback;
+}
 
 const SECTION_CONFIG: Record<PromptSectionKey, { title: string; categories: TagCategory[]; tagPrefix?: string; placeholder: string }> = {
   artist: { title: "작가", categories: ["artist", "general", "meta"], tagPrefix: "artist:", placeholder: "artist:toma 또는 toma로 검색 가능" },
@@ -329,7 +338,18 @@ export function V5Studio() {
   const [presetSaveOpen, setPresetSaveOpen] = useState(false);
   const [presetSaveName, setPresetSaveName] = useState("");
   const [presetSaveTarget, setPresetSaveTarget] = useState<string | null>(null);
-  const [stageRatioIndex, setStageRatioIndex] = useState(0);
+  const [stagePct, setStagePct] = useState<number>(() => readSavedSplitPct("nai-v5-split-stage-pct", 56, 16, 74));
+  const [wideCanvasPct, setWideCanvasPct] = useState<number>(() => readSavedSplitPct("nai-v5-split-wide-pct", 48, 28, 68));
+  const [resizingSplit, setResizingSplit] = useState(false);
+  const s11ShellRef = useRef<HTMLElement | null>(null);
+  const splitDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    horizontal: boolean;
+    lastPct: number;
+  } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const [imagesHidden, setImagesHidden] = useState(false);
@@ -1396,10 +1416,12 @@ export function V5Studio() {
     const upscaleBlocked = upscaleBlockedFor(selected);
     return (
       <main
-        className={`s11-shell ${desktop ? "s11-wide" : ""} ${viewport.keyboard ? "s11-kb-open" : ""}`}
+        ref={s11ShellRef}
+        className={`s11-shell ${desktop ? "s11-wide" : ""} ${viewport.keyboard ? "s11-kb-open" : ""} ${resizingSplit ? "s11-resizing" : ""}`}
         style={{
           ...(viewport.pinned ? { "--vv-height": `${viewport.height}px`, "--vv-top": `${viewport.top}px` } : {}),
-          "--s11-stage-ratio": S11_STAGE_RATIOS[stageRatioIndex],
+          "--s11-stage-ratio": `${stagePct.toFixed(2)}%`,
+          "--s11-wide-canvas": `${wideCanvasPct.toFixed(2)}%`,
         } as CSSProperties}
       >
         <header className="s11-top-bar">
@@ -1505,8 +1527,74 @@ export function V5Studio() {
         <button
           type="button"
           className="s11-divider"
-          aria-label="이미지 크기 전환"
-          onClick={() => setStageRatioIndex((i) => (i + 1) % S11_STAGE_RATIOS.length)}
+          aria-label="이미지 영역 크기 조절 (드래그 또는 클릭)"
+          onPointerDown={(event) => {
+            if (event.button !== 0 && event.pointerType === "mouse") return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            splitDragRef.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              moved: false,
+              horizontal: desktop,
+              lastPct: desktop ? wideCanvasPct : stagePct,
+            };
+            setResizingSplit(true);
+          }}
+          onPointerMove={(event) => {
+            const drag = splitDragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const shell = s11ShellRef.current;
+            if (!shell) return;
+            if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 4) {
+              drag.moved = true;
+            }
+            if (!drag.moved) return;
+            const rect = shell.getBoundingClientRect();
+            if (drag.horizontal) {
+              const raw = ((rect.right - event.clientX) / Math.max(rect.width, 1)) * 100;
+              const next = Math.min(68, Math.max(28, raw));
+              drag.lastPct = next;
+              setWideCanvasPct(next);
+            } else {
+              const topBar = 46;
+              const avail = Math.max(rect.height - topBar, 1);
+              const raw = ((event.clientY - (rect.top + topBar)) / avail) * 100;
+              const next = Math.min(74, Math.max(16, raw));
+              drag.lastPct = next;
+              setStagePct(next);
+            }
+          }}
+          onPointerUp={(event) => {
+            const drag = splitDragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            splitDragRef.current = null;
+            setResizingSplit(false);
+            try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+            if (drag.moved) {
+              try {
+                localStorage.setItem(
+                  drag.horizontal ? "nai-v5-split-wide-pct" : "nai-v5-split-stage-pct",
+                  String(Math.round(drag.lastPct * 10) / 10),
+                );
+              } catch {}
+            } else if (drag.horizontal) {
+              const nextIdx = (S11_WIDE_SNAPS.findIndex((p) => Math.abs(p - wideCanvasPct) < 4) + 1) % S11_WIDE_SNAPS.length;
+              const next = S11_WIDE_SNAPS[nextIdx];
+              setWideCanvasPct(next);
+              try { localStorage.setItem("nai-v5-split-wide-pct", String(next)); } catch {}
+            } else {
+              const nextIdx = (S11_STAGE_SNAPS.findIndex((p) => Math.abs(p - stagePct) < 4) + 1) % S11_STAGE_SNAPS.length;
+              const next = S11_STAGE_SNAPS[nextIdx];
+              setStagePct(next);
+              try { localStorage.setItem("nai-v5-split-stage-pct", String(next)); } catch {}
+            }
+          }}
+          onPointerCancel={() => {
+            splitDragRef.current = null;
+            setResizingSplit(false);
+          }}
         >
           <span aria-hidden="true" />
         </button>

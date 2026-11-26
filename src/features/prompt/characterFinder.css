@@ -343,40 +343,67 @@
 
 .character-finder-sheet .finder-star {
   position: absolute;
-  right: 4px;
-  top: 4px;
-  width: 28px;
+  right: 6px;
+  top: 0;
+  width: 24px;
   height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  font-size: 15px;
-  background: rgba(20, 22, 28, 0.72);
-  color: #fff;
+  padding: 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: rgba(14, 16, 22, 0.56);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   display: inline-grid;
   place-items: center;
+  transition: background 140ms ease, color 140ms ease, transform 120ms ease, opacity 140ms ease;
+}
+.character-finder-sheet .finder-star:hover {
+  background: rgba(14, 16, 22, 0.82);
+  color: #fff;
 }
 .character-finder-sheet .finder-star.active {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
+  background: linear-gradient(180deg, #f6c963 0%, #e5a832 100%);
+  border-color: rgba(255, 236, 179, 0.65);
+  color: #1f1606;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+}
+.character-finder-sheet .finder-star.active:hover {
+  filter: brightness(1.06);
 }
 
 .character-finder-sheet .finder-detail-btn {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
+  right: 5px;
+  bottom: 5px;
   width: 26px;
   height: 22px;
   padding: 0;
-  border: 0;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  background: rgba(20, 22, 28, 0.72);
-  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(14, 16, 22, 0.68);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   display: inline-grid;
   place-items: center;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+.character-finder-sheet .finder-detail-btn:hover {
+  background: rgba(14, 16, 22, 0.9);
+}
+
+@media (hover: hover) {
+  .character-finder-sheet .finder-detail-btn {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .finder-tile-art:hover .finder-detail-btn,
+  .finder-tile-art:focus-within .finder-detail-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .finder-new {
