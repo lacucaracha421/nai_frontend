@@ -1,4 +1,4 @@
-export type NovelAiV5Model="nai-diffusion-5-full"|"nai-diffusion-5-curated";
+export type NovelAiV5Model="nai-diffusion-5-full"|"nai-diffusion-5-full-medium"|"nai-diffusion-5-curated";
 export type PromptSectionKey="artist"|"other"|"quality"|"negative";
 export type CharacterPrompt={id:string;name:string;prompt:string;finderTags?:string[];negative:string;enabled:boolean;position:{x:number;y:number}};
 export type ReferenceMode="character&style"|"character"|"style"|"outfit";

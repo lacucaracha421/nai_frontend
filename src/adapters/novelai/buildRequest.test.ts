@@ -74,4 +74,27 @@ describe("buildNovelAiRequest with Precise Reference", () => {
     ]);
     expect(activeReferenceImages({ references: refs })).toEqual(["AAA", "BBB", "CCC", "DDD"]);
   });
+
+  it("enforces Medium effort distilled constraints for nai-diffusion-5-full-medium", () => {
+    const req = buildNovelAiRequest({
+      ...baseDraft,
+      characters: [{ id: "c1", name: "a", prompt: "1girl", negative: "bad hands", enabled: true, position: { x: 0.5, y: 0.5 } }],
+      settings: {
+        ...baseDraft.settings,
+        model: "nai-diffusion-5-full-medium",
+        steps: 28,
+        sampler: "k_dpmpp_2m",
+        guidanceRescale: 0.3,
+      },
+    });
+    expect(req.model).toBe("nai-diffusion-5-full-medium");
+    expect(req.parameters.steps).toBe(14);
+    expect(req.parameters.sampler).toBe("k_euler_ancestral");
+    expect(req.parameters.cfg_rescale).toBe(0);
+    expect(req.parameters.negative_prompt).toBe("");
+    expect(req.parameters.v4_negative_prompt.caption.base_caption).toBe("");
+    expect(req.parameters.v4_negative_prompt.caption.char_captions[0].char_caption).toBe("");
+    expect(req.parameters.deliberate_euler_ancestral_bug).toBe(false);
+    expect(req.parameters.prefer_brownian).toBe(true);
+  });
 });

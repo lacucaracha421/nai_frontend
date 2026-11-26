@@ -436,8 +436,10 @@ export function V5Studio() {
   const finishPending = finishEnabled && !!previewTarget && (finishBusy || !previewUrlFor(previewTarget)) && !finishError;
   const activeReferenceCount = references.filter((ref) => ref.enabled).length;
   const usageLabel = connectionStatus === "connected" ? formatUsageLabel(quota?.usage) : null;
+  const isMediumEffort = settings.model === "nai-diffusion-5-full-medium";
+  const effectiveSteps = isMediumEffort ? 14 : settings.steps;
   const cost = connectionStatus === "connected" && quota
-    ? estimateAnlas({ width: settings.width, height: settings.height, steps: settings.steps, referenceCount: activeReferenceCount }, quota)
+    ? estimateAnlas({ width: settings.width, height: settings.height, steps: effectiveSteps, referenceCount: activeReferenceCount }, quota)
     : undefined;
   const anlasText = quota?.anlas !== null && quota?.anlas !== undefined ? `Anlas ${quota.anlas.toLocaleString()}` : null;
 
@@ -1174,7 +1176,7 @@ export function V5Studio() {
       </button>
       <button type="button" className="s11-dock-settings" onClick={() => setSettingsScope("generation")}>
         <strong>생성 설정</strong>
-        <small>{settings.width}×{settings.height} · {settings.steps} · CFG {settings.guidance}</small>
+        <small>{settings.width}×{settings.height} · {isMediumEffort ? "Medium 14" : settings.steps} · CFG {settings.guidance}</small>
       </button>
       <button type="button" className={`s11-dock-generate ${paidAnlasLabel ? "has-cost" : ""}`} disabled={busy} onClick={() => generateNow(tools ?? boardTools.current ?? undefined)}>
         <strong>{generateLabel}</strong>
@@ -1189,7 +1191,21 @@ export function V5Studio() {
       {notice && <div className="success-toast b2-toast"><span>{notice}</span></div>}
       {loader.element}
 
-      <div className="b2-panels">
+      <div
+        className="b2-panels"
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          setSettingsScope(null);
+          setQuickCopy(null);
+          setCharacterSheet(false);
+          setLibraryOpen(false);
+          setRawEditor(false);
+          setFinishOpen(false);
+          setPlacementId(null);
+          setReferenceOpen(false);
+          setDictManagerTab(null);
+        }}
+      >
         {placementId && (
           <div className="b2-placement">
             <div
@@ -1254,8 +1270,8 @@ export function V5Studio() {
         />
       )}
       {finishOpen && viewer && <FinishSheet image={previewTarget} busy={finishPending} onClose={() => setFinishOpen(false)} />}
-      {menu === "prompt" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
-      {menu === "image" && <MenuSheet anchor={desktop ? menuAnchor : undefined} title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "prompt" && <MenuSheet title={sectionMenuLabel} items={promptMenuItems} onClose={() => setMenu(null)} />}
+      {menu === "image" && <MenuSheet title="이미지 메뉴" items={imageMenuItems} onClose={() => setMenu(null)} />}
     </>
   );
 
@@ -1324,6 +1340,26 @@ export function V5Studio() {
               </aside>
             )}
           </div>
+
+          {selectedPick && selectedPickLabel && (
+            <div className="s11-canvas-random-wrap">
+              <div className="s11-random-banner" aria-live="polite">
+                <span className="s11-random-banner-text">
+                  <span aria-hidden="true">🎲</span> <b>{selectedPickLabel.name}</b>
+                  {selectedPickLabel.series && <small> · {selectedPickLabel.series}</small>}
+                </span>
+                <button
+                  type="button"
+                  className="s11-random-keep"
+                  onClick={() => {
+                    void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정`, 1600));
+                  }}
+                >
+                  고정
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="s11-image-actions">
             <button type="button" className={`s11-act-btn primary save-button ${saveState}`} disabled={!selected || saving} onClick={() => void saveImage(selected)}>
@@ -1418,23 +1454,7 @@ export function V5Studio() {
                     if (tag.category === "character" && activeCharacter) updateCharacter(activeCharacter.id, { name: tag.display });
                   }}
                   header={s11BoardHeader}
-                  banner={tab === "character" && selectedPick && selectedPickLabel ? (
-                    <div className="s11-random-banner" aria-live="polite">
-                      <span className="s11-random-banner-text">
-                        <span aria-hidden="true">🎲</span> <b>{selectedPickLabel.name}</b>
-                        {selectedPickLabel.series && <small> · {selectedPickLabel.series}</small>}
-                      </span>
-                      <button
-                        type="button"
-                        className="s11-random-keep"
-                        onClick={() => {
-                          void keepRandomCharacter(selectedPick).then(() => showNotice(`${selectedPickLabel.name} 고정`, 1600));
-                        }}
-                      >
-                        고정
-                      </button>
-                    </div>
-                  ) : undefined}
+                  banner={undefined}
                   keyboardOpen={viewport.keyboard}
                   onQuickGenerate={() => generateNow(boardTools.current ?? undefined)}
                   generateDisabled={busy}

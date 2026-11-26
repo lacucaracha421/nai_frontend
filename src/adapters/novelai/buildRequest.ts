@@ -45,6 +45,11 @@ export function joinPositivePrompt(
 
 export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest {
   const prompt = joinPositivePrompt(draft);
+  const medium = draft.settings.model === "nai-diffusion-5-full-medium";
+  const effectiveSteps = medium ? 14 : draft.settings.steps;
+  const effectiveSampler = medium ? "k_euler_ancestral" : draft.settings.sampler;
+  const effectiveRescale = medium ? 0 : draft.settings.guidanceRescale;
+  const effectiveNegative = medium ? "" : cleanPart(draft.negativePrompt);
   const enabled = draft.characters.filter((c) => c.enabled && c.prompt.trim());
 
   // NovelAI V4/V5 structured character captions expect a center entry even when
@@ -58,7 +63,7 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
   // Keep the negative caption array index-aligned with the positive characters.
   // Empty per-character UC is valid, but the center still needs to be present.
   const negs = enabled.map((c) => ({
-    char_caption: cleanPart(c.negative),
+    char_caption: medium ? "" : cleanPart(c.negative),
     centers: [{ x: c.position.x, y: c.position.y }],
   }));
 
@@ -66,13 +71,13 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
     params_version: 4,
     width: draft.settings.width,
     height: draft.settings.height,
-    steps: draft.settings.steps,
+    steps: effectiveSteps,
     scale: draft.settings.guidance,
-    cfg_rescale: draft.settings.guidanceRescale,
-    sampler: draft.settings.sampler,
+    cfg_rescale: effectiveRescale,
+    sampler: effectiveSampler,
     noise_schedule: draft.settings.noiseSchedule,
     n_samples: 1,
-    negative_prompt: cleanPart(draft.negativePrompt),
+    negative_prompt: effectiveNegative,
     qualityToggle: false,
     ucPreset: 0,
     dynamic_thresholding: false,
@@ -90,7 +95,7 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
     },
     v4_negative_prompt: {
       caption: {
-        base_caption: cleanPart(draft.negativePrompt),
+        base_caption: effectiveNegative,
         char_captions: negs,
       },
       // Current NovelAI clients keep negative character coordinates disabled;
@@ -109,7 +114,7 @@ export function buildNovelAiRequest(draft: GenerationDraft): NovelAiImageRequest
     parameters.extra_noise_seed = draft.settings.seed;
   }
 
-  if (draft.settings.sampler === "k_euler_ancestral") {
+  if (effectiveSampler === "k_euler_ancestral") {
     parameters.deliberate_euler_ancestral_bug = false;
     parameters.prefer_brownian = true;
   }

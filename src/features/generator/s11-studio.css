@@ -659,13 +659,61 @@
 .s11-shell.s11-wide .s11-image-actions {
   padding: 6px 14px 12px;
 }
+.s11-canvas-random-wrap {
+  flex: none;
+  padding: 2px 10px 0;
+}
+.s11-shell.s11-wide .s11-canvas-random-wrap {
+  padding: 2px 14px 0;
+}
 .s11-shell.s11-wide button:not(:disabled) {
   cursor: pointer;
 }
-.s11-shell.s11-wide .sheet,
-.s11-shell.s11-wide .finish-sheet {
-  left: 50%;
+.s11-shell.s11-wide .s11-hero:hover,
+.s11-shell.s11-wide .s11-rail-item:hover {
+  filter: none;
+}
+.s11-shell.s11-wide .b2-panels {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 0;
+  overflow: visible;
+  background: rgba(7, 7, 10, 0.62);
+  backdrop-filter: blur(4px);
+}
+.s11-shell.s11-wide .b2-panels:empty {
+  display: none;
+}
+.s11-shell.s11-wide .b2-panels > .sheet,
+.s11-shell.s11-wide .b2-panels > .finish-sheet,
+.s11-shell.s11-wide .b2-panels > .b2-placement {
+  position: relative;
+  inset: auto;
+  left: auto;
   right: auto;
   width: min(760px, calc(100vw - 48px));
-  transform: translateX(-50%);
+  max-height: min(86vh, 840px);
+  height: auto;
+  transform: none;
+  border-radius: 18px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.s11-shell.s11-wide .b2-panels > .character-finder-sheet {
+  height: min(84vh, 800px);
+}
+.s11-shell.s11-wide .b2-menu-scrim {
+  background: rgba(7, 7, 10, 0.5);
+  align-items: center;
+  justify-content: center;
+}
+.s11-shell.s11-wide .b2-menu {
+  position: relative;
+  inset: auto;
+  width: min(320px, calc(100vw - 32px));
 }

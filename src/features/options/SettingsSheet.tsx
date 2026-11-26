@@ -1,7 +1,7 @@
 import { useGenerationStore } from "../../stores/generationStore";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useUiStore } from "../../stores/uiStore";
-import { SAMPLERS, V5_MODELS } from "../../adapters/novelai/models";
+import { isMediumEffortModel, isV5FullModel, SAMPLERS, V5_MODELS } from "../../adapters/novelai/models";
 import { BackupSection } from "./BackupSection";
 import { TranslationSettings } from "./TranslationSettings";
 
@@ -70,21 +70,60 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
         </section>
         )}
 
-        {generation && (<>
+        {generation && (() => {
+          const isFull = isV5FullModel(settings.model);
+          const isMedium = isMediumEffortModel(settings.model);
+          return (<>
         <section>
           <h3>Model</h3>
           <div className="segmented">
-            {V5_MODELS.map((model) => (
-              <button
-                className={settings.model === model.value ? "active" : ""}
-                key={model.value}
-                onClick={() => setSetting("model", model.value)}
-              >
-                {model.label}
-              </button>
-            ))}
+            {V5_MODELS.map((model) => {
+              const active = model.value === "nai-diffusion-5-full" ? isFull : settings.model === model.value;
+              return (
+                <button
+                  className={active ? "active" : ""}
+                  key={model.value}
+                  onClick={() => {
+                    if (model.value === "nai-diffusion-5-full") {
+                      if (!isFull) setSetting("model", "nai-diffusion-5-full");
+                    } else {
+                      setSetting("model", model.value);
+                    }
+                  }}
+                >
+                  {model.label}
+                </button>
+              );
+            })}
           </div>
         </section>
+
+        {isFull && (
+        <section>
+          <h3>Effort</h3>
+          <div className="segmented">
+            <button
+              className={!isMedium ? "active" : ""}
+              aria-pressed={!isMedium}
+              onClick={() => setSetting("model", "nai-diffusion-5-full")}
+            >
+              High (기본)
+            </button>
+            <button
+              className={isMedium ? "active" : ""}
+              aria-pressed={isMedium}
+              onClick={() => setSetting("model", "nai-diffusion-5-full-medium")}
+            >
+              Medium (사용량 절약)
+            </button>
+          </div>
+          {isMedium && (
+            <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              14 스텝 · Euler Ancestral · Rescale 0 고정 (제외 프롬프트 미지원 · 본문에 -3::태그:: 사용)
+            </p>
+          )}
+        </section>
+        )}
 
         <section>
           <h3>Resolution</h3>
@@ -127,7 +166,7 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
         <section className="setting-grid">
           <label>
             Steps
-            <input type="number" min={1} max={50} value={settings.steps} onChange={(event) => setSetting("steps", Number(event.target.value))} />
+            <input type="number" min={1} max={50} disabled={isMedium} value={isMedium ? 14 : settings.steps} onChange={(event) => setSetting("steps", Number(event.target.value))} />
           </label>
           <label>
             Guidance
@@ -135,7 +174,7 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
           </label>
           <label>
             CFG Rescale
-            <input type="number" step=".05" value={settings.guidanceRescale} onChange={(event) => setSetting("guidanceRescale", Number(event.target.value))} />
+            <input type="number" step=".05" disabled={isMedium} value={isMedium ? 0 : settings.guidanceRescale} onChange={(event) => setSetting("guidanceRescale", Number(event.target.value))} />
           </label>
           <label>
             Seed
@@ -145,11 +184,12 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
 
         <section>
           <h3>Sampler</h3>
-          <select value={settings.sampler} onChange={(event) => setSetting("sampler", event.target.value)}>
+          <select disabled={isMedium} value={isMedium ? "k_euler_ancestral" : settings.sampler} onChange={(event) => setSetting("sampler", event.target.value)}>
             {SAMPLERS.map((sampler) => <option key={sampler.value} value={sampler.value}>{sampler.label}</option>)}
           </select>
         </section>
-        </>)}
+        </>);
+        })()}
 
         {!generation && (<>
         <section>
