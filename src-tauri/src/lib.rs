@@ -45,7 +45,9 @@ pub fn run() {
             commands::favorite_local_tags,
             character_catalog::character_catalog,
             character_catalog::character_thumbnail,
-            commands::save_image
+            commands::save_image,
+            commands::sync_remote_state_get,
+            commands::sync_remote_state_put
         ])
         .run(tauri::generate_context!())
         .expect("error while running NAI V5 Studio");

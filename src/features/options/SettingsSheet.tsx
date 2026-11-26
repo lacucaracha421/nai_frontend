@@ -3,6 +3,7 @@ import { useConnectionStore } from "../../stores/connectionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { isMediumEffortModel, isV5FullModel, SAMPLERS, V5_MODELS } from "../../adapters/novelai/models";
 import { BackupSection } from "./BackupSection";
+import { SyncSection } from "./SyncSection";
 import { TranslationSettings } from "./TranslationSettings";
 
 const normalResolutions = [
@@ -217,6 +218,8 @@ export function SettingsSheet({ onClose, scope }: { onClose: () => void; scope: 
         </section>
 
         <TranslationSettings />
+
+        <SyncSection />
 
         <BackupSection />
         </>)}

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Icon } from "../../../components/Icon";
 import { readImageBytes } from "../../../adapters/novelai/client";
 import { useGenerationStore } from "../../../stores/generationStore";
@@ -13,6 +13,18 @@ const REFERENCE_MODES: { value: ReferenceMode; label: string }[] = [
   { value: "outfit", label: "Outfit" },
 ];
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|avif)$/i;
+
+function isImageFile(file: File) {
+  return file.type.startsWith("image/") || IMAGE_EXT_RE.test(file.name);
+}
+
+function hasDraggedFiles(dataTransfer: DataTransfer | null) {
+  if (!dataTransfer) return false;
+  if (Array.from(dataTransfer.types ?? []).includes("Files")) return true;
+  return Array.from(dataTransfer.items ?? []).some((item) => item.kind === "file");
+}
+
 type Props = {
   currentImage?: GenerationImage;
 };
@@ -24,15 +36,22 @@ export function ReferencePanel({ currentImage }: Props) {
   const removeReference = useGenerationStore((s) => s.removeReference);
   const clearReferences = useGenerationStore((s) => s.clearReferences);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFiles = async (files: FileList | null) => {
+  const handleFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
+    const list = Array.from(files).filter(isImageFile);
+    if (list.length === 0) {
+      setError("이미지 파일(PNG, JPG, WebP 등)만 추가할 수 있습니다.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const preparedList = await Promise.all(Array.from(files).map((file) => prepareReferenceBlob(file)));
+      const preparedList = await Promise.all(list.map((file) => prepareReferenceBlob(file)));
       for (const prepared of preparedList) {
         addReference(prepared);
       }
@@ -42,6 +61,54 @@ export function ReferencePanel({ currentImage }: Props) {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
+  };
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]")) return;
+      const items = Array.from(event.clipboardData?.items ?? []);
+      const files = items
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file && isImageFile(file)));
+      if (files.length === 0) return;
+      event.preventDefault();
+      void handleFiles(files);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  });
+
+  const onDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragging(true);
+  };
+
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    if (!dragging) setDragging(true);
+  };
+
+  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragging(false);
+  };
+
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepthRef.current = 0;
+    setDragging(false);
+    if (busy) return;
+    void handleFiles(event.dataTransfer.files);
   };
 
   const addCurrentImage = async () => {
@@ -60,7 +127,13 @@ export function ReferencePanel({ currentImage }: Props) {
   };
 
   return (
-    <div className="reference-inline">
+    <div
+      className={`reference-inline ${dragging ? "is-dragging" : ""}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <input
         ref={inputRef}
         type="file"
@@ -98,9 +171,14 @@ export function ReferencePanel({ currentImage }: Props) {
 
       {error && <div className="reference-error" role="alert">{error}</div>}
 
-      <div className="reference-inline-body">
+      <div className={`reference-inline-body ${dragging ? "is-dragging" : ""}`}>
+        {dragging && (
+          <div className="reference-drop-overlay" aria-hidden="true">
+            <span>여기에 이미지를 놓아 레퍼런스 추가</span>
+          </div>
+        )}
         {references.length === 0 ? (
-          <div className="reference-empty">참조할 캐릭터·화풍·의상 이미지를 추가하세요.</div>
+          <div className="reference-empty">참조할 캐릭터·화풍·의상 이미지를 추가하거나 여기에 끌어다 놓으세요. (Ctrl+V 붙여넣기 가능)</div>
         ) : (
           <div className="reference-grid">
             {references.map((ref) => {

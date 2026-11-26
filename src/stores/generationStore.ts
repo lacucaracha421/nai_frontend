@@ -335,10 +335,10 @@ export const useGenerationStore = create<State>()(
           ...current,
           ...migrated,
           settings: { ...DEFAULT_SETTINGS, ...(migrated.settings ?? {}) },
-          images: [],
-          activeImage: 0,
-          status: "idle",
-          errorMessage: null,
+          images: current.images,
+          activeImage: current.activeImage,
+          status: current.status,
+          errorMessage: current.errorMessage,
         };
       },
       partialize: (state) => ({

@@ -5,6 +5,7 @@ use crate::{
     translation::{self, TranslationConfig, TranslationKeyStatus, TranslationProvider},
 };
 use serde_json::Value;
+use std::time::Duration;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -123,4 +124,59 @@ pub async fn save_image(app: AppHandle, image_base64: String, filename: String) 
     let directory = save::save_directory(&app)?;
     let path = save::write_image(&directory, &filename, &bytes)?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+fn normalize_sync_base_url(base_url: &str) -> Result<String, String> {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("동기화 서버 주소가 비어 있습니다.".to_string());
+    }
+    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
+        return Err("동기화 서버 주소는 http:// 또는 https://로 시작해야 합니다.".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+fn sync_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(3))
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|error| format!("HTTP 클라이언트 초기화 실패: {error}"))
+}
+
+#[tauri::command]
+pub async fn sync_remote_state_get(base_url: String) -> Result<Value, String> {
+    let base = normalize_sync_base_url(&base_url)?;
+    let client = sync_http_client()?;
+    let response = client
+        .get(format!("{base}/api/state"))
+        .send()
+        .await
+        .map_err(|error| format!("동기화 서버 연결 실패: {error}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("동기화 서버 응답 오류 ({status})"));
+    }
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| format!("동기화 데이터 파싱 실패: {error}"))
+}
+
+#[tauri::command]
+pub async fn sync_remote_state_put(base_url: String, storage: Value) -> Result<(), String> {
+    let base = normalize_sync_base_url(&base_url)?;
+    let client = sync_http_client()?;
+    let response = client
+        .put(format!("{base}/api/state"))
+        .json(&serde_json::json!({ "storage": storage }))
+        .send()
+        .await
+        .map_err(|error| format!("동기화 저장 실패: {error}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("동기화 저장 오류 ({status})"));
+    }
+    Ok(())
 }

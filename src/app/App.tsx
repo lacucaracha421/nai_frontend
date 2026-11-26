@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import type { PluginListener } from "@tauri-apps/api/core";
 import { V5Studio } from "../features/generator/V5Studio";
+import { QUICKCOPY_STORAGE_KEY, QUICKCOPY_UPDATED_EVENT } from "../features/tags/quickCopyStorage";
+import { registerSyncRehydrator } from "../services/webStateSync";
+import { useCharacterLibraryStore } from "../stores/characterLibraryStore";
 import { useConnectionStore } from "../stores/connectionStore";
+import { useGenerationStore } from "../stores/generationStore";
+import { useTagStore } from "../stores/tagStore";
+import { useTranslationStore } from "../stores/translationStore";
+import { useUiStore } from "../stores/uiStore";
 import { EXIT_WINDOW_MS, backStack } from "./backStack";
 
 const isTauriRuntime = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -14,6 +21,33 @@ export function App() {
   useEffect(() => {
     void restoreConnection();
   }, [restoreConnection]);
+
+  useEffect(() => {
+    registerSyncRehydrator((changedKeys) => {
+      const changed = new Set(changedKeys);
+      if (changed.has("nai-v5-character-library-v1")) {
+        void useCharacterLibraryStore.persist.rehydrate();
+      }
+      if (changed.has("nai-v5-local-tag-favorites")) {
+        void useTagStore.persist.rehydrate();
+      }
+      if (changed.has("nai-v5-translation-settings-v0.1")) {
+        void useTranslationStore.persist.rehydrate();
+      }
+      if (changed.has("nai-v5-s11-ui")) {
+        void useUiStore.persist.rehydrate();
+      }
+      if (changed.has("nai-v5-s11-generation-v0.3")) {
+        const currentStatus = useGenerationStore.getState().status;
+        if (currentStatus !== "generating" && currentStatus !== "upscaling") {
+          void useGenerationStore.persist.rehydrate();
+        }
+      }
+      if (changed.has(QUICKCOPY_STORAGE_KEY) || changedKeys.some((k) => k.startsWith("artist-tag-quick-copy."))) {
+        window.dispatchEvent(new Event(QUICKCOPY_UPDATED_EVENT));
+      }
+    });
+  }, []);
 
   // Android Back: close the topmost open layer. With nothing open, the first Back shows
   // "한 번 더 누르면 종료" and hands Back to Android for a moment, so a second Back
