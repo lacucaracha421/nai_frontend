@@ -17,17 +17,31 @@ export type FinderPreferences = {
   randomInsertMode: "name" | "features";
   finderTab: "find" | "library";
   finderSeries: string | null;
+  libraryView: "folders" | "all";
 };
-const finderDefaults: FinderPreferences = { insertMode: "name", randomScope: "all", randomSeries: [], randomInsertMode: "name", finderTab: "find", finderSeries: null };
+const finderDefaults: FinderPreferences = {
+  insertMode: "name",
+  randomScope: "all",
+  randomSeries: [],
+  randomInsertMode: "name",
+  finderTab: "find",
+  finderSeries: null,
+  libraryView: "folders",
+};
 
 /** Copy known bookmark fields, retaining order and custom folders without filtering. */
 export function migrateCharacterLibrary(persisted: unknown) {
-  const old = persisted as { entries?: CharacterLibraryEntry[]; legacyFavoritesMigrated?: boolean } | null;
+  const old = persisted as {
+    entries?: CharacterLibraryEntry[];
+    legacyFavoritesMigrated?: boolean;
+    recentRaws?: string[];
+  } | null;
   return {
     ...finderDefaults,
     legacyFavoritesMigrated: old?.legacyFavoritesMigrated ?? false,
     hiddenThumbnails: [] as string[],
     shownThumbnails: [] as string[],
+    recentRaws: Array.isArray(old?.recentRaws) ? old.recentRaws.slice(0, 12) : ([] as string[]),
     entries: (old?.entries ?? []).map(({ raw, display, series, addedAt }) => ({ raw, display, series, addedAt })),
   };
 }
@@ -35,12 +49,15 @@ export function migrateCharacterLibrary(persisted: unknown) {
 type State = FinderPreferences & {
   entries: CharacterLibraryEntry[];
   legacyFavoritesMigrated: boolean;
+  /** Recently inserted character raw tags (newest first, max 12). */
+  recentRaws: string[];
   /** Catalog names whose thumbnail shows a different character; kept on this device only. */
   hiddenThumbnails: string[];
   /** Suspect thumbnails (hidden by default) that the user chose to show again. */
   shownThumbnails: string[];
   toggleHiddenThumbnail: (raw: string, suspect: boolean) => void;
   setFinderPreferences: (patch: Partial<FinderPreferences>) => void;
+  recordRecent: (raw: string) => void;
   addTag: (tag: Pick<LocalTag, "raw" | "display">, series?: string) => void;
   addMany: (tags: Array<Pick<LocalTag, "raw" | "display">>) => void;
   toggleTag: (tag: Pick<LocalTag, "raw" | "display">) => void;
@@ -95,6 +112,7 @@ export const useCharacterLibraryStore = create<State>()(
     (set, get) => ({
       entries: [],
       legacyFavoritesMigrated: false,
+      recentRaws: [],
       hiddenThumbnails: [],
       ...finderDefaults,
       shownThumbnails: [],
@@ -106,6 +124,12 @@ export const useCharacterLibraryStore = create<State>()(
         return suspect ? { shownThumbnails: without(state.shownThumbnails) } : { hiddenThumbnails: [...state.hiddenThumbnails, raw] };
       }),
       setFinderPreferences: (patch) => set(patch),
+      recordRecent: (raw) => set((state) => {
+        const clean = raw.trim();
+        if (!clean) return state;
+        const prev = Array.isArray(state.recentRaws) ? state.recentRaws : [];
+        return { recentRaws: [clean, ...prev.filter((item) => item !== clean)].slice(0, 12) };
+      }),
       addTag: (tag, series) => set((state) => {
         if (state.entries.some((entry) => entry.raw === tag.raw)) return state;
         return { entries: [makeEntry(tag, series), ...state.entries] };

@@ -11,7 +11,7 @@ import { joinPositivePrompt } from "../../adapters/novelai/buildRequest";
 import { CharacterSheet } from "../prompt/CharacterSheet";
 import { CharacterFinderSheet, type FinderSelection } from "../prompt/CharacterFinderSheet";
 import { CharacterCatalogPrefetch } from "../prompt/CharacterCatalogPrefetch";
-import { insertCharacter } from "../prompt/characterCatalog";
+import { characterLabel, insertCharacter } from "../prompt/characterCatalog";
 import { CharacterStageOverlay } from "../prompt/CharacterStageOverlay";
 import { RawPromptSheet } from "../prompt/RawPromptSheet";
 import { TagBoard, switchCarriesEditing, type TagBoardTools } from "../prompt/TagBoard";
@@ -594,17 +594,23 @@ export function V5Studio() {
     if (add || !target) {
       addCharacter();
       target = useGenerationStore.getState().characters.at(-1);
+      setFinderAdd(false);
     } else checkpointCharacter();
     if (!target) return;
     updateCharacter(target.id, insertCharacter(target, row, mode, removed));
     setCharacterId(target.id);
-    setLibraryOpen(false);
+    const slotIndex = useGenerationStore.getState().characters.findIndex((c) => c.id === target?.id);
+    showNotice(`캐릭터 ${slotIndex >= 0 ? slotIndex + 1 : 1} · ${characterLabel(row.raw) ?? row.display}`, 1400);
   };
 
   const openDictionary = () => {
     if (tab === "character") {
-      setFinderAdd(false); setFinderRandom(false); setLibraryOpen(true);
+      setFinderAdd(false);
+      setFinderRandom(false);
+      setInlineDictOpen(false);
+      setLibraryOpen((open) => !open);
     } else {
+      setLibraryOpen(false);
       setInlineDictOpen((open) => !open);
     }
   };
@@ -983,7 +989,7 @@ export function V5Studio() {
   // PC has one panel slot. Opening another panel replaces the previous panel before paint.
   const previousPanels = useRef<boolean[]>([]);
   useLayoutEffect(() => {
-    const panels = [settingsScope !== null, quickCopy !== null, characterSheet, libraryOpen, rawEditor, finishOpen, placementId !== null, referenceOpen];
+    const panels = [settingsScope !== null, quickCopy !== null, characterSheet, rawEditor, finishOpen, placementId !== null, referenceOpen];
     let opened = -1;
     panels.forEach((open, index) => { if (open && !previousPanels.current[index]) opened = index; });
     previousPanels.current = panels;
@@ -991,12 +997,11 @@ export function V5Studio() {
     if (opened !== 0) setSettingsScope(null);
     if (opened !== 1) setQuickCopy(null);
     if (opened !== 2) setCharacterSheet(false);
-    if (opened !== 3) setLibraryOpen(false);
-    if (opened !== 4) setRawEditor(false);
-    if (opened !== 5) setFinishOpen(false);
-    if (opened !== 6) setPlacementId(null);
-    if (opened !== 7) setReferenceOpen(false);
-  }, [desktop, settingsScope, quickCopy, characterSheet, libraryOpen, rawEditor, finishOpen, placementId, referenceOpen]);
+    if (opened !== 3) setRawEditor(false);
+    if (opened !== 4) setFinishOpen(false);
+    if (opened !== 5) setPlacementId(null);
+    if (opened !== 6) setReferenceOpen(false);
+  }, [desktop, settingsScope, quickCopy, characterSheet, rawEditor, finishOpen, placementId, referenceOpen]);
 
   // Android Back closes the topmost of these (see app/backStack.ts).
   useBackLayer(menu !== null, () => setMenu(null));
@@ -1263,7 +1268,7 @@ export function V5Studio() {
     <footer className="s11-bottom-dock">
       <button
         type="button"
-        className={`s11-dock-btn ${inlineDictOpen ? "active" : ""}`}
+        className={`s11-dock-btn ${inlineDictOpen || libraryOpen ? "active" : ""}`}
         onClick={openDictionary}
       >
         <Icon name={tab === "character" ? "search" : "book"} />
@@ -1311,7 +1316,6 @@ export function V5Studio() {
           setSettingsScope(null);
           setQuickCopy(null);
           setCharacterSheet(false);
-          setLibraryOpen(false);
           setRawEditor(false);
           setFinishOpen(false);
           setPlacementId(null);
@@ -1350,7 +1354,6 @@ export function V5Studio() {
           />
         )}
         <CharacterCatalogPrefetch />
-        {libraryOpen && <CharacterFinderSheet onClose={() => setLibraryOpen(false)} onSelect={selectFromLibrary} current={activeCharacter} currentIndex={Math.max(0, chars.findIndex(c => c.id === activeCharacter?.id))} initialAdd={finderAdd} initialRandom={finderRandom} />}
         {quickCopy && <QuickCopySheet destination={quickCopy} onClose={() => setQuickCopy(null)} onInsert={(value) => appendPrompt(quickCopy, value)} />}
         {rawEditor && (
           <RawPromptSheet
@@ -1517,6 +1520,19 @@ export function V5Studio() {
                 onToggleTag={toggleDictionaryTag}
                 onOpenManager={(manageTab) => setDictManagerTab(manageTab)}
                 onClose={() => setInlineDictOpen(false)}
+              />
+              {s11BottomDock(boardTools.current ?? undefined)}
+            </>
+          ) : libraryOpen ? (
+            <>
+              <CharacterFinderSheet
+                inline
+                onClose={() => setLibraryOpen(false)}
+                onSelect={selectFromLibrary}
+                current={activeCharacter}
+                currentIndex={Math.max(0, chars.findIndex((c) => c.id === activeCharacter?.id))}
+                initialAdd={finderAdd}
+                initialRandom={finderRandom}
               />
               {s11BottomDock(boardTools.current ?? undefined)}
             </>
